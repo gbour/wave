@@ -1,0 +1,16 @@
+{application, wave, [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+	  kernel,
+	  stdlib,
+	  lager
+  ]},
+  {mod, { wave_app, []}},
+  {env, [
+	% MQTT
+    {mqtt_port, 4949}
+  ]}
+]}.
+
