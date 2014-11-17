@@ -29,6 +29,13 @@ start() ->
 	lager:start(),
 	lager:set_loglevel(lager_console_backend, debug),
 
+    % HTTP server (+dependencies)
+    application:start(crypto),
+    application:start(asn1),
+    application:start(public_key),
+    application:start(ssl),
+
+    application:start(ranch),
 	application:start(wave).
 
 start(_StartType, _StartArgs) ->
@@ -36,7 +43,7 @@ start(_StartType, _StartArgs) ->
 
 	% start mqtt listener
 	{ok, MqttPort} = application:get_env(wave, mqtt_port),
-	mqtt_listener:start_link(mqtt_listener, [{port, MqttPort}], []),
+    {ok, _} = ranch:start_listener(wave, 1, ranch_tcp, [{port, MqttPort}], mqtt_ranch_protocol, []),
 
 	wave_sup:start_link().
 

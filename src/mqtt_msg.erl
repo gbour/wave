@@ -99,6 +99,8 @@ decode_payload('SUBSCRIBE', {Len, <<MsgID:16, Payload/binary>>}) ->
 
 decode_payload('PINGREQ', {0, <<>>}) ->
 	{ok, undefined};
+decode_payload('PINGRESP', {0, <<>>}) ->
+    {ok, undefined};
 
 decode_payload('DISCONNECT', {0, <<>>}) ->
     lager:debug("DISCONNECT"),
@@ -181,6 +183,8 @@ encode_payload('SUBACK', Opts) ->
 	  (encode_qos(Qos))/binary
 	>>;
 
+encode_payload('PINGREQ', _) ->
+    <<>>;
 encode_payload('PINGRESP', _) ->
 	<<>>.
 

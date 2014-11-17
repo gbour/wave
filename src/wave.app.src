@@ -10,7 +10,7 @@
   {mod, { wave_app, []}},
   {env, [
 	% MQTT
-    {mqtt_port, 4949}
+    {mqtt_port, 1883}
   ]}
 ]}.
 
