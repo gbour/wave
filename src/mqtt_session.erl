@@ -138,8 +138,15 @@ connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData) ->
     {reply, Resp, connected, StateData, 5000};
 
 connected({publish, Topic, Content}, _, StateData=#session{transport={Callback,Transport,Socket}}) ->
-    Callback:publish(Transport, Socket, Topic, Content),
-    {reply, ok, connected, StateData, 5000};
+    Ret = Callback:publish(Transport, Socket, Topic, Content),
+	lager:info("ret= ~p", [Ret]),
+	case Ret of
+		{error, Err} ->
+			{stop, normal, disconnect, undefined};
+
+		ok ->
+			{reply, ok, connected, StateData, 5000}
+	end;
 
 connected(_,_, StateData) ->
     {stop, normal, disconnect, undefined}.

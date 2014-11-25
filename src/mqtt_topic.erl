@@ -108,8 +108,18 @@ code_change(_, State, _) ->
 dispatch(_, '$end_of_table', _, _)       ->
     ok;
 dispatch(Subscribers, S={Mod,Fun,Pid}, Topic, Content) ->
-    Mod:Fun(Pid, Topic, Content),
+	Next = ets:next(Subscribers, S),
 
-    dispatch(Subscribers, ets:next(Subscribers, S), Topic, Content).
+	case is_process_alive(Pid) of
+		true ->
+			%NOTE: delete if send failed ?
+			Mod:Fun(Pid, Topic, Content);
+
+		_    ->
+			lager:info("removing dead subscriber ~p", [Pid]),
+			ets:delete(Subscribers, S)
+	end,
+
+    dispatch(Subscribers, Next, Topic, Content).
 
 
