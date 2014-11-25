@@ -26,8 +26,10 @@
 %% ===================================================================
 
 start() ->
-	lager:start(),
-	lager:set_loglevel(lager_console_backend, debug),
+    lager:start(),
+    lager:set_loglevel(lager_console_backend, debug),
+
+    application:start(gproc),
 
     % HTTP server (+dependencies)
     application:start(crypto),
@@ -37,6 +39,7 @@ start() ->
 
     application:start(ranch),
 	application:start(wave).
+
 
 start(_StartType, _StartArgs) ->
 	lager:debug("starting wave app"),

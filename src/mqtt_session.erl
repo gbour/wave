@@ -27,7 +27,7 @@
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
--export([handle/2]).
+-export([handle/2,publish/3]).
 -export([initiate/3, connected/2, connected/3]).
 %
 % role
@@ -82,6 +82,11 @@ handle(Pid, Msg) ->
 
 	{ok, Resp}.
 
+%
+% a message is published for me
+%
+publish(Pid, Topic, Content) ->
+    gen_fsm:sync_send_event(Pid, {publish, Topic, Content}).
 
 %% STATES
 
@@ -111,15 +116,30 @@ connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=Ref}) ->
     gen_fsm:cancel_timer(Ref),
     {reply, undefined, connected, StateData#session{pingid=undefined}, 5000};
 
-connected(#mqtt_msg{type='PUBLISH'}, _, StateData) ->
+connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData) ->
+    Topic   = proplists:get_value(topic, P),
+    Content = proplists:get_value(data, P),
+
+    mqtt_topic:publish(Topic, Content),
+
 	Resp = #mqtt_msg{type='CONNACK', payload=[{retcode,0}]},
 	{reply, Resp, connected, StateData, 5000};
 
 connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData) ->
 	MsgId = proplists:get_value(msgid, P),
+    Topics = proplists:get_value(topics, P),
+  
+    % subscribe to all listed topics (creating it if it don't exists)
+    [ mqtt_topic:subscribe(Topic, {?MODULE,publish,self()}) || {Topic,Qos} <- Topics ],
+
+
 	Resp  = #mqtt_msg{type='SUBACK', payload=[{msgid,MsgId},{qos,[1]}]},
 
     {reply, Resp, connected, StateData, 5000};
+
+connected({publish, Topic, Content}, _, StateData=#session{transport={Callback,Transport,Socket}}) ->
+    Callback:publish(Transport, Socket, Topic, Content),
+    {reply, ok, connected, StateData, 5000};
 
 connected(_,_, StateData) ->
     {stop, normal, disconnect, undefined}.

@@ -21,7 +21,7 @@
 -export([start_link/4]).
 -export([init/4]).
 
--export([ping/2, close/2]).
+-export([ping/2, publish/4, close/2]).
 
 -include("include/mqtt_msg.hrl").
 
@@ -110,7 +110,17 @@ answer(_) ->
     error.
 
 ping(Transport, Socket) ->
-    Transport:send(Socket, mqtt_msg:encode(#mqtt_msg{type='PINGREQ'})).
+    %Transport:send(Socket, mqtt_msg:encode(#mqtt_msg{type='PINGREQ'})).
+    %Msg = #mqtt_msg{type='PUBLISH', payload=[{topic,<<"foobar">>}, {msgid,1234}, {content, <<"chello">>}]},
+    Msg = #mqtt_msg{type='PINGREQ'},
+    Transport:send(Socket, mqtt_msg:encode(Msg)).
+
+
+publish(Transport, Socket, Topic, Content) ->
+    Msg = #mqtt_msg{type='PUBLISH', payload=[{topic,Topic}, {content, Content}]},
+    Transport:send(Socket, mqtt_msg:encode(Msg)).
+
 
 close(Transport, Socket) ->
     Transport:close(Socket).
+

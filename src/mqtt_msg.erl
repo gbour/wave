@@ -167,6 +167,18 @@ encode(#mqtt_msg{retain=Retain, qos=Qos, dup=Dup, type=Type, payload=Payload}) -
 		P/binary
     >>.
 
+encode_payload('PUBLISH', Opts) ->
+    Topic = proplists:get_value(topic, Opts),
+    MsgID = proplists:get_value(msgid, Opts),
+    Content = proplists:get_value(content, Opts),
+
+    <<
+        (encode_string(Topic))/binary,
+        %MsgID:16,
+        % payload
+        (bin(Content))/binary
+    >>;
+
 encode_payload('CONNACK', [{retcode, RetCode}]) ->
     <<
       % var headers
@@ -188,6 +200,12 @@ encode_payload('PINGREQ', _) ->
     <<>>;
 encode_payload('PINGRESP', _) ->
 	<<>>.
+
+encode_string(Str) ->
+    <<
+      (size(Str)):16,
+      Str/binary
+    >>.
 
 encode_qos(undefined) ->
 	<<>>;
@@ -228,3 +246,6 @@ type2atom(13) -> 'PINGRESP';
 type2atom(14) -> 'DISCONNECT';
 type2atom(_)  -> invalid.
 
+
+bin(X) when is_binary(X) ->
+    X.
