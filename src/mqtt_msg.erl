@@ -106,7 +106,8 @@ decode_payload('DISCONNECT', {0, <<>>}) ->
     lager:debug("DISCONNECT"),
     % not a real error, we just want to close the connection
     %TODO: return a disconnect object; and do cleanup upward
-    {error, disconnect};
+    %{error, disconnect};
+    {ok, undefined};
 
 decode_payload('CONNECT', {Len, <<0:8, 4:8, "MQTT", Level:8/integer, Flags:8, Rest/binary>>}) ->
     lager:debug("CONNECT"),

@@ -21,6 +21,8 @@
 -export([start_link/4]).
 -export([init/4]).
 
+-export([ping/2, close/2]).
+
 -include("include/mqtt_msg.hrl").
 
 start_link(Ref, Socket, Transport, Opts) ->
@@ -29,30 +31,42 @@ start_link(Ref, Socket, Transport, Opts) ->
 
 init(Ref, Socket, Transport, _Opts = []) ->
     ok = ranch:accept_ack(Ref),
-    loop(Socket, Transport).
 
-loop(Socket, Transport) ->
-    %TODO: do not use *infinity* timeout (handle incorrectly closed sockets) 
+    {ok, Session} = mqtt_session:start_link({?MODULE, Transport, Socket}),
+    lager:debug("fsm= ~p", [Session]),
+    loop(Socket, Transport, Session).
+
+loop(Socket, Transport, Session) ->
+    %TODO: do not use *infinity* timeout (handle incorrectly closed sockets)
     %      we can use PINGS to check socket state
-    case Transport:recv(Socket, 0, 5000) of
+    case Transport:recv(Socket, 0, infinity) of %5000) of
         {ok, Data} ->
-            %Transport:send(Socket, Data),
-            route(Socket, Transport, Data),
-            loop(Socket, Transport);
+            case route(Socket, Transport, Session, Data) of
+                continue ->
+                    loop(Socket, Transport, Session);
+                _ ->
+                    stop
+            end;
 
         {error, timeout} ->
             lager:debug("socket timeout. Sending ping"),
             Transport:send(Socket, mqtt_msg:encode(#mqtt_msg{type='PINGREQ'})),
-            loop(Socket, Transport);
+            loop(Socket, Transport, Session);
+
+        {error, closed} ->
+            ok;
 
         Err ->
             lager:debug("err ~p. closing socket", [Err]),
             ok = Transport:close(Socket)
-    end.
+    end,
 
-route(_,_, <<>>) ->
+    Transport:close(Socket),
+    ok.
+
+route(_,_,_, <<>>) ->
     continue;
-route(Socket, Transport, Raw) ->
+route(Socket, Transport, Session, Raw) ->
     case mqtt_msg:decode(Raw) of
         {error, disconnect, _} ->
             lager:info("closing connection"),
@@ -61,20 +75,22 @@ route(Socket, Transport, Raw) ->
 
         {ok, Msg, Rest} ->
             lager:info("ok ~p", [Msg]),
-            
-            case answer(Msg) of
-                ok ->
-                    lager:debug("no response to provide");
 
-                error ->
-                    lager:info("invalid query. closing socket"),
-                    Transport:close(Socket);
-
-                Resp  ->
-                    lager:info("sending ~p", [Resp]),
+            %case answer(Msg) of
+            case mqtt_session:handle(Session, Msg) of
+                {ok, Resp=#mqtt_msg{}} ->
+                    lager:info("sending resp ~p", [Resp]),
                     Transport:send(Socket, mqtt_msg:encode(Resp)),
+                    route(Socket, Transport, Session, Rest);
 
-                    route(Socket, Transport, Rest)
+                {ok, undefined}  ->
+                    lager:info("nothing to return"),
+                    route(Socket, Transport, Session, Rest);
+
+                {ok, disconnect} ->
+                    lager:info("closing socket"),
+                    %Transport:close(Socket),
+                    stop
             end
     end.
 
@@ -93,4 +109,8 @@ answer(#mqtt_msg{type='PINGRESP'}) ->
 answer(_) ->
     error.
 
+ping(Transport, Socket) ->
+    Transport:send(Socket, mqtt_msg:encode(#mqtt_msg{type='PINGREQ'})).
 
+close(Transport, Socket) ->
+    Transport:close(Socket).
