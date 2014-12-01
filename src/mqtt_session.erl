@@ -90,12 +90,24 @@ publish(Pid, Topic, Content) ->
 
 %% STATES
 
-initiate(#mqtt_msg{type='CONNECT'}, _, StateData) ->
+initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
 	lager:info("connected"),
 	%gen_fsm:start_timer(5000, timeout1),
 	%lager:info("timeout set"),
+    DeviceID = proplists:get_value(clientid, P),
+    Username = proplists:get_value(username, P),
+    Password = proplists:get_value(password, P),
 
-	Resp = #mqtt_msg{type='CONNACK', payload=[{retcode,0}]},
+    Retcode = case wave_auth:check(device, DeviceID, Username, Password) of
+        {ok, Record} ->
+            0; % ok
+        {error, wrong_id} ->
+            2;
+        {error, bad_credentials} ->
+            4 % not authorized
+    end,
+
+	Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
 	{reply, Resp, connected, StateData, 5000};
 initiate(#mqtt_msg{}, _, StateData) ->
 	% close socket
