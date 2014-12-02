@@ -59,7 +59,7 @@ decode_payload('CONNECT', {Len, <<0:8, 6:8, "MQIsdp", Version:8/integer, Flags:8
     {ClientID, Rest2} = decode_string(Rest),
 
     {Topic, Message, Rest3} = case Will of
-        1 -> 
+        1 ->
             {_T, _R}  = decode_string(Rest2),
             {_M, _R2} = decode_string(_R),
             {_T, _M, _R2};
@@ -71,7 +71,7 @@ decode_payload('CONNECT', {Len, <<0:8, 6:8, "MQIsdp", Version:8/integer, Flags:8
         _ -> {undefined, Rest3}
     end,
 
-    {Password, Rest5} = case Pwd of 
+    {Password, Rest5} = case Pwd of
         1 -> decode_string(Rest4);
         _ -> {undefined, Rest4}
     end,
@@ -112,6 +112,10 @@ decode_payload('DISCONNECT', {0, <<>>}) ->
 decode_payload('CONNECT', {Len, <<0:8, 4:8, "MQTT", Level:8/integer, Flags:8, Rest/binary>>}) ->
     lager:debug("CONNECT"),
     {error, disconnect};
+
+decode_payload('CONNACK', {Len, <<_:8, RetCode:8/integer>>}) ->
+    lager:debug("CONNACK"),
+    {ok, [{retcode, RetCode}]};
 
 decode_payload(Cmd, Args) ->
     lager:info("invalid:: ~p: ~p", [Cmd, Args]),
@@ -158,6 +162,7 @@ rlength(<<1:1, Len:7/integer, Rest/binary>>, Mult, Acc) ->
 encode(#mqtt_msg{retain=Retain, qos=Qos, dup=Dup, type=Type, payload=Payload}) ->
     P = encode_payload(Type, Payload),
 
+    lager:info("~p ~p", [P, is_binary(P)]),
 	%<<Retain/integer, Qos, Dup, atom2type(Type)>>.
 	<<
         % fixed headers
@@ -166,6 +171,28 @@ encode(#mqtt_msg{retain=Retain, qos=Qos, dup=Dup, type=Type, payload=Payload}) -
         (erlang:size(P)):8,
 		P/binary
     >>.
+
+encode_payload('CONNECT', Opts) ->
+    ClientID = proplists:get_value(clientid, Opts),
+    Username = proplists:get_value(username, Opts),
+    Password = proplists:get_value(password, Opts),
+
+    <<
+      6:16,       % protocol name
+      <<"MQIsdp">>/binary,
+      3:8,        % version
+      % connect flags
+      (setflag(Username)):1,
+      (setflag(Password)):1,
+      0:6,
+
+      10:16,      % keep-alive
+
+      (encode_string(ClientID))/binary,
+      (encode_string(Username))/binary,
+      (encode_string(Password))/binary
+    >>;
+
 
 encode_payload('PUBLISH', Opts) ->
     Topic = proplists:get_value(topic, Opts),
@@ -183,8 +210,8 @@ encode_payload('CONNACK', [{retcode, RetCode}]) ->
     <<
       % var headers
       0:8,
-      RetCode:8
       % payload
+      RetCode:8
     >>;
 
 encode_payload('SUBACK', Opts) ->
@@ -201,6 +228,8 @@ encode_payload('PINGREQ', _) ->
 encode_payload('PINGRESP', _) ->
 	<<>>.
 
+encode_string(undefined) ->
+    <<>>;
 encode_string(Str) ->
     <<
       (size(Str)):16,
@@ -246,6 +275,8 @@ type2atom(13) -> 'PINGRESP';
 type2atom(14) -> 'DISCONNECT';
 type2atom(_)  -> invalid.
 
+setflag(undefined) -> 0;
+setflag(_)         -> 1.
 
 bin(X) when is_binary(X) ->
     X.

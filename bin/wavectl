@@ -1,0 +1,67 @@
+#!/usr/bin/env escript
+
+%% -*- erlang -*-
+%%! -smp enable -sname import-deviceids 
+-mode(compile).
+
+-include_lib("wave/include/mqtt_msg.hrl").
+
+-define(CLIENTID, <<"wavectl/0.1">>).
+% TODO: read it from app.config
+-define(USERNAME, <<"wavectl">>).
+-define(PASSWORD, <<"password">>).
+
+main([]) ->
+    BaseDir = ".",
+
+    code:add_path(BaseDir ++ "/ebin"),
+    [ code:add_path(P) || P <- filelib:wildcard(BaseDir ++ "/deps/*/ebin/") ],
+
+    R = application:ensure_all_started(lager),
+    io:format("~p~n", [R]),
+
+    case connect(?CLIENTID, ?USERNAME, ?PASSWORD) of
+        {ok, Sock} ->
+            io:format("auth accepted~n"),
+            ok;
+
+        Err ->
+            io:format("failed to connect: ~p~n", [Err]),
+            halt(1)
+    end;
+
+main(_) ->
+    io:format("Usage: ~p~n", [escript:script_name()]),
+    halt(1).
+
+connect(ClientID, Username, Password) ->
+    {ok, Sock} = gen_tcp:connect({127,0,0,1}, 1883, [binary,{active,false}]),
+    
+    Msg = #mqtt_msg{type='CONNECT', payload=[{clientid,ClientID},{username,Username},{password,Password}]},
+    case send(Sock, Msg) of
+        {ok, #mqtt_msg{type='CONNACK', payload=P}} ->
+            case proplists:get_value(retcode, P) of
+                0   -> {ok, Sock};
+                2   -> {error, "invalid clientid"};
+                4   -> {error, "invalid credentials"};
+                Err -> {error, Err}
+            end;
+
+        Err ->
+            Err
+    end.
+
+send(Sock, Msg) ->
+    ok = gen_tcp:send(Sock, mqtt_msg:encode(Msg)),
+
+    case gen_tcp:recv(Sock, 0, 5000) of
+        {ok, Pkt} ->
+            case mqtt_msg:decode(Pkt) of
+                {ok, Resp, _} -> {ok, Resp};
+                Err2          -> Err2
+            end;
+
+        Err -> 
+            Err
+    end.
+

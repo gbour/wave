@@ -91,7 +91,7 @@ publish(Pid, Topic, Content) ->
 %% STATES
 
 initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
-	lager:info("connected"),
+	lager:info("received CONNECT"),
 	%gen_fsm:start_timer(5000, timeout1),
 	%lager:info("timeout set"),
     DeviceID = proplists:get_value(clientid, P),
