@@ -107,7 +107,8 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
             4 % not authorized
     end,
 
-	Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
+	%Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
+	Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, 0}]},
 	{reply, Resp, connected, StateData, 5000};
 initiate(#mqtt_msg{}, _, StateData) ->
 	% close socket
@@ -132,17 +133,31 @@ connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData) ->
     Topic   = proplists:get_value(topic, P),
     Content = proplists:get_value(data, P),
 
-    mqtt_topic:publish(Topic, Content),
+    MatchList = mqtt_topic_registry:match(Topic),
+    lager:info("matchlist= ~p", [MatchList]),
+    [
+        case is_process_alive(Pid) of
+            true ->
+                Mod:Fun(Pid, Topic, Content);
+
+            _ ->
+                lager:info("deadbeef ~p", [Pid]),
+                mqtt_topic_registry:unsubscribe(Subscr)
+
+        end
+
+        || Subscr={_, {Mod,Fun,Pid}} <- MatchList
+    ],
 
 	Resp = #mqtt_msg{type='CONNACK', payload=[{retcode,0}]},
 	{reply, Resp, connected, StateData, 5000};
 
 connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData) ->
-	MsgId = proplists:get_value(msgid, P),
+	MsgId  = proplists:get_value(msgid, P),
     Topics = proplists:get_value(topics, P),
   
     % subscribe to all listed topics (creating it if it don't exists)
-    [ mqtt_topic:subscribe(Topic, {?MODULE,publish,self()}) || {Topic,Qos} <- Topics ],
+    [ mqtt_topic_registry:subscribe(Topic, {?MODULE,publish,self()}) || {Topic,Qos} <- Topics ],
 
 
 	Resp  = #mqtt_msg{type='SUBACK', payload=[{msgid,MsgId},{qos,[1]}]},
@@ -168,10 +183,11 @@ connected({timeout, _, timeout1}, StateData) ->
 	{stop, disconnect, []};
 
 connected(timeout, StateData=#session{transport={Callback,Transport,Socket}}) ->
-    lager:info("5s timeout"),
+    %lager:info("5s timeout"),
     % sending ping
-    Callback:ping(Transport, Socket),
-    Ref = gen_fsm:send_event_after(1000, ping_timeout),
+    %Callback:ping(Transport, Socket),
+    %Ref = gen_fsm:send_event_after(1000, ping_timeout),
+    Ref=0,
 
     {next_state, connected, StateData#session{pingid=Ref}};
 

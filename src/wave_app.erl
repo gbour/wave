@@ -44,6 +44,10 @@ start() ->
 start(_StartType, _StartArgs) ->
 	lager:debug("starting wave app"),
 
+    % start topics registry
+    % TODO: use supervisor
+    mqtt_topic_registry:start_link(),
+
 	% start mqtt listener
 	{ok, MqttPort} = application:get_env(wave, mqtt_port),
     {ok, _} = ranch:start_listener(wave, 1, ranch_tcp, [{port, MqttPort}], mqtt_ranch_protocol, []),
