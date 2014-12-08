@@ -251,7 +251,7 @@ atom2type('PUBACK')      ->  4;
 atom2type('PUBREC')      ->  5;
 atom2type('PUBREL')      ->  6;
 atom2type('PUBCOMP')     ->  7;
-atom2type('SUBSCRIBE')   ->  9;
+atom2type('SUBSCRIBE')   ->  8;
 atom2type('SUBACK')      ->  9;
 atom2type('UNSUBSCRIBE') -> 10;
 atom2type('UNSUBACK')    -> 11;

@@ -149,7 +149,7 @@ connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData) ->
         || Subscr={_, {Mod,Fun,Pid}} <- MatchList
     ],
 
-	Resp = #mqtt_msg{type='CONNACK', payload=[{retcode,0}]},
+	Resp = #mqtt_msg{type='PUBACK', payload=[{msgid,1}]},
 	{reply, Resp, connected, StateData, 5000};
 
 connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData) ->
