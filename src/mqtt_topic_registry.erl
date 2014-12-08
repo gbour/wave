@@ -110,7 +110,7 @@ priv_dump([{Topic, Subscriber} |T]) ->
 priv_dump([]) ->
     ok.
 
-priv_unsubscribe(_, [], S2) ->
+priv_unsubscribe(_, [], S2) ->
     S2;
 priv_unsubscribe(S, [S|T], S2) ->
     priv_unsubscribe(S, T, S2);

@@ -20,15 +20,29 @@ main([]) ->
     R = application:ensure_all_started(lager),
     io:format("~p~n", [R]),
 
-    case connect(?CLIENTID, ?USERNAME, ?PASSWORD) of
-        {ok, Sock} ->
+    Sock = case connect(?CLIENTID, ?USERNAME, ?PASSWORD) of
+        {ok, _Sock} ->
             io:format("auth accepted~n"),
-            ok;
+            _Sock;
 
         Err ->
             io:format("failed to connect: ~p~n", [Err]),
             halt(1)
-    end;
+    end,
+
+    Id = erlang:integer_to_binary(random:uniform(99999)),
+    % subscribe to my response channel
+    send(Sock, #mqtt_msg{type='SUBSCRIBE', payload=[{topic, <<"/adm/wavectl/", Id/binary, "/resp">>}]}),
+
+    % ping/pong exchange
+    Resp = send(Sock, #mqtt_msg{type='PUBLISH', payload=[{msgid,1},{topic,<<"/adm/wavectl/",Id/binary>>},
+        {content, jiffy:encode({[{request, ping},{id, random:uniform(99999)}]})}]}),
+    io:format("r= ~p~n", [Resp]),
+
+    Pong = recv(Sock),
+    io:format("received pong= ~p~n", [Pong]),
+
+    ok;
 
 main(_) ->
     io:format("Usage: ~p~n", [escript:script_name()]),
@@ -54,6 +68,18 @@ connect(ClientID, Username, Password) ->
 send(Sock, Msg) ->
     ok = gen_tcp:send(Sock, mqtt_msg:encode(Msg)),
 
+    case gen_tcp:recv(Sock, 0, 5000) of
+        {ok, Pkt} ->
+            case mqtt_msg:decode(Pkt) of
+                {ok, Resp, _} -> {ok, Resp};
+                Err2          -> Err2
+            end;
+
+        Err -> 
+            Err
+    end.
+
+recv(Sock) ->
     case gen_tcp:recv(Sock, 0, 5000) of
         {ok, Pkt} ->
             case mqtt_msg:decode(Pkt) of

@@ -3,7 +3,7 @@
 - use a dedicated topic /adm/wavetcl/{id}
   response sent by server in /adm/wavectl/{id}/resp
 
-- payload = json
+- payload = json, msgpack later
 - strong auth (TLS, scrypted password)
 
 clear:

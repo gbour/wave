@@ -47,6 +47,7 @@ start(_StartType, _StartArgs) ->
     % start topics registry
     % TODO: use supervisor
     mqtt_topic_registry:start_link(),
+    wave_ctlmngr:start_link(),
 
 	% start mqtt listener
 	{ok, MqttPort} = application:get_env(wave, mqtt_port),

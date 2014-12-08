@@ -117,6 +117,14 @@ decode_payload('CONNACK', {Len, <<_:8, RetCode:8/integer>>}) ->
     lager:debug("CONNACK"),
     {ok, [{retcode, RetCode}]};
 
+decode_payload('PUBACK', {Len, <<MsgID:16>>}) ->
+    lager:debug("PUBACK. MsgID= ~p", [MsgID]),
+    {ok, [{msgid, MsgID}]};
+
+decode_payload('SUBACK', {Len, <<MsgID:16, Qos/binary>>}) ->
+    lager:debug("SUBACK. MsgID= ~p", [MsgID]),
+    {ok, [{msgid, MsgID}]};
+
 decode_payload(Cmd, Args) ->
     lager:info("invalid:: ~p: ~p", [Cmd, Args]),
 
@@ -206,12 +214,29 @@ encode_payload('PUBLISH', Opts) ->
         (bin(Content))/binary
     >>;
 
+encode_payload('SUBSCRIBE', Opts) ->
+    Topic = proplists:get_value(topic, Opts),
+    lager:info("topic= ~p", [Topic]),
+
+    <<
+        1:16, % MsgID - mandatory
+        (encode_string(Topic))/binary,
+        0:8 % QoS
+    >>;
+
 encode_payload('CONNACK', [{retcode, RetCode}]) ->
     <<
       % var headers
       0:8,
       % payload
       RetCode:8
+    >>;
+
+encode_payload('PUBACK', Opts) ->
+    MsgID = proplists:get_value(msgid, Opts),
+
+    <<
+        MsgID:16
     >>;
 
 encode_payload('SUBACK', Opts) ->
