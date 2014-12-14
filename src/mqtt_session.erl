@@ -27,7 +27,7 @@
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
--export([handle/2,publish/3]).
+-export([handle/2,publish/3, is_alive/1, garbage_collect/1]).
 -export([initiate/3, connected/2, connected/3]).
 %
 % role
@@ -63,6 +63,7 @@
 %       on ANY incoming message : reset timeout#1 ; ... ; set timeout #1
 
 -record(session, {
+    deviceid,
     transport,
     pingid = undefined
 }).
@@ -83,6 +84,25 @@ handle(Pid, Msg) ->
 	{ok, Resp}.
 
 %
+%
+% return true if client connection still alive
+% (check socket status => kill mqtt_session if socket is in error (closed))
+is_alive(Pid) ->
+    case is_process_alive(Pid) of
+        true ->
+            case gen_fsm:sync_send_event(Pid, ping) of
+                ok -> true;
+                _  -> false
+            end;
+
+        _    ->
+            false
+    end.
+
+garbage_collect(Pid) ->
+    ok.
+
+%
 % a message is published for me
 %
 publish(Pid, Topic, Content) ->
@@ -100,16 +120,36 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
 
     Retcode = case wave_auth:check(device, DeviceID, Username, Password) of
         {ok, Record} ->
-            0; % ok
+            lager:info("dev record= ~p", [Record]),
+
+            case gproc:where({n,l,DeviceID}) of
+                undefined ->
+                    gproc:reg({n,l,DeviceID}),
+                    0;
+
+                Pid       ->
+                    %TODO: check if processus is alive / socket is opened (try read)
+                    case mqtt_session:is_alive(Pid) of
+                        true ->
+                            lager:info("~p device already registered", [DeviceID]),
+                            5;
+
+                        _    ->
+                            %mqtt_session:garbage_collect(Pid),
+                            gproc:reg({n,l,DeviceID}),
+                            0
+                    end
+            end;
+
         {error, wrong_id} ->
             2;
         {error, bad_credentials} ->
             4 % not authorized
     end,
 
-	%Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
-	Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, 0}]},
-	{reply, Resp, connected, StateData, 5000};
+	Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
+	%Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, 0}]},
+	{reply, Resp, connected, StateData#session{deviceid=DeviceID}, 5000};
 initiate(#mqtt_msg{}, _, StateData) ->
 	% close socket
 	{stop, disconnect, []};
@@ -174,6 +214,17 @@ connected({publish, Topic, Content}, _, StateData=#session{transport={Callback,T
 		ok ->
 			{reply, ok, connected, StateData, 5000}
 	end;
+
+connected(ping, _, StateData=#session{transport={Callback,Transport,Socket}}) ->
+    Ret = Callback:crlfping(Transport, Socket),
+    lager:info("send CRLF ping= ~p", [Ret]),
+    case Ret of
+        {error, Err} ->
+            {stop, normal, disconnect, undefined};
+
+        ok ->
+            {reply, ok, connected, StateData, 5000}
+    end;
 
 connected(_,_, StateData) ->
     {stop, normal, disconnect, undefined}.

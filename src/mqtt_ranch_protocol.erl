@@ -21,7 +21,7 @@
 -export([start_link/4]).
 -export([init/4]).
 
--export([ping/2, publish/4, close/2]).
+-export([ping/2, crlfping/2, publish/4, close/2]).
 
 -include("include/mqtt_msg.hrl").
 
@@ -115,6 +115,8 @@ ping(Transport, Socket) ->
     Msg = #mqtt_msg{type='PINGREQ'},
     Transport:send(Socket, mqtt_msg:encode(Msg)).
 
+crlfping(T, S) ->
+    T:send(S, <<"">>).
 
 publish(Transport, Socket, Topic, Content) ->
     Msg = #mqtt_msg{type='PUBLISH', payload=[{topic,Topic}, {content, Content}]},

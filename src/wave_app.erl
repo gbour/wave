@@ -29,7 +29,7 @@ start() ->
     lager:start(),
     lager:set_loglevel(lager_console_backend, debug),
 
-    application:start(gproc),
+    application:ensure_all_started(gproc),
     application:ensure_all_started(shotgun),
 
     % HTTP server (+dependencies)
