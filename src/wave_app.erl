@@ -30,6 +30,7 @@ start() ->
     lager:set_loglevel(lager_console_backend, debug),
 
     application:start(gproc),
+    application:ensure_all_started(shotgun),
 
     % HTTP server (+dependencies)
     application:start(crypto),
@@ -49,6 +50,11 @@ start(_StartType, _StartArgs) ->
     mqtt_topic_registry:start_link(),
     wave_ctlmngr:start_link(),
 
+    % start modules
+    {ok, Mods} = application:get_env(wave, modules),
+    lager:info("~p", [Mods]),
+    load_module(Mods),
+
 	% start mqtt listener
 	{ok, MqttPort} = application:get_env(wave, mqtt_port),
     {ok, _} = ranch:start_listener(wave, 1, ranch_tcp, [{port, MqttPort}], mqtt_ranch_protocol, []),
@@ -56,4 +62,13 @@ start(_StartType, _StartArgs) ->
 	wave_sup:start_link().
 
 stop(_State) ->
+    ok.
+
+load_module([{Mod, Args} |T]) ->
+    lager:info("load ~p", [Mod]),
+    (erlang:list_to_atom("wave_mod_"++erlang:atom_to_list(Mod))):start_link(Args),
+
+    load_module(T);
+
+load_module([]) ->
     ok.

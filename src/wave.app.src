@@ -11,7 +11,20 @@
   {mod, { wave_app, []}},
   {env, [
 	% MQTT
-    {mqtt_port, 1883}
+    {mqtt_port, 1883},
+
+    {modules, [
+        {freemobile, [
+            {username, foo},
+            {password, bar},
+
+            {topics, [
+                "/secu/ssh"
+            ]}
+        ]}
+
+    ]}
+
   ]}
 ]}.
 
