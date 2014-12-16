@@ -48,6 +48,7 @@ start(_StartType, _StartArgs) ->
     % start topics registry
     % TODO: use supervisor
     mqtt_topic_registry:start_link(),
+    mqtt_offline:start_link(),
     wave_ctlmngr:start_link(),
 
     % start modules

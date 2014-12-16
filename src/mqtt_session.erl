@@ -169,7 +169,7 @@ connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=Ref}) ->
     gen_fsm:cancel_timer(Ref),
     {reply, undefined, connected, StateData#session{pingid=undefined}, 5000};
 
-connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData) ->
+connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData=#session{deviceid=DeviceID}) ->
     Topic   = proplists:get_value(topic, P),
     Content = proplists:get_value(data, P),
 
@@ -178,11 +178,16 @@ connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData) ->
     [
         case is_process_alive(Pid) of
             true ->
-                Mod:Fun(Pid, Topic, Content);
+                %TODO: add MatchTopic in parameters
+                %      ie the matching topic rx that lead to executing this callback
+                %
+                %      in case of error (socket closed), subscriber is automatically registered
+                %      to offline
+                Ret = Mod:Fun(Pid, Topic, Content);
 
             _ ->
-                lager:info("deadbeef ~p", [Pid]),
-                mqtt_topic_registry:unsubscribe(Subscr)
+                % SHOULD NEVER HAPPEND
+                lager:error("deadbeef ~p", [Pid])
 
         end
 
@@ -192,24 +197,23 @@ connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData) ->
 	Resp = #mqtt_msg{type='PUBACK', payload=[{msgid,1}]},
 	{reply, Resp, connected, StateData, 5000};
 
-connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData) ->
+connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T}) ->
 	MsgId  = proplists:get_value(msgid, P),
     Topics = proplists:get_value(topics, P),
   
     % subscribe to all listed topics (creating it if it don't exists)
     [ mqtt_topic_registry:subscribe(Topic, {?MODULE,publish,self()}) || {Topic,Qos} <- Topics ],
 
-
 	Resp  = #mqtt_msg{type='SUBACK', payload=[{msgid,MsgId},{qos,[1]}]},
 
-    {reply, Resp, connected, StateData, 5000};
+    {reply, Resp, connected, StateData#session{topics=Topics++T}, 5000};
 
 connected({publish, Topic, Content}, _, StateData=#session{transport={Callback,Transport,Socket}}) ->
     Ret = Callback:publish(Transport, Socket, Topic, Content),
 	lager:info("ret= ~p", [Ret]),
 	case Ret of
 		{error, Err} ->
-			{stop, normal, disconnect, undefined};
+			{stop, normal, disconnect, StateData};
 
 		ok ->
 			{reply, ok, connected, StateData, 5000}
@@ -220,7 +224,7 @@ connected(ping, _, StateData=#session{transport={Callback,Transport,Socket}}) ->
     lager:info("send CRLF ping= ~p", [Ret]),
     case Ret of
         {error, Err} ->
-            {stop, normal, disconnect, undefined};
+            {stop, normal, disconnect, StateData};
 
         ok ->
             {reply, ok, connected, StateData, 5000}
@@ -260,8 +264,27 @@ handle_info(_Info, _StateName, StateData) ->
 	lager:debug("info ~p", [_StateName]),
     {stop, error, StateData}.
 
-terminate(_Reason, _StateName, _StateData) ->
-    lager:info("session terminate"),
+terminate(_Reason, _StateName, _StateData=#session{deviceid=DeviceID, topics=T}) ->
+    lager:info("session terminate: ~p (~p ~p)", [_Reason, _StateName, _StateData]),
+    [
+        % anonymous function
+        %fun({Topic, _}) ->
+        case true of
+            true ->
+            lager:info("t= ~p ~p", [Topic, self()]),
+            % TODO: add a mqtt_topic_register:substitute() 
+            %       replacing client session process by offline process
+            mqtt_topic_registry:unsubscribe({Topic, {?MODULE,publish,self()}}),
+            mqtt_offline:register(Topic, DeviceID)
+        end
+
+        || {Topic, Qos} <- T
+    ],
+    terminate;
+
+% publisher disconnection
+terminate(_Reason, _StateName, undefined) ->
+    lager:info("terminate for ~p/~p", [_Reason, _StateName]),
     terminate.
 
 code_change(_OldVsn, StateName, StateData, _Extra) ->
