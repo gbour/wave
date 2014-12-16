@@ -32,7 +32,7 @@
 
 %
 %-export([get/1, subscribe/2, get_subscribers/1]).
--export([register/2, dump/0, event/3]).
+-export([register/2, recover/1, dump/0, event/3]).
 % gen_server API
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
@@ -54,6 +54,9 @@ init(_) ->
 register(Topic, DeviceID) ->
     gen_server:call(?MODULE, {register, Topic, DeviceID}).
 
+recover(DeviceID) ->
+    gen_server:call(?MODULE, {recover, DeviceID}).
+
 dump() ->
     gen_server:call(?MODULE,dump).
 
@@ -72,6 +75,17 @@ handle_call({register, Topic, DeviceID}, _, State=#state{registrations=R}) ->
     mqtt_topic_registry:subscribe(Topic, {?MODULE, event, self()}),
 
     {reply, ok, State#state{registrations=[{Topic, DeviceID}|R]}};
+
+handle_call({recover, DeviceID}, _, State=#state{registrations=R}) ->
+    {R2, DTopics} = lists:splitwith(fun({Topic, DeviceID2}) -> DeviceID2 =/= DeviceID end, R),
+    lager:info("~p / ~p", [R2, DTopics]),
+    lists:foreach(fun({Topic, _}) ->
+            mqtt_topic_registry:unsubscribe({Topic, {?MODULE,event,self()}})
+        end,
+        DTopics
+    ),
+
+    {reply, DTopics, State#state{registrations=R2}};
 
 %TODO: add MatchTopic in parameters
 %      ie the matching topic rx that lead to executing this callback

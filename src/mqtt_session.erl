@@ -125,6 +125,11 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
             case gproc:where({n,l,DeviceID}) of
                 undefined ->
                     gproc:reg({n,l,DeviceID}),
+
+                    Topics = mqtt_offline:recover(DeviceID),
+                    lager:info("offline topics: ~p", [Topics]),
+                    [ mqtt_topic_registry:subscribe(Topic, {?MODULE,publish,self()}) || {Topic,_} <- Topics ],
+
                     0;
 
                 Pid       ->
