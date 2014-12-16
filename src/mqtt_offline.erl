@@ -32,7 +32,7 @@
 
 %
 %-export([get/1, subscribe/2, get_subscribers/1]).
--export([register/2, recover/1, dump/0, event/3]).
+-export([register/2, recover/1, flush/2, dump/0, event/3]).
 % gen_server API
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
@@ -56,6 +56,9 @@ register(Topic, DeviceID) ->
 
 recover(DeviceID) ->
     gen_server:call(?MODULE, {recover, DeviceID}).
+
+flush(DeviceID, Session) ->
+    gen_server:cast(?MODULE, {flush, DeviceID, Session}).
 
 dump() ->
     gen_server:call(?MODULE,dump).
@@ -90,12 +93,56 @@ handle_call({recover, DeviceID}, _, State=#state{registrations=R}) ->
 %TODO: add MatchTopic in parameters
 %      ie the matching topic rx that lead to executing this callback
 handle_call({event, Topic, Content}, _, State=#state{msgid=MsgID, registrations=R}) ->
+    {ok, C} = eredis:start_link(),
     lager:info("received event on ~p", [Topic]),
+
+    MsgIDs = erlang:integer_to_binary(MsgID),
+    Ret = eredis:q(C, ["SET", <<"msg:", (erlang:integer_to_binary(MsgID))/binary>>, Content]),
+    lager:info("~p", [Ret]),
+
+    [
+        case mqtt_top of
+            _ ->
+            %Topic ->
+                eredis:q(C, ["LPUSH", <<"queue:", DeviceID/binary>>, MsgIDs]),
+                eredis:q(C, ["INCR",  <<"msg:", MsgIDs/binary, ":refcount">>]);
+
+            _     ->
+                pass
+        end
+
+        || {T2, DeviceID} <- R
+    ],
+
     {reply, ok, State#state{msgid=MsgID+1}};
 
 handle_call(_,_,State) ->
     {reply, ok, State}.
 
+handle_cast({flush, DeviceID, {M,F,Pid}}, State=#state{}) ->
+    lager:info("flush ~p", [DeviceID]),
+    {ok, C} = eredis:start_link(),
+
+    {ok, MsgIDs} = eredis:q(C, ["LRANGE", <<"queue:", DeviceID/binary>>, 0, -1]),
+    lists:foreach(fun(Id) ->
+            {ok, Msg} = eredis:q(C, ["GET", <<"msg:", Id/binary>>]),
+            lager:info("~p flush msg: ~p (id: ~p)", [DeviceID, Msg, Id]),
+            M:F(Pid, <<"/offline">>, Msg),
+            {ok, Cnt} = eredis:q(C, ["DECR", <<"msg:", Id/binary,":refcount">>]),
+            Cnt2 = erlang:binary_to_integer(Cnt),
+            if Cnt2 =< 0 ->
+                eredis:q(C, ["DEL", <<"msg:", Id/binary>>]),
+                eredis:q(C, ["DEL", <<"msg:", Id/binary, ":refcount">>])
+            end,
+
+            ok
+        end, 
+        MsgIDs
+    ),
+    %TODO: delete queue
+    eredis:q(C, ["LTRIM", <<"queue:",DeviceID/binary>>, length(MsgIDs), -1]),
+
+    {noreply, State};
 
 handle_cast(_, State) ->
     {noreply, State}.

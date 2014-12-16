@@ -126,9 +126,17 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
                 undefined ->
                     gproc:reg({n,l,DeviceID}),
 
+                    % if connection is successful, we need to check if we have offline messages
+                    % 
                     Topics = mqtt_offline:recover(DeviceID),
                     lager:info("offline topics: ~p", [Topics]),
                     [ mqtt_topic_registry:subscribe(Topic, {?MODULE,publish,self()}) || {Topic,_} <- Topics ],
+                    % flush is async
+                    case Topics of
+                        [] -> ok;
+                        _  ->
+                            mqtt_offline:flush(DeviceID, {?MODULE,publish,self()})
+                    end,
 
                     0;
 
