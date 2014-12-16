@@ -73,7 +73,16 @@ handle_call(dump, _, State=#state{subscriptions=S}) ->
     {reply, ok, State};
 
 handle_call({subscribe, TopicName, Subscriber}, _, State=#state{subscriptions=Subscriptions}) ->
-    {reply, ok, State#state{subscriptions=Subscriptions ++ [{TopicName, Subscriber}]}};
+    {Reply, S2} = case lists:filter(fun(Item) -> Item =:= {TopicName,Subscriber} end, Subscriptions) of
+        [] ->
+            {ok, Subscriptions ++ [{TopicName,Subscriber}]};
+
+        _  ->
+            lager:error("~p already subscribed to ~p", [Subscriber, TopicName]),
+            {duplicate, Subscriptions}
+    end,
+
+    {reply, Reply, State#state{subscriptions=S2}};
 
 handle_call({unsubscribe, Subscriber}, _, State=#state{subscriptions=S}) ->
     S2 = priv_unsubscribe(Subscriber, S, []),
