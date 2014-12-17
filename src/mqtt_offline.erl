@@ -92,18 +92,17 @@ handle_call({recover, DeviceID}, _, State=#state{registrations=R}) ->
 
 %TODO: add MatchTopic in parameters
 %      ie the matching topic rx that lead to executing this callback
-handle_call({event, Topic, Content}, _, State=#state{msgid=MsgID, registrations=R}) ->
+handle_call({event, {Topic,TopicMatch}, Content}, _, State=#state{msgid=MsgID, registrations=R}) ->
     {ok, C} = eredis:start_link(),
-    lager:info("received event on ~p", [Topic]),
+    lager:info("received event on ~p (matched with ~s)", [Topic, TopicMatch]),
 
     MsgIDs = erlang:integer_to_binary(MsgID),
     Ret = eredis:q(C, ["SET", <<"msg:", (erlang:integer_to_binary(MsgID))/binary>>, Content]),
     lager:info("~p", [Ret]),
 
     [
-        case mqtt_top of
-            _ ->
-            %Topic ->
+        case T2 of
+            TopicMatch ->
                 eredis:q(C, ["LPUSH", <<"queue:", DeviceID/binary>>, MsgIDs]),
                 eredis:q(C, ["INCR",  <<"msg:", MsgIDs/binary, ":refcount">>]);
 

@@ -196,7 +196,7 @@ connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData=#session{deviceid=D
                 %
                 %      in case of error (socket closed), subscriber is automatically registered
                 %      to offline
-                Ret = Mod:Fun(Pid, Topic, Content);
+                Ret = Mod:Fun(Pid, {Topic,TopicMatch}, Content);
 
             _ ->
                 % SHOULD NEVER HAPPEND
@@ -204,7 +204,7 @@ connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData=#session{deviceid=D
 
         end
 
-        || Subscr={_, {Mod,Fun,Pid}} <- MatchList
+        || Subscr={TopicMatch, {Mod,Fun,Pid}} <- MatchList
     ],
 
 	Resp = #mqtt_msg{type='PUBACK', payload=[{msgid,1}]},
@@ -221,7 +221,7 @@ connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T
 
     {reply, Resp, connected, StateData#session{topics=Topics++T}, 5000};
 
-connected({publish, Topic, Content}, _, StateData=#session{transport={Callback,Transport,Socket}}) ->
+connected({publish, {Topic,_}, Content}, _, StateData=#session{transport={Callback,Transport,Socket}}) ->
     Ret = Callback:publish(Transport, Socket, Topic, Content),
 	lager:info("ret= ~p", [Ret]),
 	case Ret of
