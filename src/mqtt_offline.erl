@@ -80,7 +80,7 @@ handle_call({register, Topic, DeviceID}, _, State=#state{registrations=R}) ->
     {reply, ok, State#state{registrations=[{Topic, DeviceID}|R]}};
 
 handle_call({recover, DeviceID}, _, State=#state{registrations=R}) ->
-    {R2, DTopics} = lists:splitwith(fun({Topic, DeviceID2}) -> DeviceID2 =/= DeviceID end, R),
+    {R2, DTopics} = lists:partition(fun({_Topic, DeviceID2}) -> DeviceID2 =/= DeviceID end, R),
     lager:info("~p / ~p", [R2, DTopics]),
     lists:foreach(fun({Topic, _}) ->
             mqtt_topic_registry:unsubscribe({Topic, {?MODULE,event,self()}})
