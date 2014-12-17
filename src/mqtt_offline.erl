@@ -96,15 +96,17 @@ handle_call({event, {Topic,TopicMatch}, Content}, _, State=#state{msgid=MsgID, r
     {ok, C} = eredis:start_link(),
     lager:info("received event on ~p (matched with ~s)", [Topic, TopicMatch]),
 
-    MsgIDs = erlang:integer_to_binary(MsgID),
-    Ret = eredis:q(C, ["RPUSH", <<"msg:", MsgIDs/binary>>, Topic, Content]),
+    %TODO: optimisation: for messages shorted than len(HMAC),
+    %      store directly the message in the queue
+    MsgID = erlang:list_to_binary(hmac:hexlify(hmac:hmac("", Content))),
+    Ret = eredis:q(C, ["SET", <<"msg:", MsgID/binary>>, Content]),
     lager:info("~p", [Ret]),
 
     [
         case T2 of
             TopicMatch ->
-                eredis:q(C, ["RPUSH", <<"queue:", DeviceID/binary>>, MsgIDs]),
-                eredis:q(C, ["INCR",  <<"msg:", MsgIDs/binary, ":refcount">>]);
+                eredis:q(C, ["RPUSH", <<"queue:", DeviceID/binary>>, Topic, MsgID]),
+                eredis:q(C, ["INCR",  <<"msg:", MsgID/binary, ":refcount">>]);
 
             _     ->
                 pass
@@ -118,29 +120,13 @@ handle_call({event, {Topic,TopicMatch}, Content}, _, State=#state{msgid=MsgID, r
 handle_call(_,_,State) ->
     {reply, ok, State}.
 
-handle_cast({flush, DeviceID, {M,F,Pid}}, State=#state{}) ->
+handle_cast({flush, DeviceID, Device={_M,_F,_Pid}}, State=#state{}) ->
     lager:info("flush ~p", [DeviceID]),
     {ok, C} = eredis:start_link(),
 
     {ok, MsgIDs} = eredis:q(C, ["LRANGE", <<"queue:", DeviceID/binary>>, 0, -1]),
-    lists:foreach(fun(Id) ->
-            {ok, [Topic, Msg]} = eredis:q(C, ["LRANGE", <<"msg:", Id/binary>>, 0, 1]),
-            lager:info("~p flush msg: ~p (id: ~p, topic= ~p)", [DeviceID, Msg, Id, Topic]),
-            M:F(Pid, {Topic, undefined}, Msg),
+    priv_flush(C, MsgIDs, Device),
 
-            %TODO: operation must be atomic (including the LRANGE ?)
-            %      use MULTI/EXEC
-            {ok, Cnt} = eredis:q(C, ["DECR", <<"msg:", Id/binary,":refcount">>]),
-            Cnt2 = erlang:binary_to_integer(Cnt),
-            if Cnt2 =< 0 ->
-                eredis:q(C, ["DEL", <<"msg:", Id/binary>>]),
-                eredis:q(C, ["DEL", <<"msg:", Id/binary, ":refcount">>])
-            end,
-
-            ok
-        end, 
-        MsgIDs
-    ),
     %TODO: delete queue
     eredis:q(C, ["LTRIM", <<"queue:",DeviceID/binary>>, length(MsgIDs), -1]),
 
@@ -162,3 +148,26 @@ code_change(_, State, _) ->
     {ok, State}.
 
 
+priv_flush(C, [Topic, MsgID |T], Device={M,F,Pid}) ->
+    {ok, Msg} = eredis:q(C, ["GET", <<"msg:", MsgID/binary>>]),
+    lager:info("flush msg: ~p (id: ~p, topic= ~p)", [Msg, MsgID, Topic]),
+    M:F(Pid, {Topic, undefined}, Msg),
+
+    %TODO: operation must be atomic (including the LRANGE ?)
+    %      use MULTI/EXEC
+    {ok, Cnt} = eredis:q(C, ["DECR", <<"msg:", MsgID/binary,":refcount">>]),
+    Cnt2 = erlang:binary_to_integer(Cnt),
+    if 
+        Cnt2 =< 0 ->
+            eredis:q(C, ["DEL", <<"msg:", MsgID/binary>>]),
+            eredis:q(C, ["DEL", <<"msg:", MsgID/binary, ":refcount">>]);
+
+        true ->
+            ok
+    end,
+
+    % next queued message
+    priv_flush(C, T, Device);
+
+priv_flush(_, [], _) ->
+    ok.
