@@ -97,7 +97,7 @@ handle_call({event, {Topic,TopicMatch}, Content}, _, State=#state{msgid=MsgID, r
     lager:info("received event on ~p (matched with ~s)", [Topic, TopicMatch]),
 
     MsgIDs = erlang:integer_to_binary(MsgID),
-    Ret = eredis:q(C, ["SET", <<"msg:", (erlang:integer_to_binary(MsgID))/binary>>, Content]),
+    Ret = eredis:q(C, ["RPUSH", <<"msg:", MsgIDs/binary>>, Topic, Content]),
     lager:info("~p", [Ret]),
 
     [
@@ -124,9 +124,12 @@ handle_cast({flush, DeviceID, {M,F,Pid}}, State=#state{}) ->
 
     {ok, MsgIDs} = eredis:q(C, ["LRANGE", <<"queue:", DeviceID/binary>>, 0, -1]),
     lists:foreach(fun(Id) ->
-            {ok, Msg} = eredis:q(C, ["GET", <<"msg:", Id/binary>>]),
-            lager:info("~p flush msg: ~p (id: ~p)", [DeviceID, Msg, Id]),
-            M:F(Pid, <<"/offline">>, Msg),
+            {ok, [Topic, Msg]} = eredis:q(C, ["LRANGE", <<"msg:", Id/binary>>, 0, 1]),
+            lager:info("~p flush msg: ~p (id: ~p, topic= ~p)", [DeviceID, Msg, Id, Topic]),
+            M:F(Pid, {Topic, undefined}, Msg),
+
+            %TODO: operation must be atomic (including the LRANGE ?)
+            %      use MULTI/EXEC
             {ok, Cnt} = eredis:q(C, ["DECR", <<"msg:", Id/binary,":refcount">>]),
             Cnt2 = erlang:binary_to_integer(Cnt),
             if Cnt2 =< 0 ->
