@@ -103,7 +103,7 @@ handle_call({event, {Topic,TopicMatch}, Content}, _, State=#state{msgid=MsgID, r
     [
         case T2 of
             TopicMatch ->
-                eredis:q(C, ["LPUSH", <<"queue:", DeviceID/binary>>, MsgIDs]),
+                eredis:q(C, ["RPUSH", <<"queue:", DeviceID/binary>>, MsgIDs]),
                 eredis:q(C, ["INCR",  <<"msg:", MsgIDs/binary, ":refcount">>]);
 
             _     ->
