@@ -65,15 +65,19 @@
 -record(session, {
     deviceid,
     transport,
-    pingid = undefined
+    pingid = undefined,
+    keepalive
 }).
+
+-define(CONNECT_TIMEOUT  , 5000). % ms
+-define(DEFAULT_KEEPALIVE, 300).  % secs
 
 start_link(Transport) ->
     gen_fsm:start_link(?MODULE, Transport, []).
 
 init(Transport) ->
 	% timeout on socket connection: close socket is no CONNECT message received after timeout
-	{ok, initiate, #session{transport=Transport}, 5000}.
+	{ok, initiate, #session{transport=Transport}, ?CONNECT_TIMEOUT}.
 
 %%
 
@@ -117,6 +121,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
     DeviceID = proplists:get_value(clientid, P),
     Username = proplists:get_value(username, P),
     Password = proplists:get_value(password, P),
+    KeepAlive = proplists:get_value(keepalive, P, ?DEFAULT_KEEPALIVE) * 1000,
 
     Retcode = case wave_auth:check(device, DeviceID, Username, Password) of
         {ok, Record} ->
@@ -162,7 +167,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
 
 	Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
 	%Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, 0}]},
-	{reply, Resp, connected, StateData#session{deviceid=DeviceID}, 5000};
+	{reply, Resp, connected, StateData#session{deviceid=DeviceID, keepalive=KeepAlive}, round(KeepAlive*1.5)};
 initiate(#mqtt_msg{}, _, StateData) ->
 	% close socket
 	{stop, disconnect, []};
@@ -173,16 +178,16 @@ initiate({timeout, _, timeout1}, _, StateData) ->
 connected(#mqtt_msg{type='DISCONNECT'}, _, StateData) ->
     {stop, normal, disconnect, undefined};
 
-connected(#mqtt_msg{type='PINGREQ'}, _, StateData) ->
+connected(#mqtt_msg{type='PINGREQ'}, _, StateData=#session{keepalive=Ka}) ->
     Resp = #mqtt_msg{type='PINGRESP'},
-    {reply, Resp, connected, StateData, 5000};
+    {reply, Resp, connected, StateData, round(Ka*1.5)};
 
-connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=Ref}) ->
+connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=Ref,keepalive=Ka}) ->
     lager:info("received PINGRESP"),
     gen_fsm:cancel_timer(Ref),
-    {reply, undefined, connected, StateData#session{pingid=undefined}, 5000};
+    {reply, undefined, connected, StateData#session{pingid=undefined}, round(Ka*1.5)};
 
-connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData=#session{deviceid=DeviceID}) ->
+connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData=#session{deviceid=DeviceID,keepalive=Ka}) ->
     Topic   = proplists:get_value(topic, P),
     Content = proplists:get_value(data, P),
 
@@ -208,9 +213,9 @@ connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData=#session{deviceid=D
     ],
 
 	Resp = #mqtt_msg{type='PUBACK', payload=[{msgid,1}]},
-	{reply, Resp, connected, StateData, 5000};
+	{reply, Resp, connected, StateData, round(Ka*1.5)};
 
-connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T}) ->
+connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T, keepalive=Ka}) ->
 	MsgId  = proplists:get_value(msgid, P),
     Topics = proplists:get_value(topics, P),
   
@@ -219,9 +224,10 @@ connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T
 
 	Resp  = #mqtt_msg{type='SUBACK', payload=[{msgid,MsgId},{qos,[1]}]},
 
-    {reply, Resp, connected, StateData#session{topics=Topics++T}, 5000};
+    {reply, Resp, connected, StateData#session{topics=Topics++T}, round(Ka*1.5)};
 
-connected({publish, {Topic,_}, Content}, _, StateData=#session{transport={Callback,Transport,Socket}}) ->
+connected({publish, {Topic,_}, Content}, _,
+          StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
     Ret = Callback:publish(Transport, Socket, Topic, Content),
 	lager:info("ret= ~p", [Ret]),
 	case Ret of
@@ -229,7 +235,7 @@ connected({publish, {Topic,_}, Content}, _, StateData=#session{transport={Callba
 			{stop, normal, disconnect, StateData};
 
 		ok ->
-			{reply, ok, connected, StateData, 5000}
+			{reply, ok, connected, StateData, round(Ka*1.5)}
 	end;
 
 connected(ping, _, StateData=#session{transport={Callback,Transport,Socket}}) ->
@@ -257,7 +263,9 @@ connected(timeout, StateData=#session{transport={Callback,Transport,Socket}}) ->
     %Ref = gen_fsm:send_event_after(1000, ping_timeout),
     Ref=0,
 
-    {next_state, connected, StateData#session{pingid=Ref}};
+    Callback:close(Transport, Socket),
+    %{next_state, connected, StateData#session{pingid=Ref}};
+    {stop, normal, StateData};
 
 connected(ping_timeout, StateData=#session{transport={Callback,Transport,Socket}}) ->
     Callback:close(Transport, Socket),

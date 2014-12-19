@@ -78,7 +78,9 @@ decode_payload('CONNECT', {Len, <<0:8, 6:8, "MQIsdp", Version:8/integer, Flags:8
 
     lager:debug("~p / ~p / ~p / ~p / ~p", [ClientID, Topic, Message, Username, Password]),
 
-    {ok, [{clientid, ClientID}, {topic, Topic}, {message, Message}, {username, Username}, {password, Password}]};
+    {ok, [{clientid, ClientID}, {topic, Topic}, {message, Message}, {username, Username}, {password, Password},
+        {keepalive, Ka}
+    ]};
 
 decode_payload('PUBLISH', {Len, Rest}) ->
     lager:debug("PUBLISH (v3.1) ~p ~p", [Len, Rest]),
