@@ -95,9 +95,15 @@ decode_payload('PUBLISH', {Len, Rest}) ->
 decode_payload('SUBSCRIBE', {Len, <<MsgID:16, Payload/binary>>}) ->
     lager:debug("SUBSCRIBE v3.1 ~p", [MsgID]),
 
-	Topics = get_topics(Payload, []),
+	Topics = get_topics(Payload, [], true),
 	lager:debug("topics= ~p", [Topics]),
 	{ok, [{msgid, MsgID},{topics, Topics}]};
+
+decode_payload('UNSUBSCRIBE', {Len, <<MsgID:16, Payload/binary>>}) ->
+    lager:debug("UNSUBSCRIBE: ~p", [Payload]),
+
+    Topics = get_topics(Payload, [], false),
+    {ok, [{msgid, MsgID}, {topics, Topics}]};
 
 decode_payload('PINGREQ', {0, <<>>}) ->
 	{ok, undefined};
@@ -132,14 +138,18 @@ decode_payload(Cmd, Args) ->
 
     {error, disconnect}.
 
-get_topics(<<>>, Topics) ->
+get_topics(<<>>, Topics, _) ->
 	Topics;
-get_topics(Payload, Topics) ->
+% with QOS field (SUBSCRIBE)
+get_topics(Payload, Topics, true) ->
 	{Name, Rest} = decode_string(Payload),
 	<<_:6, Qos:2/integer, Rest2/binary>> = Rest,
 
-	get_topics(Rest2, [{Name,Qos}|Topics]).
-
+	get_topics(Rest2, [{Name,Qos}|Topics], true);
+% without QOS field (UNSUBSCRIBE)
+get_topics(Payload, Topics, _) ->
+	{Name, Rest} = decode_string(Payload),
+	get_topics(Rest, [Name|Topics], false).
 
 decode_string(<<>>) ->
     {<<>>, <<>>};
@@ -249,6 +259,9 @@ encode_payload('SUBACK', Opts) ->
 	  MsgId:16,
 	  (encode_qos(Qos))/binary
 	>>;
+
+encode_payload('UNSUBACK', [{msgid, MsgID}]) ->
+	<<MsgID:16>>;
 
 encode_payload('PINGREQ', _) ->
     <<>>;

@@ -64,6 +64,7 @@
 
 -record(session, {
     deviceid,
+    topics = [], % list of subscribed topics
     transport,
     pingid = undefined,
     keepalive
@@ -215,6 +216,7 @@ connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData=#session{deviceid=D
 	Resp = #mqtt_msg{type='PUBACK', payload=[{msgid,1}]},
 	{reply, Resp, connected, StateData, round(Ka*1.5)};
 
+%TODO: prevent subscribing multiple times to the same topic
 connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T, keepalive=Ka}) ->
 	MsgId  = proplists:get_value(msgid, P),
     Topics = proplists:get_value(topics, P),
@@ -224,7 +226,25 @@ connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T
 
 	Resp  = #mqtt_msg{type='SUBACK', payload=[{msgid,MsgId},{qos,[1]}]},
 
+    lager:info("Ka=~p", [Ka]),
     {reply, Resp, connected, StateData#session{topics=Topics++T}, round(Ka*1.5)};
+
+connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _, StateData=#session{topics=OldTopics, keepalive=Ka}) ->
+	MsgId  = proplists:get_value(msgid, P),
+    Topics = proplists:get_value(topics, P),
+  
+    % subscribe to all listed topics (creating it if it don't exists)
+    lists:foreach(fun(T) ->
+            mqtt_topic_registry:unsubscribe(T, {?MODULE,publish,self()})
+        end, 
+        Topics
+    ),
+
+    NewTopics = lists:subtract(OldTopics, Topics),
+	Resp  = #mqtt_msg{type='SUBACK', payload=[{msgid,MsgId},{qos,[1]}]},
+
+    lager:info("Ka=~p ~p", [Ka, OldTopics]),
+    {reply, Resp, connected, StateData#session{topics=NewTopics}, round(Ka*1.5)};
 
 connected({publish, {Topic,_}, Content}, _,
           StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->

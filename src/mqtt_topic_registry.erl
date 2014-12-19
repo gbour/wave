@@ -32,7 +32,7 @@
 
 %
 %-export([get/1, subscribe/2, get_subscribers/1]).
--export([dump/0, subscribe/2, unsubscribe/1, match/1]).
+-export([dump/0, subscribe/2, unsubscribe/1, unsubscribe/2, match/1]).
 % gen_server API
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
@@ -56,6 +56,9 @@ subscribe(Name, Subscriber) ->
 
 unsubscribe(Subscriber) ->
     gen_server:call(?MODULE, {unsubscribe, Subscriber}).
+
+unsubscribe(Name, Subscriber) ->
+    gen_server:call(?MODULE, {unsubscribe, Name, Subscriber}).
 
 match(Name) ->
     gen_server:call(?MODULE, {match, Name}).
@@ -86,6 +89,11 @@ handle_call({subscribe, TopicName, Subscriber}, _, State=#state{subscriptions=Su
 
 handle_call({unsubscribe, Subscriber}, _, State=#state{subscriptions=S}) ->
     S2 = priv_unsubscribe(Subscriber, S, []),
+    {reply, ok, State#state{subscriptions=S2}};
+
+handle_call({unsubscribe, TopicName, Subscriber}, _, State=#state{subscriptions=S}) ->
+    S2 = lists:subtract(S, [{TopicName, Subscriber}]),
+    lager:info("~p / ~p", [S, S2]),
     {reply, ok, State#state{subscriptions=S2}};
 
 handle_call({match, TopicName}, _, State=#state{subscriptions=S}) ->
