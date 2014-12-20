@@ -21,7 +21,7 @@
 
 check(device, DeviceID, Username, Password) ->
     lager:info("auth check ~p (~p: ~p)", [DeviceID, Username, Password]),
-    {ok, C} = eredis:start_link(),
+    {ok, C} = application:get_env(wave, redis),
     {ok, Key} = eredis:q(C, ["GET", ["key:device/deviceid/", DeviceID]]),
     lager:info("check= ~p", [Key]),
 

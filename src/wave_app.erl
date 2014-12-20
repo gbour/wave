@@ -45,6 +45,10 @@ start() ->
 start(_StartType, _StartArgs) ->
 	lager:debug("starting wave app"),
 
+    % start redis connection
+    {ok, Conn} = eredis:start_link("127.0.0.1", 6379, 1),
+    application:set_env(wave, redis, Conn),
+
     % start topics registry
     % TODO: use supervisor
     mqtt_topic_registry:start_link(),

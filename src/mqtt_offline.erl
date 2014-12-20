@@ -26,8 +26,8 @@
 -include("include/mqtt_msg.hrl").
 
 -record(state, {
-    msgid,
-    registrations = []
+    registrations = [],
+    redis % redis connection
 }).
 
 %
@@ -40,7 +40,9 @@ start_link() ->
     gen_server:start_link({local,?MODULE}, ?MODULE, [], []).
 
 init(_) ->
-    {ok, #state{msgid=1}}.
+    {ok, Redis} = application:get_env(wave, redis),
+
+    {ok, #state{redis=Redis}}.
 
 %%
 %% PUBLIC API
@@ -92,21 +94,20 @@ handle_call({recover, DeviceID}, _, State=#state{registrations=R}) ->
 
 %TODO: add MatchTopic in parameters
 %      ie the matching topic rx that lead to executing this callback
-handle_call({event, {Topic,TopicMatch}, Content}, _, State=#state{msgid=MsgID, registrations=R}) ->
-    {ok, C} = eredis:start_link(),
+handle_call({event, {Topic,TopicMatch}, Content}, _, State=#state{registrations=R, redis=Redis}) ->
     lager:info("received event on ~p (matched with ~s)", [Topic, TopicMatch]),
 
     %TODO: optimisation: for messages shorted than len(HMAC),
     %      store directly the message in the queue
     MsgID = erlang:list_to_binary(hmac:hexlify(hmac:hmac("", Content))),
-    Ret = eredis:q(C, ["SET", <<"msg:", MsgID/binary>>, Content]),
+    Ret = eredis:q(Redis, ["SET", <<"msg:", MsgID/binary>>, Content]),
     lager:info("~p", [Ret]),
 
     [
         case T2 of
             TopicMatch ->
-                eredis:q(C, ["RPUSH", <<"queue:", DeviceID/binary>>, Topic, MsgID]),
-                eredis:q(C, ["INCR",  <<"msg:", MsgID/binary, ":refcount">>]);
+                eredis:q(Redis, ["RPUSH", <<"queue:", DeviceID/binary>>, Topic, MsgID]),
+                eredis:q(Redis, ["INCR",  <<"msg:", MsgID/binary, ":refcount">>]);
 
             _     ->
                 pass
@@ -115,20 +116,19 @@ handle_call({event, {Topic,TopicMatch}, Content}, _, State=#state{msgid=MsgID, r
         || {T2, DeviceID} <- R
     ],
 
-    {reply, ok, State#state{msgid=MsgID+1}};
+    {reply, ok, State};
 
 handle_call(_,_,State) ->
     {reply, ok, State}.
 
-handle_cast({flush, DeviceID, Device={_M,_F,_Pid}}, State=#state{}) ->
+handle_cast({flush, DeviceID, Device={_M,_F,_Pid}}, State=#state{redis=Redis}) ->
     lager:info("flush ~p", [DeviceID]),
-    {ok, C} = eredis:start_link(),
 
-    {ok, MsgIDs} = eredis:q(C, ["LRANGE", <<"queue:", DeviceID/binary>>, 0, -1]),
-    priv_flush(C, MsgIDs, Device),
+    {ok, MsgIDs} = eredis:q(Redis, ["LRANGE", <<"queue:", DeviceID/binary>>, 0, -1]),
+    priv_flush(Redis, MsgIDs, Device),
 
     %TODO: delete queue
-    eredis:q(C, ["LTRIM", <<"queue:",DeviceID/binary>>, length(MsgIDs), -1]),
+    eredis:q(Redis, ["LTRIM", <<"queue:",DeviceID/binary>>, length(MsgIDs), -1]),
 
     {noreply, State};
 
