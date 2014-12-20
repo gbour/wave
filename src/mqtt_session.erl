@@ -124,10 +124,18 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
     Password = proplists:get_value(password, P),
     KeepAlive = proplists:get_value(keepalive, P, ?DEFAULT_KEEPALIVE) * 1000,
 
-    Retcode = case wave_auth:check(device, DeviceID, Username, Password) of
-        {ok, Record} ->
-            lager:info("dev record= ~p", [Record]),
+    % load device settings from db
+    Settings = case wave_redis:device({deviceid, DeviceID}) of
+        {error, Err} ->
+            lager:info("~p: failed to get settings (~p)", [DeviceID, Err]),
+            [];
 
+        {ok, Setts} ->
+            Setts
+    end,
+
+    Retcode = case wave_auth:check(device, DeviceID, Username, Password, Settings) of
+        {ok, _} ->
             case gproc:where({n,l,DeviceID}) of
                 undefined ->
                     gproc:reg({n,l,DeviceID}),

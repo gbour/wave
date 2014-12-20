@@ -1,0 +1,32 @@
+
+users:
+    - id: 1
+      name: system
+      password: password
+    - id: 10
+      name: jdoe
+      password: password
+    - id: 11
+      name: anonym
+      password: password
+
+devices:
+    - name: wavectl
+      owner: system
+      username: wavectl
+      password: password
+    - name: therm
+      owner: jdoe
+      anonymous: true
+    - name: a
+      owner: jdoe
+      username: foo
+      password: bar
+    - name: b
+      owner: jdoe
+      username: foo
+      password: bar
+    - name: c
+      owner: jdoe
+      username: foo
+      password: bar

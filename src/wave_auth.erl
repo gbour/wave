@@ -17,29 +17,32 @@
 -module(wave_auth).
 -author("Guillaume Bour <guillaume@bour.cc>").
 
--export([check/4]).
+-export([check/5]).
 
-check(device, DeviceID, Username, Password) ->
+
+check(device, _,_,_,[]) ->
+    {error, wrong_id};
+check(device, DeviceID, Username, Password, Settings) ->
     lager:info("auth check ~p (~p: ~p)", [DeviceID, Username, Password]),
-    {ok, C} = application:get_env(wave, redis),
-    {ok, Key} = eredis:q(C, ["GET", ["key:device/deviceid/", DeviceID]]),
-    lager:info("check= ~p", [Key]),
+    DbUsername = proplists:get_value(<<"username">>, Settings),
+    DbPassword = proplists:get_value(<<"password">>, Settings),
 
-    case Key of
-        undefined ->
-            {error, wrong_id};
+    credential(Username, Password, {DbUsername, DbPassword}).
 
-        Key ->
-            {ok, Record} = as_proplist(eredis:q(C, ["HGETALL", Key])),
-            lager:info("rec= ~p", [Record]),
+credential(Username, Password, {Username, Password}) ->
+    {ok, match};
+credential(_,_,_) ->
+    {error, bad_credentials}.
 
-            case {proplists:get_value(<<"username">>, Record), proplists:get_value(<<"password">>, Record)} of
-                {Username, Password} ->
-                    {ok, Record};
-                _                    ->
-                    {error, bad_credentials}
-            end
-    end.
+% Set device state (connected or not)
+% State: true|false
+%
+%connected(DeviceID, State) ->
+%
+
+%
+% return whether this device is already connected or not
+%connected(DeviceID)
 
 as_proplist({ok, Resp}) ->
     {ok, as_proplist(Resp, [])};
