@@ -1,0 +1,20 @@
+#!/usr/bin/python
+
+import inspect
+
+import TestSuite
+import testsuite
+
+#from testsuite import *
+#from testsuite import plop
+
+if __name__ == '__main__':
+    for (modname, mod) in inspect.getmembers(testsuite, predicate=inspect.ismodule):
+        for (clsname, cls) in inspect.getmembers(mod, predicate=inspect.isclass):
+            #mro = inspect.getmro(cls)
+            #if len(mro) < 2 or mro[1] != TestSuite.TestSuite:
+            if not issubclass(cls, TestSuite.TestSuite) or cls == TestSuite.TestSuite:
+                continue
+
+            #print modname,clsname, inspect.getmro(cls)
+            cls().run()
