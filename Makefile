@@ -10,7 +10,7 @@ debug:
 	erl -pa ebin/ `find deps -name ebin` -s $(APP) -s sync
 
 test:
-	cd tests && ./run
+	cd tests && PYTHONPATH=./nyamuk ./run
 
 release:
 	./rebar generate

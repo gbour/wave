@@ -1,12 +1,12 @@
 language: erlang
 otp_release:
-    - 17
+    - 17.3
+services:
+    - redis-server
 install:
     - make build
     - "git clone https://github.com/gbour/nyamuk.git tests/nyamuk"
-before_script:
-    - "erl -pa ebin/ `find deps -name ebin` -s wave_app -detached"
 script:
-    - "make test"
+    - ./.travis-run.sh
 notifications:
     email: "travis-wave@bour.cc"
