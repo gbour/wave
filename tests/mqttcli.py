@@ -15,9 +15,9 @@ class MqttClient(object):
 
     def do(self, action, *args):
         getattr(self._c, action)(*args)
-       
-        self._c.packet_write()
-        self._c.loop()
+
+        r = self._c.packet_write()
+        r = self._c.loop()
         return self._c.pop_event()
 
     def __getattr__(self, name):

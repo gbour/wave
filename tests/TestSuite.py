@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: UTF8 -*-
 
+import sys
 import inspect
 import traceback
 import subprocess
@@ -21,8 +22,7 @@ def catch(func):
         try:
             return func(self)
         except Exception, e:
-            traceback.print_exc()
-
+            traceback.print_exc(file=sys.stderr)
             return False
     return _
 
@@ -31,15 +31,25 @@ class TestSuite(object):
         self.suitename = suitename
 
     def run(self):
+        status = True
         print "\n\033[1m... {0} ...\033[0m".format(self.suitename)
 
         tests = [(name, meth) for (name, meth) in inspect.getmembers(self, predicate=inspect.ismethod) if name.startswith('test_')]
         for (name, test) in tests:
-            (desc, ret) = test()
+            ret = test()
+            if type(ret) == bool:
+                desc = self.__module__ + "." + name
+            else:
+                (desc, ret) = ret
+
             if ret:
                 self.passed(desc)
             else:
                 self.failed(desc)
+
+            status = status and ret
+
+        return status
 
     def passed(self, testname):
         print "{0}{1}[\033[92mPASSED\033[0m]".format(testname, ' '*(WIDTH-10-len(testname)))

@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import sys
 import inspect
 
 import TestSuite
@@ -9,6 +10,8 @@ import testsuite
 #from testsuite import plop
 
 if __name__ == '__main__':
+    status = True
+
     for (modname, mod) in inspect.getmembers(testsuite, predicate=inspect.ismodule):
         for (clsname, cls) in inspect.getmembers(mod, predicate=inspect.isclass):
             #mro = inspect.getmro(cls)
@@ -17,4 +20,7 @@ if __name__ == '__main__':
                 continue
 
             #print modname,clsname, inspect.getmro(cls)
-            cls().run()
+            ret = cls().run()
+            status = ret and status
+
+    sys.exit(0 if status else 11)
