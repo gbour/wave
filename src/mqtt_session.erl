@@ -196,7 +196,7 @@ connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=Ref,keepalive
     gen_fsm:cancel_timer(Ref),
     {reply, undefined, connected, StateData#session{pingid=undefined}, round(Ka*1.5)};
 
-connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData=#session{deviceid=DeviceID,keepalive=Ka}) ->
+connected(#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, _, StateData=#session{deviceid=DeviceID,keepalive=Ka}) ->
     Topic   = proplists:get_value(topic, P),
     Content = proplists:get_value(data, P),
 
@@ -210,7 +210,18 @@ connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData=#session{deviceid=D
                 %
                 %      in case of error (socket closed), subscriber is automatically registered
                 %      to offline
-                Ret = Mod:Fun(Pid, {Topic,TopicMatch}, Content);
+                Ret = Mod:Fun(Pid, {Topic,TopicMatch}, Content),
+                lager:info("publish to client: ~p", [Ret]),
+                case Ret of
+                    disconnect ->
+%                        mqtt_topic_registry:unsubscribe(Subscr),
+%                        mqtt_offline:register(Topic, DeviceID),
+                        mqtt_offline:event(undefined, Topic, Content),
+                        ok;
+
+                    _ ->
+                        ok
+                end;
 
             _ ->
                 % SHOULD NEVER HAPPEND
@@ -221,7 +232,14 @@ connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData=#session{deviceid=D
         || Subscr={TopicMatch, {Mod,Fun,Pid}, Fields} <- MatchList
     ],
 
-	Resp = #mqtt_msg{type='PUBACK', payload=[{msgid,1}]},
+    Resp = case Qos of
+        2 ->
+            #mqtt_msg{type='PUBREC', payload=[{msgid,1}]};
+        1 ->
+	        #mqtt_msg{type='PUBACK', payload=[{msgid,1}]};
+        _ ->
+            undefined
+    end,
 	{reply, Resp, connected, StateData, round(Ka*1.5)};
 
 %TODO: prevent subscribing multiple times to the same topic

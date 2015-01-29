@@ -27,7 +27,7 @@ decode(<<Type:4, Dup:1, Qos:2, Retain:1, Rest/binary>>) ->
     <<P:Len/binary, Rest3/binary>> = Rest2,
 
 
-    Msg = case decode_payload(T, {Len, P}) of
+    Msg = case decode_payload(T, Qos, {Len, P}) of
         {ok, Payload} ->
             {ok, #mqtt_msg{
                 type=T,
@@ -45,12 +45,12 @@ decode(<<Type:4, Dup:1, Qos:2, Retain:1, Rest/binary>>) ->
     %lager:debug("~p", [Msg]),
     Msg.
 
-decode_payload(_, overflow) ->
+decode_payload(_, _, overflow) ->
     error;
 
 %
 % CONNECT
-decode_payload('CONNECT', {Len, <<0:8, 6:8, "MQIsdp", Version:8/integer, Flags:8, Ka:16, Rest/binary>>}) ->
+decode_payload('CONNECT', Qos, {Len, <<0:8, 6:8, "MQIsdp", Version:8/integer, Flags:8, Ka:16, Rest/binary>>}) ->
     lager:debug("CONNECTv3.1: ~p", [Flags]),
     Len2 = Len-12,
 
@@ -76,64 +76,75 @@ decode_payload('CONNECT', {Len, <<0:8, 6:8, "MQIsdp", Version:8/integer, Flags:8
         _ -> {undefined, Rest4}
     end,
 
-    lager:debug("~p / ~p / ~p / ~p / ~p", [ClientID, Topic, Message, Username, Password]),
+    lager:debug("~p / ~p / ~p / ~p / ~p, keepalive=~p", [ClientID, Topic, Message, Username, Password,
+                                                        Ka]),
 
     {ok, [{clientid, ClientID}, {topic, Topic}, {message, Message}, {username, Username}, {password, Password},
         {keepalive, Ka}
     ]};
 
-decode_payload('PUBLISH', {Len, Rest}) ->
-    lager:debug("PUBLISH (v3.1) ~p ~p", [Len, Rest]),
+decode_payload('PUBLISH', Qos, {Len, Rest}) ->
+    lager:debug("PUBLISH (qos=~p) ~p ~p", [Qos, Len, Rest]),
 
     {Topic, Rest2} = decode_string(Rest),
-    %lager:debug("rest= ~p", [Rest2]),
+    Ret = if
+        Qos =:= 0 ->
+            [{topic,Topic}, {data, Rest2}];
+        true      ->
+            <<MsgID:16, Rest3/binary>> = Rest2,
+            [{topic,Topic}, {msgid,MsgID}, {data, Rest3}]
+    end,
+    %{Topic, <<MsgID:16, Rest2/binary>>} = decode_string(Rest),
+    lager:debug("ret= ~p", [Ret]),
 
-    % if qos  = 1|2, read messageid (2 bytes)
+    {ok, Ret};
 
-    {ok, [{topic, Topic},{data, Rest2}]};
-
-decode_payload('SUBSCRIBE', {Len, <<MsgID:16, Payload/binary>>}) ->
+decode_payload('SUBSCRIBE', Qos, {Len, <<MsgID:16, Payload/binary>>}) ->
     lager:debug("SUBSCRIBE v3.1 ~p", [MsgID]),
 
 	Topics = get_topics(Payload, [], true),
 	lager:debug("topics= ~p", [Topics]),
 	{ok, [{msgid, MsgID},{topics, Topics}]};
 
-decode_payload('UNSUBSCRIBE', {Len, <<MsgID:16, Payload/binary>>}) ->
+decode_payload('UNSUBSCRIBE', Qos, {Len, <<MsgID:16, Payload/binary>>}) ->
     lager:debug("UNSUBSCRIBE: ~p", [Payload]),
 
     Topics = get_topics(Payload, [], false),
     {ok, [{msgid, MsgID}, {topics, Topics}]};
 
-decode_payload('PINGREQ', {0, <<>>}) ->
+decode_payload('PINGREQ', _, {0, <<>>}) ->
 	{ok, undefined};
-decode_payload('PINGRESP', {0, <<>>}) ->
+decode_payload('PINGRESP', _, {0, <<>>}) ->
     {ok, undefined};
 
-decode_payload('DISCONNECT', {0, <<>>}) ->
+decode_payload('DISCONNECT', _, {0, <<>>}) ->
     lager:debug("DISCONNECT"),
     % not a real error, we just want to close the connection
     %TODO: return a disconnect object; and do cleanup upward
     %{error, disconnect};
     {ok, undefined};
 
-decode_payload('CONNECT', {Len, <<0:8, 4:8, "MQTT", Level:8/integer, Flags:8, Rest/binary>>}) ->
+decode_payload('CONNECT', _, {Len, <<0:8, 4:8, "MQTT", Level:8/integer, Flags:8, Rest/binary>>}) ->
     lager:debug("CONNECT"),
     {error, disconnect};
 
-decode_payload('CONNACK', {Len, <<_:8, RetCode:8/integer>>}) ->
+decode_payload('CONNACK', _, {Len, <<_:8, RetCode:8/integer>>}) ->
     lager:debug("CONNACK"),
     {ok, [{retcode, RetCode}]};
 
-decode_payload('PUBACK', {Len, <<MsgID:16>>}) ->
+decode_payload('PUBACK', _, {Len, <<MsgID:16>>}) ->
     lager:debug("PUBACK. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
-decode_payload('SUBACK', {Len, <<MsgID:16, Qos/binary>>}) ->
+decode_payload('PUBREC', _, {Len, <<MsgID:16>>}) ->
+    lager:debug("PUBREC. MsgID= ~p", [MsgID]),
+    {ok, [{msgid, MsgID}]};
+
+decode_payload('SUBACK', _, {Len, <<MsgID:16, Qos/binary>>}) ->
     lager:debug("SUBACK. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
-decode_payload(Cmd, Args) ->
+decode_payload(Cmd, _, Args) ->
     lager:info("invalid:: ~p: ~p", [Cmd, Args]),
 
     {error, disconnect}.
@@ -245,6 +256,13 @@ encode_payload('CONNACK', [{retcode, RetCode}]) ->
     >>;
 
 encode_payload('PUBACK', Opts) ->
+    MsgID = proplists:get_value(msgid, Opts),
+
+    <<
+        MsgID:16
+    >>;
+
+encode_payload('PUBREC', Opts) ->
     MsgID = proplists:get_value(msgid, Opts),
 
     <<
