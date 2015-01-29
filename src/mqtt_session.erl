@@ -218,7 +218,7 @@ connected(#mqtt_msg{type='PUBLISH', payload=P}, _, StateData=#session{deviceid=D
 
         end
 
-        || Subscr={TopicMatch, {Mod,Fun,Pid}} <- MatchList
+        || Subscr={TopicMatch, {Mod,Fun,Pid}, Fields} <- MatchList
     ],
 
 	Resp = #mqtt_msg{type='PUBACK', payload=[{msgid,1}]},
@@ -323,7 +323,7 @@ terminate(_Reason, _StateName, _StateData=#session{deviceid=DeviceID, topics=T})
             lager:info("t= ~p ~p", [Topic, self()]),
             % TODO: add a mqtt_topic_register:substitute() 
             %       replacing client session process by offline process
-            mqtt_topic_registry:unsubscribe({Topic, {?MODULE,publish,self()}}),
+            mqtt_topic_registry:unsubscribe(Topic, {?MODULE,publish,self()}),
             mqtt_offline:register(Topic, DeviceID)
         end
 

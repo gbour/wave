@@ -49,7 +49,8 @@ init(_) ->
 
 %
 % todo: there may be wildcard in topic name => need to do a search
-%w
+%
+% Name: TopicName | {TopicName, Fields}
 subscribe(Name, Subscriber) ->
     lager:debug("~p subscribing to ~p topic", [Subscriber, Name]),
     gen_server:call(?MODULE, {subscribe, Name, Subscriber}).
@@ -75,13 +76,20 @@ handle_call(dump, _, State=#state{subscriptions=S}) ->
     priv_dump(S),
     {reply, ok, State};
 
-handle_call({subscribe, TopicName, Subscriber}, _, State=#state{subscriptions=Subscriptions}) ->
-    {Reply, S2} = case lists:filter(fun(Item) -> Item =:= {TopicName,Subscriber} end, Subscriptions) of
+handle_call({subscribe, Topic, Subscriber}, _, State=#state{subscriptions=Subscriptions}) ->
+    {TopicName, Fields} = case Topic of
+        {T, M} -> 
+            {T, M};
+        Topic  -> 
+            {Topic, mqtt_topic_match:fields(Topic)}
+    end,
+
+    {Reply, S2} = case lists:filter(fun(Item) -> Item =:= {TopicName,Fields,Subscriber} end, Subscriptions) of
         [] ->
-            {ok, Subscriptions ++ [{TopicName,Subscriber}]};
+            {ok, Subscriptions ++ [{TopicName,Fields,Subscriber}]};
 
         _  ->
-            lager:error("~p already subscribed to ~p", [Subscriber, TopicName]),
+            lager:error("~p already subscribed to ~p (~p)", [Subscriber, TopicName, Fields]),
             {duplicate, Subscriptions}
     end,
 
@@ -92,8 +100,11 @@ handle_call({unsubscribe, Subscriber}, _, State=#state{subscriptions=S}) ->
     {reply, ok, State#state{subscriptions=S2}};
 
 handle_call({unsubscribe, TopicName, Subscriber}, _, State=#state{subscriptions=S}) ->
-    S2 = lists:subtract(S, [{TopicName, Subscriber}]),
-    lager:info("~p / ~p", [S, S2]),
+    S2 = lists:filter(fun({T,_,Sub}) ->
+            {T,Sub} =/= {TopicName, Subscriber}
+        end, S
+    ),
+    lager:info("unsub2 ~p / ~p", [S, S2]),
     {reply, ok, State#state{subscriptions=S2}};
 
 handle_call({match, TopicName}, _, State=#state{subscriptions=S}) ->
@@ -120,8 +131,8 @@ code_change(_, State, _) ->
     {ok, State}.
 
 
-priv_dump([{Topic, Subscriber} |T]) ->
-    lager:info("~p -> ~p", [Topic, Subscriber]),
+priv_dump([{Topic, Fields, Subscriber} |T]) ->
+    lager:info("~p (~p) -> ~p", [Topic, Fields, Subscriber]),
     priv_dump(T);
 
 priv_dump([]) ->
@@ -134,13 +145,14 @@ priv_unsubscribe(S, [S|T], S2) ->
 priv_unsubscribe(S, [H|T], S2) ->
     priv_unsubscribe(S, T, [H|S2]).
 
-priv_match(Topic, [{Topic, S}|T], M) ->
-    priv_match(Topic, T, [{Topic,S}|M]);
-
-priv_match(Topic, [{Re, S}|T], M) ->
-    MatchList = case mqtt_topic_match:match(Re, Topic) of
-        ok ->
-            [{Re,S}|M];
+% exact match
+priv_match(Topic, [{Topic, _, S}|T], M) ->
+    priv_match(Topic, T, [{Topic,S,[]}|M]);
+% regex
+priv_match(Topic, [{Re, Fields, S}|T], M) ->
+    MatchList = case mqtt_topic_match:match(Re, {Topic, Fields}) of
+        {ok, MatchFields} ->
+            [{Re,S,MatchFields}|M];
 
         fail ->
             M
