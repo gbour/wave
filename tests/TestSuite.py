@@ -5,8 +5,8 @@ import inspect
 import traceback
 import subprocess
 
-p = subprocess.Popen(['tput', 'cols'], stdout=subprocess.PIPE)
-WIDTH = int(p.stdout.read()[:-1])
+p = subprocess.Popen(["stty","size"], stdout=subprocess.PIPE)
+WIDTH = int(p.stdout.read()[:-1].split(' ')[-1])
 
 # test functions decorator
 def desc(name):
