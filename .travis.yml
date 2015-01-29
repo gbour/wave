@@ -1,0 +1,12 @@
+language: erlang
+otp_release:
+    - 17
+install:
+    - make build
+    - "git clone https://github.com/gbour/nyamuk.git tests/nyamuk"
+before_script:
+    - "erl -pa ebin/ `find deps -name ebin` -s wave_app -detached"
+script:
+    - "make test"
+notifications:
+    email: "travis-wave@bour.cc"
