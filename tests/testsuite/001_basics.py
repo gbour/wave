@@ -62,3 +62,12 @@ class Basic(TestSuite):
 
         c.disconnect()
         return True
+
+    @catch
+    @desc("PING REQ/RESP")
+    def test_20(self):
+        c = self.newclient()
+        e = c.send_pingreq()
+        c.disconnect()
+
+        return isinstance(e, EventPingResp)
