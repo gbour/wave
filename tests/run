@@ -10,9 +10,16 @@ import testsuite
 #from testsuite import plop
 
 if __name__ == '__main__':
+    modfilter = None
+    if len(sys.argv) > 1:
+        modfilter = sys.argv[1]
+
     status = True
 
     for (modname, mod) in inspect.getmembers(testsuite, predicate=inspect.ismodule):
+        if modfilter and not modfilter in modname:
+            continue
+
         for (clsname, cls) in inspect.getmembers(mod, predicate=inspect.isclass):
             #mro = inspect.getmro(cls)
             #if len(mro) < 2 or mro[1] != TestSuite.TestSuite:
