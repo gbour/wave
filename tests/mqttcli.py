@@ -20,6 +20,10 @@ class MqttClient(object):
         r = self._c.loop()
         return self._c.pop_event()
 
+    def recv(self):
+        self._c.loop()
+        return self._c.pop_event()
+
     def __getattr__(self, name):
         def _(*args):
             return self.do(name, *args)
