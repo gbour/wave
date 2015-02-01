@@ -3,7 +3,7 @@
 
 import types
 
-from TestSuite import TestSuite, desc, catch, client
+from TestSuite import TestSuite, desc, catch
 from mqttcli import MqttClient
 from nyamuk.event import *
 
