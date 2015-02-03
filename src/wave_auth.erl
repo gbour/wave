@@ -17,21 +17,27 @@
 -module(wave_auth).
 -author("Guillaume Bour <guillaume@bour.cc>").
 
--export([check/5]).
+-export([check/4]).
 
+check({ok, false}, _,_,_) ->
+    lager:debug("no auth required"),
+    {ok, noauth};
 
-check(device, _,_,_,[]) ->
+check(_,DeviceID,_,[]) ->
+    lager:debug("unknown ~p DeviceID", [DeviceID]),
     {error, wrong_id};
-check(device, DeviceID, Username, Password, Settings) ->
-    lager:info("auth check ~p (~p: ~p)", [DeviceID, Username, Password]),
-    DbUsername = proplists:get_value(<<"username">>, Settings),
-    DbPassword = proplists:get_value(<<"password">>, Settings),
 
-    credential(Username, Password, {DbUsername, DbPassword}).
+check(_, DeviceID, Credentials, Settings) ->
+    lager:debug("auth check ~p (~p)", [DeviceID, Credentials]),
 
-credential(Username, Password, {Username, Password}) ->
+    credential(Credentials, {
+        proplists:get_value(<<"username">>, Settings),
+        proplists:get_value(<<"password">>, Settings)
+    }).
+
+credential(Credentials, Credentials) ->
     {ok, match};
-credential(_,_,_) ->
+credential(_,_) ->
     {error, bad_credentials}.
 
 % Set device state (connected or not)

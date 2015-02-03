@@ -120,8 +120,8 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
 	%gen_fsm:start_timer(5000, timeout1),
 	%lager:info("timeout set"),
     DeviceID = proplists:get_value(clientid, P),
-    Username = proplists:get_value(username, P),
-    Password = proplists:get_value(password, P),
+    User     = proplists:get_value(username, P),
+    Pwd      = proplists:get_value(password, P),
     KeepAlive = proplists:get_value(keepalive, P, ?DEFAULT_KEEPALIVE) * 1000,
 
     % load device settings from db
@@ -134,7 +134,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
             Setts
     end,
 
-    Retcode = case wave_auth:check(device, DeviceID, Username, Password, Settings) of
+    Retcode = case wave_auth:check(application:get_env(wave, auth_required), DeviceID, {User, Pwd}, Settings) of
         {ok, _} ->
             case gproc:where({n,l,DeviceID}) of
                 undefined ->
