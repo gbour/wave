@@ -1,3 +1,5 @@
+%% vim: filetype=erlang
+
 {application, wave, [
   {description, ""},
   {vsn, "1"},
@@ -9,22 +11,9 @@
       lager
   ]},
   {mod, { wave_app, []}},
-  {env, [
-	% MQTT
-    {mqtt_port, 1883},
-
-    {modules, [
-        {freemobile, [
-            {username, foo},
-            {password, bar},
-
-            {topics, [
-                "/secu/ssh"
-            ]}
-        ]}
-
-    ]}
-
-  ]}
+  {env, []}
 ]}.
+
+
+
 
