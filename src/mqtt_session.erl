@@ -104,7 +104,7 @@ is_alive(Pid) ->
             false
     end.
 
-garbage_collect(Pid) ->
+garbage_collect(_Pid) ->
     ok.
 
 %
@@ -176,14 +176,14 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
 
 	Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
 	{reply, Resp, connected, StateData#session{deviceid=DeviceID, keepalive=KeepAlive}, round(KeepAlive*1.5)};
-initiate(#mqtt_msg{}, _, StateData) ->
+initiate(#mqtt_msg{}, _, _StateData) ->
 	% close socket
 	{stop, disconnect, []};
-initiate({timeout, _, timeout1}, _, StateData) ->
+initiate({timeout, _, timeout1}, _, _StateData) ->
 	lager:info("initiate timeout"),
 	{stop, disconnect, []}.
 
-connected(#mqtt_msg{type='DISCONNECT'}, _, StateData) ->
+connected(#mqtt_msg{type='DISCONNECT'}, _, _StateData) ->
     {stop, normal, disconnect, undefined};
 
 connected(#mqtt_msg{type='PINGREQ'}, _, StateData=#session{keepalive=Ka}) ->
@@ -195,7 +195,7 @@ connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=Ref,keepalive
     gen_fsm:cancel_timer(Ref),
     {reply, undefined, connected, StateData#session{pingid=undefined}, round(Ka*1.5)};
 
-connected(#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, _, StateData=#session{deviceid=DeviceID,keepalive=Ka}) ->
+connected(#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, _, StateData=#session{deviceid=_DeviceID,keepalive=Ka}) ->
     Topic   = proplists:get_value(topic, P),
     Content = proplists:get_value(data, P),
 
@@ -232,7 +232,7 @@ connected(#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, _, StateData=#session{d
 
         end
 
-        || Subscr={TopicMatch, {Mod,Fun,Pid}, Fields} <- MatchList
+        || _Subscr={TopicMatch, {Mod,Fun,Pid}, _Fields} <- MatchList
     ],
 
     Resp = case Qos of
@@ -251,7 +251,7 @@ connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T
     Topics = proplists:get_value(topics, P),
   
     % subscribe to all listed topics (creating it if it don't exists)
-    [ mqtt_topic_registry:subscribe(Topic, {?MODULE,publish,self()}) || {Topic,Qos} <- Topics ],
+    [ mqtt_topic_registry:subscribe(Topic, {?MODULE,publish,self()}) || {Topic,_Qos} <- Topics ],
 
 	Resp  = #mqtt_msg{type='SUBACK', payload=[{msgid,MsgId},{qos,[1]}]},
 
@@ -280,7 +280,7 @@ connected({publish, {Topic,_}, Content}, _,
     Ret = Callback:publish(Transport, Socket, Topic, Content),
 	lager:info("ret= ~p", [Ret]),
 	case Ret of
-		{error, Err} ->
+		{error, _Err} ->
 			{stop, normal, disconnect, StateData};
 
 		ok ->
@@ -291,17 +291,17 @@ connected(ping, _, StateData=#session{transport={Callback,Transport,Socket}}) ->
     Ret = Callback:crlfping(Transport, Socket),
     lager:info("send CRLF ping= ~p", [Ret]),
     case Ret of
-        {error, Err} ->
+        {error, _Err} ->
             {stop, normal, disconnect, StateData};
 
         ok ->
             {reply, ok, connected, StateData, 5000}
     end;
 
-connected(_,_, StateData) ->
+connected(_,_, _StateData) ->
     {stop, normal, disconnect, undefined}.
 
-connected({timeout, _, timeout1}, StateData) ->
+connected({timeout, _, timeout1}, _StateData) ->
 	lager:info("timeout after connection"),
 	{stop, disconnect, []};
 
@@ -310,13 +310,13 @@ connected(timeout, StateData=#session{transport={Callback,Transport,Socket}}) ->
     % sending ping
     %Callback:ping(Transport, Socket),
     %Ref = gen_fsm:send_event_after(1000, ping_timeout),
-    Ref=0,
+    _Ref=0,
 
     Callback:close(Transport, Socket),
     %{next_state, connected, StateData#session{pingid=Ref}};
     {stop, normal, StateData};
 
-connected(ping_timeout, StateData=#session{transport={Callback,Transport,Socket}}) ->
+connected(ping_timeout, _StateData=#session{transport={Callback,Transport,Socket}}) ->
     Callback:close(Transport, Socket),
     {stop, normal, undefined}.
 
