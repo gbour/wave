@@ -175,7 +175,6 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
     end,
 
 	Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
-	%Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, 0}]},
 	{reply, Resp, connected, StateData#session{deviceid=DeviceID, keepalive=KeepAlive}, round(KeepAlive*1.5)};
 initiate(#mqtt_msg{}, _, StateData) ->
 	% close socket
@@ -334,15 +333,17 @@ handle_info(_Info, _StateName, StateData) ->
 terminate(_Reason, _StateName, _StateData=#session{deviceid=DeviceID, topics=T}) ->
     lager:info("session terminate: ~p (~p ~p)", [_Reason, _StateName, _StateData]),
     [
-        % anonymous function
-        %fun({Topic, _}) ->
-        case true of
-            true ->
-            lager:info("t= ~p ~p", [Topic, self()]),
-            % TODO: add a mqtt_topic_register:substitute() 
-            %       replacing client session process by offline process
-            mqtt_topic_registry:unsubscribe(Topic, {?MODULE,publish,self()}),
-            mqtt_offline:register(Topic, DeviceID)
+        case Qos of
+            0 ->
+                lager:debug("~p: forget ~p topic (QoS=~p)", [self(), Topic, Qos]),
+                mqtt_topic_registry:unsubscribe(Topic, {?MODULE,publish,self()});
+
+            _ ->
+                lager:debug("~p: set ~p topic in offline mode (QoS=~p)", [self(), Topic, Qos]),
+                % TODO: add a mqtt_topic_register:substitute()
+                %       replacing client session process by offline process
+                mqtt_topic_registry:unsubscribe(Topic, {?MODULE,publish,self()}),
+                mqtt_offline:register(Topic, DeviceID)
         end
 
         || {Topic, Qos} <- T
