@@ -211,11 +211,15 @@ connected(#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, _, StateData=#session{d
                 %      to offline
                 Ret = Mod:Fun(Pid, {Topic,TopicMatch}, Content),
                 lager:info("publish to client: ~p", [Ret]),
-                case Ret of
-                    disconnect ->
+                case {Qos, Ret} of
+                    {0, disconnect} ->
+                        lager:debug("client ~p disconnected but QoS = 0. message dropped", [Pid]);
+
+                    {_, disconnect} ->
+                        lager:debug("client ~p disconnected while sending message", [Pid]),
 %                        mqtt_topic_registry:unsubscribe(Subscr),
 %                        mqtt_offline:register(Topic, DeviceID),
-                        mqtt_offline:event(undefined, Topic, Content),
+                        mqtt_offline:event(undefined, {Topic, Qos}, Content),
                         ok;
 
                     _ ->
