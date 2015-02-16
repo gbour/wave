@@ -21,7 +21,7 @@
 -export([start_link/4]).
 -export([init/4]).
 
--export([ping/2, crlfping/2, publish/4, close/2]).
+-export([ping/2, crlfping/2, send/3, close/2]).
 
 -include("include/mqtt_msg.hrl").
 
@@ -118,10 +118,8 @@ ping(Transport, Socket) ->
 crlfping(T, S) ->
     T:send(S, <<"">>).
 
-publish(Transport, Socket, Topic, Content) ->
-    Msg = #mqtt_msg{type='PUBLISH', payload=[{topic,Topic}, {content, Content}]},
+send(Transport, Socket, Msg) ->
     Transport:send(Socket, mqtt_msg:encode(Msg)).
-
 
 close(Transport, Socket) ->
     Transport:close(Socket).

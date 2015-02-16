@@ -27,7 +27,7 @@
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
--export([handle/2,publish/3, is_alive/1, garbage_collect/1]).
+-export([handle/2, publish/4, is_alive/1, garbage_collect/1]).
 -export([initiate/3, connected/2, connected/3]).
 %
 % role
@@ -110,8 +110,8 @@ garbage_collect(_Pid) ->
 %
 % a message is published for me
 %
-publish(Pid, Topic, Content) ->
-    gen_fsm:sync_send_event(Pid, {publish, Topic, Content}).
+publish(Pid, Topic, Content, Qos) ->
+    gen_fsm:sync_send_event(Pid, {publish, Topic, Content, Qos}).
 
 %% STATES
 
@@ -209,7 +209,8 @@ connected(#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, _, StateData=#session{d
                 %
                 %      in case of error (socket closed), subscriber is automatically registered
                 %      to offline
-                Ret = Mod:Fun(Pid, {Topic,TopicMatch}, Content),
+                lager:info("candidate: pid=~p, topic=~p, content=~p", [Pid, Topic, Content]),
+                Ret = Mod:Fun(Pid, {Topic,TopicMatch}, Content, Qos),
                 lager:info("publish to client: ~p", [Ret]),
                 case {Qos, Ret} of
                     {0, disconnect} ->
@@ -275,11 +276,23 @@ connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _, StateData=#session{topics
     lager:info("Ka=~p ~p", [Ka, OldTopics]),
     {reply, Resp, connected, StateData#session{topics=NewTopics}, round(Ka*1.5)};
 
-connected({publish, {Topic,_}, Content}, _,
+connected({publish, {Topic,_}, Content, Qos}, _,
           StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
-    Ret = Callback:publish(Transport, Socket, Topic, Content),
-	lager:info("ret= ~p", [Ret]),
-	case Ret of
+    lager:debug("~p: publish message to client with QoS=~p", [self(), Qos]),
+
+    Msg   = #mqtt_msg{type='PUBLISH', payload=[{topic,Topic}, {content, Content}]},
+    State = case Qos of 
+        0 -> 
+            Callback:send(Transport, Socket, Msg);
+
+        _ ->
+            %TODO
+            lager:error("NOT IMPLEMENTED"),
+            ok
+    end,
+
+	lager:info("publish msg status= ~p", [State]),
+	case State of
 		{error, _Err} ->
 			{stop, normal, disconnect, StateData};
 

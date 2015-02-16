@@ -25,7 +25,7 @@
 }).
 
 %
--export([trigger/3]).
+-export([trigger/4]).
 % gen_server API
 -export([start_link/1, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
@@ -50,7 +50,7 @@ init([Conf]) ->
 %%
 
 %
-trigger(Pid, Topic, Payload) ->
+trigger(Pid, Topic, Payload, _Qos) ->
     P = jiffy:decode(Payload, [return_maps]),
     lager:info("trigger ~p", [P]),
 
