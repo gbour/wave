@@ -174,6 +174,8 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
             4 % not authorized
     end,
 
+    wave_event_router:route(<<"$/mqtt/CONNECT">>, [{deviceid, DeviceID}, {retcode, Retcode}]),
+
 	Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
 	{reply, Resp, connected, StateData#session{deviceid=DeviceID, keepalive=KeepAlive}, round(KeepAlive*1.5)};
 initiate(#mqtt_msg{}, _, _StateData) ->
