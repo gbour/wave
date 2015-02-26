@@ -33,7 +33,7 @@ init(Ref, Socket, Transport, _Opts = []) ->
     ok = ranch:accept_ack(Ref),
 
     {ok, Session} = mqtt_session:start_link({?MODULE, Transport, Socket}),
-    lager:debug("fsm= ~p", [Session]),
+    lager:debug("fsm= ~p (~p)", [Session, Transport]),
     loop(Socket, Transport, Session).
 
 loop(Socket, Transport, Session) ->

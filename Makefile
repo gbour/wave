@@ -19,4 +19,9 @@ release:
 clean:
 	./rebar clean
 
+cert:
+	openssl req -x509 -newkey rsa:2048 -keyout ./etc/wave_key.pem -out ./etc/wave_cert.pem -days 365 \
+		-nodes \
+		-subj '/CN=FR/O=wave/CN=wave.acme.org'
+
 .PHONY: test
