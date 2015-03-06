@@ -77,8 +77,9 @@ start(_StartType, _StartArgs) ->
             {ciphers, [
                 "ECDHE-ECDSA-AES128-SHA", "ECDHE-ECDSA-AES128-SHA256",
                 "ECDHE-ECDSA-AES256-SHA", "ECDHE-ECDSA-AES256-SHA384",
-                "DHE-RSA-AES256-SHA256"]},
-
+                "ECDHE-ECDSA-AES256-SHA", "ECDHE-ECDSA-AES256-SHA384",
+                "DHE-RSA-AES256-SHA256"
+            ]},
             % reduce memory usage
             {hibernate_after, 1000}
 

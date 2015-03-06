@@ -5,6 +5,7 @@ services:
     - redis-server
 install:
     - make build
+    - make cert
     - "git clone -b enhancement https://github.com/gbour/nyamuk.git tests/nyamuk"
 script:
     - ./.travis-run.sh
