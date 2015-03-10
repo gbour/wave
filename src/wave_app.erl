@@ -60,33 +60,26 @@ start(_StartType, _StartArgs) ->
     lager:info("~p", [Mods]),
     load_module(Mods),
 
-	% start mqtt listener
-	{ok, MqttPort} = application:get_env(wave, mqtt_port),
-	{ok, MqttSslPort} = application:get_env(wave, mqtt_ssl_port),
-
-    {ok, _} = ranch:start_listener(wave, 1, ranch_tcp, [{port, MqttPort}], mqtt_ranch_protocol, []),
-    Ret = ranch:start_listener(wave_ssl, 1, ranch_ssl, [
-            {port, MqttSslPort},
+	% start mqtt listeners
+    {ok, _} = ranch:start_listener(wave, 1, ranch_tcp, [
+            {port, env([plain, port])}
+        ], mqtt_ranch_protocol, []),
+    {ok, _} = ranch:start_listener(wave_ssl, 1, ranch_ssl, [
+            {port    , env([ssl, port])},
             {certfile, filename:join([filename:dirname(code:which(wave_app)), "..", "etc", "wave_cert.pem"])},
-            {keyfile, filename:join([filename:dirname(code:which(wave_app)), "..", "etc", "wave_key.pem"])},
+            {keyfile , filename:join([filename:dirname(code:which(wave_app)), "..", "etc", "wave_key.pem"])},
 
             % increase security level
             {secure_renegotiation, true},
             {reuse_sessions, false},
-            {versions, ['tlsv1.1', 'tlsv1.2']},
-            {ciphers, [
-                "ECDHE-ECDSA-AES128-SHA", "ECDHE-ECDSA-AES128-SHA256",
-                "ECDHE-ECDSA-AES256-SHA", "ECDHE-ECDSA-AES256-SHA384",
-                "ECDHE-ECDSA-AES256-SHA", "ECDHE-ECDSA-AES256-SHA384",
-                "DHE-RSA-AES256-SHA256"
-            ]},
+            {versions, env([ssl, versions])},
+            {ciphers , env([ssl, ciphers])},
             % reduce memory usage
             {hibernate_after, 1000}
 
         ], mqtt_ranch_protocol, []),
-    lager:debug("SSL listener: ~p", [Ret]),
 
-	wave_sup:start_link().
+    wave_sup:start_link().
 
 stop(_State) ->
     ok.
@@ -99,3 +92,15 @@ load_module([{Mod, Args} |T]) ->
 
 load_module([]) ->
     ok.
+
+
+env([Key|T]) ->
+    env(application:get_env(wave, Key), T).
+
+
+env(undefined, _) ->
+    error;
+env({ok, Node}, []) ->
+    Node;
+env({ok, Node}, [Key|T]) ->
+    env({ok, proplists:get_value(Key, Node)}, T).
