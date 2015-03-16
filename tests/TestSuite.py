@@ -30,12 +30,15 @@ class TestSuite(object):
     def __init__(self, suitename):
         self.suitename = suitename
 
-    def run(self):
+    def run(self, testfilter):
         status = True
         print "\n\033[1m... {0} ...\033[0m".format(self.suitename)
 
         tests = [(name, meth) for (name, meth) in inspect.getmembers(self, predicate=inspect.ismethod) if name.startswith('test_')]
         for (name, test) in tests:
+            if testfilter and not testfilter in name:
+                continue
+
             ret = test()
             if type(ret) == bool:
                 desc = self.__module__ + "." + name
