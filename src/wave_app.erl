@@ -64,6 +64,9 @@ start(_StartType, _StartArgs) ->
     {ok, _} = ranch:start_listener(wave, 1, ranch_tcp, [
             {port, env([plain, port])}
         ], mqtt_ranch_protocol, []),
+
+    Ciphers = check_ciphers(env([ssl, ciphers])),
+    lager:info("ciphers= (~p) ~p", [erlang:length(Ciphers), Ciphers]),
     {ok, _} = ranch:start_listener(wave_ssl, 1, ranch_ssl, [
             {port    , env([ssl, port])},
             {certfile, filename:join([filename:dirname(code:which(wave_app)), "..", "etc", "wave_cert.pem"])},
@@ -72,8 +75,9 @@ start(_StartType, _StartArgs) ->
             % increase security level
             {secure_renegotiation, true},
             {reuse_sessions, false},
+            {honor_cipher_order, true},
             {versions, env([ssl, versions])},
-            {ciphers , env([ssl, ciphers])},
+            {ciphers , Ciphers},
             % reduce memory usage
             {hibernate_after, 1000}
 
@@ -104,3 +108,14 @@ env({ok, Node}, []) ->
     Node;
 env({ok, Node}, [Key|T]) ->
     env({ok, proplists:get_value(Key, Node)}, T).
+
+check_ciphers(Ciphers) ->
+    lists:filter(fun(Cipher) ->
+        try ssl_cipher:openssl_suite(Cipher) of
+            _   -> true
+        catch
+            _:_ -> false
+        end end,
+        Ciphers
+    ).
+
