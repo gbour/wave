@@ -12,6 +12,19 @@ import os.path
 # TLS > v1 not available on python2.7 except for Debian
 SSL_VERSION = ssl.PROTOCOL_TLSv1_2 if hasattr(ssl, 'PROTOCOL_TLSv1_2') else ssl.PROTOCOL_TLSv1
 
+# no socket.version() with python2.7 ssl
+def version(sock):
+    import inspect
+    for (name, val) in inspect.getmembers(ssl):
+        if not name.startswith('PROTOCOL_'):
+            continue
+
+        if sock.ssl_version == val:
+            return name.split('_', 1)[-1]
+
+    return None
+
+
 class Basic(TestSuite):
     def __init__(self):
         TestSuite.__init__(self, "SSL")
@@ -21,7 +34,7 @@ class Basic(TestSuite):
     def test_01(self):
         c = MqttClient("reg", ssl=True, ssl_opts={'ssl_version': SSL_VERSION})
         evt = c.do("connect")
-        print "Using SSL version:", c._c.sock.version()
+        print "Using SSL: version=", version(c._c.sock), ", cipher=", c._c.sock.cipher()
 
         if not isinstance(evt, EventConnack):
             return False
