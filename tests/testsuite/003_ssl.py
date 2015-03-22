@@ -77,33 +77,30 @@ class Basic(TestSuite):
             'ssl_version': SSL_VERSION,
             'cert_reqs': ssl.CERT_REQUIRED,
             'ca_certs': os.path.join(os.path.dirname(__file__), "../../", "etc/wave_cert.pem"),
-            'ciphers': 'DES_CBC_SHA'
+            'ciphers': 'NOT_A_VALID_CIPHER'
         })
-        try:
-            evt = c.do("connect")
-        except ssl.SSLError, e:
-            print "SSLError=", e
+
+        evt = c.do("connect")
+        if not isinstance(evt, EventConnack):
             return True
 
         return False
 
     @catch
-    @desc("CONNECTION OK - valid cipher")
+    @desc("CONNECTION OK - forcing cipher")
     def test_05(self):
         c = MqttClient("reg", ssl=True, ssl_opts={
             'ssl_version': SSL_VERSION,
             'cert_reqs': ssl.CERT_REQUIRED,
             'ca_certs': os.path.join(os.path.dirname(__file__), "../../", "etc/wave_cert.pem"),
-            'ciphers': 'DHE-RSA-AES256-SHA256'
+            #'ciphers': 'HIGH:!DHE:!ECDHE'
+            'ciphers': 'AES256-SHA'
         })
-        try:
-            evt = c.do("connect")
-        except ssl.SSLError, e:
-            print "SSLError=", e
-            return False
 
+        evt = c.do("connect")
         if not isinstance(evt, EventConnack):
             return False
 
+        print "Using SSL: version=", version(c._c.sock), ", cipher=", c._c.sock.cipher()
         return True
 
