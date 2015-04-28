@@ -63,12 +63,14 @@ start(_StartType, _StartArgs) ->
 	% start mqtt listeners
     {ok, _} = ranch:start_listener(wave, 1, ranch_tcp, [
             {port, env([plain, port])}
+            ,{keepalive, true}
         ], mqtt_ranch_protocol, []),
 
     Ciphers = check_ciphers(env([ssl, ciphers])),
     lager:info("ciphers= (~p) ~p", [erlang:length(Ciphers), Ciphers]),
     {ok, _} = ranch:start_listener(wave_ssl, 1, ranch_ssl, [
             {port    , env([ssl, port])},
+            {keepalive, true},
             {certfile, filename:join([filename:dirname(code:which(wave_app)), "..", "etc", "wave_cert.pem"])},
             {keyfile , filename:join([filename:dirname(code:which(wave_app)), "..", "etc", "wave_key.pem"])},
 

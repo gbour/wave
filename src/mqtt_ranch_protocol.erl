@@ -53,7 +53,16 @@ loop(Socket, Transport, Session) ->
             Transport:send(Socket, mqtt_msg:encode(#mqtt_msg{type='PINGREQ'})),
             loop(Socket, Transport, Session);
 
+        % socket closed by peer
         {error, closed} ->
+            lager:debug("err:closed"),
+            mqtt_session:disconnect(Session, peer_sock_closed),
+            ok;
+
+        % TCP keepalive timeout
+        {error, etimedout} ->
+            lager:debug("err:tcp keepalive timeout"),
+            mqtt_session:disconnect(Session, peer_tcp_ka_timeout),
             ok;
 
         Err ->

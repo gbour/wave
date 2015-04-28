@@ -27,7 +27,7 @@
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
--export([handle/2, publish/4, is_alive/1, garbage_collect/1]).
+-export([handle/2, publish/4, is_alive/1, garbage_collect/1, disconnect/2]).
 -export([initiate/3, connected/2, connected/3]).
 %
 % role
@@ -87,6 +87,11 @@ handle(Pid, Msg) ->
 	lager:info("return: ~p", [Resp]),
 
 	{ok, Resp}.
+
+% peer client disconnection
+%
+disconnect(Pid, Reason) ->
+    gen_fsm:send_all_state_event(Pid, {disconnect, Reason}).
 
 %
 %
@@ -337,9 +342,14 @@ connected(ping_timeout, _StateData=#session{transport={Callback,Transport,Socket
 
 
 
+handle_event({disconnect, Reason}, _StateName, StateData) ->
+    lager:info("session terminated. cause: ~p", [Reason]),
+    {stop, normal, StateData};
+
 handle_event(_Event, _StateName, StateData) ->
 	lager:debug("event ~p", [_StateName]),
     {stop, error, StateData}.
+
 
 handle_sync_event(_Event, _From, _StateName, StateData) ->
 	lager:debug("syncevent ~p", [_StateName]),
