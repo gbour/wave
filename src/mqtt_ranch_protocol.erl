@@ -32,8 +32,12 @@ start_link(Ref, Socket, Transport, Opts) ->
 init(Ref, Socket, Transport, _Opts = []) ->
     ok = ranch:accept_ack(Ref),
 
-    {ok, Session} = mqtt_session:start_link({?MODULE, Transport, Socket}),
-    lager:debug("fsm= ~p (~p)", [Session, Transport]),
+    {ok, {Ip,Port}} = inet:peername(Socket),
+    %TODO: use binary fmt instead
+    Addr = string:join([atom_to_list(Transport:name()), inet_parse:ntoa(Ip), integer_to_list(Port)], ":"),
+
+    {ok, Session} = mqtt_session:start_link({?MODULE, Transport, Socket}, [{addr, Addr}]),
+    lager:debug("fsm= ~p (~p) from ~p", [Session, Transport, Addr]),
     loop(Socket, Transport, Session).
 
 loop(Socket, Transport, Session) ->

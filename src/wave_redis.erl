@@ -17,7 +17,28 @@
 -module(wave_redis).
 -author("Guillaume Bour <guillaume@bour.cc>").
 
--export([device/1]).
+-export([connect/2, update/3, device/1]).
+
+%
+% new device connects
+connect(DeviceID, Values) ->
+    {ok, C} = application:get_env(wave, redis),
+
+    Key   = "wave:deviceid:" ++ DeviceID,
+    case eredis:q(C, ["HGET", Key, "state"]) of
+        {ok, <<"connected">>} ->
+            {error, exists};
+
+        _             ->
+            Pairs = lists:foldr(fun ({X,Y},Acc) -> [X,Y|Acc] end, [], Values),
+            eredis:q(C, ["HMSET", Key|Pairs])
+    end.
+
+update(DeviceID, Key, Value) ->
+    {ok, C} = application:get_env(wave, redis),
+
+    eredis:q(C, ["HSET", "wave:deviceid:" ++ DeviceID, Key, Value]).
+
 
 device({id, Err={error, _}}) ->
     Err;

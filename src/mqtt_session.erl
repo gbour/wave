@@ -20,7 +20,7 @@
 
 -include("include/mqtt_msg.hrl").
 
--export([start_link/1]).
+-export([start_link/2]).
 
 % gen_server
 %-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
@@ -66,6 +66,7 @@
     deviceid,
     topics = [], % list of subscribed topics
     transport,
+    opts,
     pingid = undefined,
     keepalive
 }).
@@ -73,12 +74,12 @@
 -define(CONNECT_TIMEOUT  , 5000). % ms
 -define(DEFAULT_KEEPALIVE, 300).  % secs
 
-start_link(Transport) ->
-    gen_fsm:start_link(?MODULE, Transport, []).
+start_link(Transport, Opts) ->
+    gen_fsm:start_link(?MODULE, [Transport, Opts], []).
 
-init(Transport) ->
-	% timeout on socket connection: close socket is no CONNECT message received after timeout
-	{ok, initiate, #session{transport=Transport}, ?CONNECT_TIMEOUT}.
+init([Transport, Opts]) ->
+    % timeout on socket connection: close socket is no CONNECT message received after timeout
+    {ok, initiate, #session{transport=Transport, opts=Opts}, ?CONNECT_TIMEOUT}.
 
 %%
 
@@ -120,7 +121,7 @@ publish(Pid, Topic, Content, Qos) ->
 
 %% STATES
 
-initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
+initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts}) ->
 	lager:info("received CONNECT"),
 	%gen_fsm:start_timer(5000, timeout1),
 	%lager:info("timeout set"),
@@ -139,7 +140,24 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
             Setts
     end,
 
-    Retcode = case wave_auth:check(application:get_env(wave, auth_required), DeviceID, {User, Pwd}, Settings) of
+    {MSecs, Secs, _} = os:timestamp(),
+    Vals             = [{state,connecting},{username,User},{ts, MSecs*1000000+Secs},{foo,<<"bar">>} | Opts],
+
+    Res = case wave_redis:connect(DeviceID, Vals) of
+        % device already connected
+        {error, exists} ->
+            %TODO: reject connections
+            %TODO: make it configurable (globally/per device) -> optionaly replace old device
+            %      (and disconnect old device)
+            %      /!\ there may be a flickering risk of both devices retries to reconnect
+            %      alternativelly
+            {error, exists};
+
+        _ ->
+            wave_auth:check(application:get_env(wave, auth_required), DeviceID, {User, Pwd}, Settings)
+    end,
+
+    Retcode = case Res of
         {ok, _} ->
             case gproc:where({n,l,DeviceID}) of
                 undefined ->
@@ -173,6 +191,8 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
                     end
             end;
 
+        {error, exists}   ->
+            2;
         {error, wrong_id} ->
             2;
         {error, bad_credentials} ->
@@ -181,8 +201,21 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData) ->
 
     wave_event_router:route(<<"$/mqtt/CONNECT">>, [{deviceid, DeviceID}, {retcode, Retcode}]),
 
-	Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
-	{reply, Resp, connected, StateData#session{deviceid=DeviceID, keepalive=KeepAlive}, round(KeepAlive*1.5)};
+    % update device status in redis
+    lager:debug("RES= ~p", [Res]),
+    NextState = case Res of
+        {error, exists} -> initiate;
+        {error, _}      ->
+            wave_redis:update(DeviceID, state, disconnected),
+            initiate;
+
+        _               ->
+            wave_redis:update(DeviceID, state, connected),
+            connected
+    end,
+
+    Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
+    {reply, Resp, NextState, StateData#session{deviceid=DeviceID, keepalive=KeepAlive}, round(KeepAlive*1.5)};
 initiate(#mqtt_msg{}, _, _StateData) ->
 	% close socket
 	{stop, disconnect, []};
@@ -359,8 +392,8 @@ handle_info(_Info, _StateName, StateData) ->
 	lager:debug("info ~p", [_StateName]),
     {stop, error, StateData}.
 
-terminate(_Reason, _StateName, _StateData=#session{deviceid=DeviceID, topics=T}) ->
-    lager:info("session terminate: ~p (~p ~p)", [_Reason, _StateName, _StateData]),
+terminate(_Reason, StateName, _StateData=#session{deviceid=DeviceID, topics=T}) ->
+    lager:info("session terminate: ~p (~p ~p)", [_Reason, StateName, _StateData]),
     [
         case Qos of
             0 ->
@@ -377,6 +410,13 @@ terminate(_Reason, _StateName, _StateData=#session{deviceid=DeviceID, topics=T})
 
         || {Topic, Qos} <- T
     ],
+
+    % change redis device state only if connected
+    case StateName of
+        connected -> wave_redis:update(DeviceID, state, disconnected);
+        _         -> pass
+    end,
+
     terminate;
 
 % publisher disconnection
