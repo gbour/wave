@@ -32,7 +32,7 @@ start_link(Ref, Socket, Transport, Opts) ->
 init(Ref, Socket, Transport, _Opts = []) ->
     ok = ranch:accept_ack(Ref),
 
-    {ok, {Ip,Port}} = inet:peername(Socket),
+    {ok, {Ip,Port}} = peername(Transport, Socket),
     %TODO: use binary fmt instead
     Addr = string:join([atom_to_list(Transport:name()), inet_parse:ntoa(Ip), integer_to_list(Port)], ":"),
 
@@ -137,3 +137,7 @@ send(Transport, Socket, Msg) ->
 close(Transport, Socket) ->
     Transport:close(Socket).
 
+peername(ranch_ssl, Socket) ->
+    ssl:peername(Socket);
+peername(_, Socket) ->
+    inet:peername(Socket).
