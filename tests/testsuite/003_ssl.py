@@ -25,7 +25,7 @@ def version(sock):
     return None
 
 
-class Basic(TestSuite):
+class SSL(TestSuite):
     def __init__(self):
         TestSuite.__init__(self, "SSL")
 

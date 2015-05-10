@@ -8,8 +8,8 @@ from nyamuk.event import *
 import nyamuk.nyamuk_const as NC
 
 class MqttClient(object):
-    def __init__(self, prefix, **kwargs):
-        self._c = nyamuk.Nyamuk("test:{0}:{1}".format(prefix, random.randint(0,9999)), None, None, 'localhost',
+    def __init__(self, prefix, rand=True, **kwargs):
+        self._c = nyamuk.Nyamuk("test:{0}:{1}".format(prefix, random.randint(0,9999) if rand else 0), None, None, 'localhost',
             **kwargs)
 
     def disconnect(self):
