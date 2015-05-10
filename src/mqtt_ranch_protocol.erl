@@ -37,7 +37,7 @@ init(Ref, Socket, Transport, _Opts = []) ->
     Addr = string:join([atom_to_list(Transport:name()), inet_parse:ntoa(Ip), integer_to_list(Port)], ":"),
 
     {ok, Session} = mqtt_session:start_link({?MODULE, Transport, Socket}, [{addr, Addr}]),
-    lager:debug("fsm= ~p (~p) from ~p", [Session, Transport, Addr]),
+    lager:debug("fsm= ~p (~p : ~p) from ~p", [Session, Transport, Socket, Addr]),
     loop(Socket, Transport, Session).
 
 loop(Socket, Transport, Session) ->
@@ -59,18 +59,18 @@ loop(Socket, Transport, Session) ->
 
         % socket closed by peer
         {error, closed} ->
-            lager:debug("err:closed"),
+            lager:debug("~p: err:closed", [Socket]),
             mqtt_session:disconnect(Session, peer_sock_closed),
             ok;
 
         % TCP keepalive timeout
         {error, etimedout} ->
-            lager:debug("err:tcp keepalive timeout"),
+            lager:debug("~p: err:tcp keepalive timeout", [Socket]),
             mqtt_session:disconnect(Session, peer_tcp_ka_timeout),
             ok;
 
         Err ->
-            lager:debug("err ~p. closing socket", [Err]),
+            lager:debug("~p: err ~p. closing socket", [Socket, Err]),
             ok = Transport:close(Socket)
     end,
 
