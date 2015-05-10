@@ -223,8 +223,8 @@ initiate({timeout, _, timeout1}, _, _StateData) ->
 	lager:info("initiate timeout"),
 	{stop, disconnect, []}.
 
-connected(#mqtt_msg{type='DISCONNECT'}, _, _StateData) ->
-    {stop, normal, disconnect, undefined};
+connected(#mqtt_msg{type='DISCONNECT'}, _, StateData) ->
+    {stop, normal, disconnect, StateData};
 
 connected(#mqtt_msg{type='PINGREQ'}, _, StateData=#session{keepalive=Ka}) ->
     Resp = #mqtt_msg{type='PINGRESP'},
@@ -392,24 +392,31 @@ handle_info(_Info, _StateName, StateData) ->
 	lager:debug("info ~p", [_StateName]),
     {stop, error, StateData}.
 
+%
+% Executed when either
+%   - clients ask disconnection (received DISCONNECT message)
+%   - network issue (socket closed, tcp keepalive timeout)
+%   - gen_fsm/erlang issue (gen_fsm is terminated)
+%
+%
 terminate(_Reason, StateName, _StateData=#session{deviceid=DeviceID, topics=T}) ->
     lager:info("session terminate: ~p (~p ~p)", [_Reason, StateName, _StateData]),
-    [
-        case Qos of
-            0 ->
-                lager:debug("~p: forget ~p topic (QoS=~p)", [self(), Topic, Qos]),
-                mqtt_topic_registry:unsubscribe(Topic, {?MODULE,publish,self()});
-
-            _ ->
-                lager:debug("~p: set ~p topic in offline mode (QoS=~p)", [self(), Topic, Qos]),
-                % TODO: add a mqtt_topic_register:substitute()
-                %       replacing client session process by offline process
-                mqtt_topic_registry:unsubscribe(Topic, {?MODULE,publish,self()}),
-                mqtt_offline:register(Topic, DeviceID)
-        end
-
-        || {Topic, Qos} <- T
-    ],
+%    [
+%        case Qos of
+%            0 ->
+%                lager:debug("~p: forget ~p topic (QoS=~p)", [self(), Topic, Qos]),
+%                mqtt_topic_registry:unsubscribe(Topic, {?MODULE,publish,self()});
+%
+%            _ ->
+%                lager:debug("~p: set ~p topic in offline mode (QoS=~p)", [self(), Topic, Qos]),
+%                % TODO: add a mqtt_topic_register:substitute()
+%                %       replacing client session process by offline process
+%                mqtt_topic_registry:unsubscribe(Topic, {?MODULE,publish,self()}),
+%                mqtt_offline:register(Topic, DeviceID)
+%        end
+%
+%        || {Topic, Qos} <- T
+%    ],
 
     % change redis device state only if connected
     case StateName of
@@ -417,11 +424,6 @@ terminate(_Reason, StateName, _StateData=#session{deviceid=DeviceID, topics=T}) 
         _         -> pass
     end,
 
-    terminate;
-
-% publisher disconnection
-terminate(_Reason, _StateName, undefined) ->
-    lager:info("terminate for ~p/~p", [_Reason, _StateName]),
     terminate.
 
 code_change(_OldVsn, StateName, StateData, _Extra) ->
