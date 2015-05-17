@@ -17,7 +17,7 @@
 -module(wave_redis).
 -author("Guillaume Bour <guillaume@bour.cc>").
 
--export([connect/2, update/3, device/1]).
+-export([connect/2, update/3, device/1, topic/2, topic/3]).
 
 %
 % new device connects
@@ -38,6 +38,28 @@ update(DeviceID, Key, Value) ->
     {ok, C} = application:get_env(wave, redis),
 
     eredis:q(C, ["HSET", "wave:deviceid:" ++ DeviceID, Key, Value]).
+
+% save registered topic
+% topics are stored in a redis list, per QOS
+%
+% i.e: wave:deviceid:foobar:qos:0:topics -> [topic1, topic2, ...]
+%
+topic(DeviceID, Topic, Qos) ->
+    {ok, C} = application:get_env(wave, redis),
+    eredis:q(C, ["LPUSH", <<"wave:deviceid:", DeviceID/binary, ":qos:", (erlang:integer_to_binary(Qos))/binary, ":topics">>, Topic]).
+
+
+% returns saved topics
+% for give DeviceID and Qos
+%
+% returns: [{Topic1, Qos}, {Topic2, Qos}, ...]
+%
+topic(DeviceID, Qos) ->
+    {ok, C} = application:get_env(wave, redis),
+    {ok, Topics} = eredis:q(C, ["LRANGE", <<"wave:deviceid:", DeviceID/binary, ":qos:", (erlang:integer_to_binary(Qos))/binary, ":topics">>, 0, -1]),
+
+    lists:map(fun(T) -> {T, 0} end, Topics).
+
 
 
 device({id, Err={error, _}}) ->
