@@ -32,7 +32,7 @@
 
 %
 %-export([get/1, subscribe/2, get_subscribers/1]).
--export([register/2, recover/1, flush/2, dump/0, event/3]).
+-export([register/3, recover/1, flush/2, dump/0, event/3]).
 % gen_server API
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
@@ -53,8 +53,9 @@ init(_) ->
 %w
 %unsubscribe(Subscriber) ->
 %    gen_server:call(?MODULE, {unsubscribe, Subscriber}).
-register(Topic, DeviceID) ->
-    gen_server:call(?MODULE, {register, Topic, DeviceID}).
+register(Topic, Qos, DeviceID) ->
+    gen_server:call(?MODULE, {register, Topic, Qos, DeviceID}).
+
 
 recover(DeviceID) ->
     gen_server:call(?MODULE, {recover, DeviceID}).
@@ -76,15 +77,15 @@ handle_call(dump, _, State=#state{registrations=R}) ->
     lager:info("~p", [R]),
     {reply, ok, State};
 
-handle_call({register, Topic, DeviceID}, _, State=#state{registrations=R}) ->
+handle_call({register, Topic, Qos, DeviceID}, _, State=#state{registrations=R}) ->
     mqtt_topic_registry:subscribe(Topic, {?MODULE, event, self()}),
 
-    {reply, ok, State#state{registrations=[{Topic, DeviceID}|R]}};
+    {reply, ok, State#state{registrations=[{Topic, Qos, DeviceID}|R]}};
 
 handle_call({recover, DeviceID}, _, State=#state{registrations=R}) ->
-    {R2, DTopics} = lists:partition(fun({_Topic, DeviceID2}) -> DeviceID2 =/= DeviceID end, R),
+    {R2, DTopics} = lists:partition(fun({_Topic, _Qos, DeviceID2}) -> DeviceID2 =/= DeviceID end, R),
     lager:info("~p / ~p", [R2, DTopics]),
-    lists:foreach(fun({Topic, _}) ->
+    lists:foreach(fun({Topic, _, _}) ->
             mqtt_topic_registry:unsubscribe(Topic, {?MODULE,event,self()})
         end,
         DTopics

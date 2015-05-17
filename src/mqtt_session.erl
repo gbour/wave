@@ -129,6 +129,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
     User     = proplists:get_value(username, P),
     Pwd      = proplists:get_value(password, P),
     KeepAlive = proplists:get_value(keepalive, P, ?DEFAULT_KEEPALIVE) * 1000,
+    Clean    = proplists:get_value(clean, P, 1),
 
     % load device settings from db
     Settings = case wave_redis:device({deviceid, DeviceID}) of
@@ -141,7 +142,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
     end,
 
     {MSecs, Secs, _} = os:timestamp(),
-    Vals             = [{state,connecting},{username,User},{ts, MSecs*1000000+Secs},{foo,<<"bar">>} | Opts],
+    Vals             = [{state,connecting},{username,User},{ts, MSecs*1000000+Secs},{clean, Clean} | Opts],
 
     Res = case wave_redis:connect(DeviceID, Vals) of
         % device already connected
@@ -157,46 +158,31 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
             wave_auth:check(application:get_env(wave, auth_required), DeviceID, {User, Pwd}, Settings)
     end,
 
-    Retcode = case Res of
+    {Retcode, Topics} = case Res of
         {ok, _} ->
-            case gproc:where({n,l,DeviceID}) of
-                undefined ->
-                    gproc:reg({n,l,DeviceID}),
+            % if connection is successful, we need to check if we have offline messages
+            Topics1 = mqtt_offline:recover(DeviceID),
+            lager:info("offline topics: ~p", [Topics1]),
+            [ mqtt_topic_registry:subscribe(Topic, {?MODULE,publish,self()}) || {Topic,_} <- Topics1 ],
+            % flush is async
+            case Topics1 of
+                [] -> ok;
+                _  ->
+                    mqtt_offline:flush(DeviceID, {?MODULE,publish,self()})
+            end,
 
-                    % if connection is successful, we need to check if we have offline messages
-                    % 
-                    Topics = mqtt_offline:recover(DeviceID),
-                    lager:info("offline topics: ~p", [Topics]),
-                    [ mqtt_topic_registry:subscribe(Topic, {?MODULE,publish,self()}) || {Topic,_} <- Topics ],
-                    % flush is async
-                    case Topics of
-                        [] -> ok;
-                        _  ->
-                            mqtt_offline:flush(DeviceID, {?MODULE,publish,self()})
-                    end,
+            Topics2 = wave_redis:topic(DeviceID, 0),
+            lager:debug("qos 0 saved topics= ~p", [Topics2]),
+            lists:foreach(fun({T,_}) -> mqtt_topic_registry:subscribe(T, {?MODULE,publish,self()}) end, Topics2),
 
-                    0;
-
-                Pid       ->
-                    %TODO: check if processus is alive / socket is opened (try read)
-                    case mqtt_session:is_alive(Pid) of
-                        true ->
-                            lager:info("~p device already registered", [DeviceID]),
-                            5;
-
-                        _    ->
-                            %mqtt_session:garbage_collect(Pid),
-                            gproc:reg({n,l,DeviceID}),
-                            0
-                    end
-            end;
+            {0, Topics1++Topics2};
 
         {error, exists}   ->
-            2;
+            {2, []};
         {error, wrong_id} ->
-            2;
+            {2, []};
         {error, bad_credentials} ->
-            4 % not authorized
+            {4, []} % not authorized
     end,
 
     wave_event_router:route(<<"$/mqtt/CONNECT">>, [{deviceid, DeviceID}, {retcode, Retcode}]),
@@ -215,7 +201,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
     end,
 
     Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
-    {reply, Resp, NextState, StateData#session{deviceid=DeviceID, keepalive=KeepAlive}, round(KeepAlive*1.5)};
+    {reply, Resp, NextState, StateData#session{deviceid=DeviceID, keepalive=KeepAlive, opts=Vals, topics=Topics}, round(KeepAlive*1.5)};
 initiate(#mqtt_msg{}, _, _StateData) ->
 	% close socket
 	{stop, disconnect, []};
@@ -290,7 +276,7 @@ connected(#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, _, StateData=#session{d
 connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T, keepalive=Ka}) ->
 	MsgId  = proplists:get_value(msgid, P),
     Topics = proplists:get_value(topics, P),
-  
+
     % subscribe to all listed topics (creating it if it don't exists)
     [ mqtt_topic_registry:subscribe(Topic, {?MODULE,publish,self()}) || {Topic,_Qos} <- Topics ],
 
@@ -302,11 +288,11 @@ connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T
 connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _, StateData=#session{topics=OldTopics, keepalive=Ka}) ->
 	MsgId  = proplists:get_value(msgid, P),
     Topics = proplists:get_value(topics, P),
-  
+
     % subscribe to all listed topics (creating it if it don't exists)
     lists:foreach(fun(T) ->
             mqtt_topic_registry:unsubscribe(T, {?MODULE,publish,self()})
-        end, 
+        end,
         Topics
     ),
 
@@ -321,8 +307,8 @@ connected({publish, {Topic,_}, Content, Qos}, _,
     lager:debug("~p: publish message to client with QoS=~p", [self(), Qos]),
 
     Msg   = #mqtt_msg{type='PUBLISH', payload=[{topic,Topic}, {content, Content}]},
-    State = case Qos of 
-        0 -> 
+    State = case Qos of
+        0 ->
             Callback:send(Transport, Socket, Msg);
 
         _ ->
@@ -399,24 +385,35 @@ handle_info(_Info, _StateName, StateData) ->
 %   - gen_fsm/erlang issue (gen_fsm is terminated)
 %
 %
-terminate(_Reason, StateName, _StateData=#session{deviceid=DeviceID, topics=T}) ->
-    lager:info("session terminate: ~p (~p ~p)", [_Reason, StateName, _StateData]),
-%    [
-%        case Qos of
-%            0 ->
-%                lager:debug("~p: forget ~p topic (QoS=~p)", [self(), Topic, Qos]),
-%                mqtt_topic_registry:unsubscribe(Topic, {?MODULE,publish,self()});
-%
-%            _ ->
-%                lager:debug("~p: set ~p topic in offline mode (QoS=~p)", [self(), Topic, Qos]),
-%                % TODO: add a mqtt_topic_register:substitute()
-%                %       replacing client session process by offline process
-%                mqtt_topic_registry:unsubscribe(Topic, {?MODULE,publish,self()}),
-%                mqtt_offline:register(Topic, DeviceID)
-%        end
-%
-%        || {Topic, Qos} <- T
-%    ],
+terminate(_Reason, StateName, _StateData=#session{deviceid=DeviceID, topics=T, opts=Opts}) ->
+    lager:info("session terminate(~p): ~p (~p ~p)", [DeviceID, _Reason, StateName, _StateData]),
+
+    lists:foreach(fun({Topic, Qos}) ->
+            mqtt_topic_registry:unsubscribe(Topic, {?MODULE, publish, self()})
+        end,
+        T
+    ),
+
+    case proplists:get_value(clean, Opts, 1) of
+        0 ->
+            lager:debug("clean=0: saving client's subscriptions qos 1 & 2 messages will be stored until client reconnects"),
+
+            lists:foreach(fun({Topic, Qos}) ->
+                    case Qos of
+                        0 ->
+                            lager:debug("qps 0 topics: ~p/~p/~p", [DeviceID, Topic, Qos]),
+                            wave_redis:topic(DeviceID, Topic, Qos);
+
+                        _ ->
+                            mqtt_offline:register(Topic, DeviceID)
+                    end
+                end,
+                T
+            );
+
+        _ ->
+            lager:debug("clean=1: cleaning client subscriptions")
+    end,
 
     % change redis device state only if connected
     case StateName of

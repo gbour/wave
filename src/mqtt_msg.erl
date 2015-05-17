@@ -54,7 +54,7 @@ decode_payload('CONNECT', Qos, {Len, <<0:8, 6:8, "MQIsdp", Version:8/integer, Fl
     lager:debug("CONNECTv3.1: ~p", [Flags]),
     Len2 = Len-12,
 
-    <<User:1, Pwd:1, Retain:1, Qos:2, Will:1, Clear:1, _:1>> = <<Flags>>,
+    <<User:1, Pwd:1, Retain:1, Qos:2, Will:1, Clean:1, _:1>> = <<Flags>>,
 
     {ClientID, Rest2} = decode_string(Rest),
 
@@ -80,7 +80,8 @@ decode_payload('CONNECT', Qos, {Len, <<0:8, 6:8, "MQIsdp", Version:8/integer, Fl
                                                         Ka]),
 
     {ok, [{clientid, ClientID}, {topic, Topic}, {message, Message}, {username, Username}, {password, Password},
-        {keepalive, Ka}
+        {keepalive, Ka},
+        {clean, Clean}
     ]};
 
 decode_payload('PUBLISH', Qos, {Len, Rest}) ->
