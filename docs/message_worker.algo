@@ -1,0 +1,98 @@
+
+
+
+
+
+
+
+# received publish message
+Client::publish (Msg)
+	Subscribers = Registar::get_subscribers(Msg.topic)
+
+	# v1 - create gen_server
+	Mw = MsgWorker::new
+
+	# alternative : use gproc to register MsgWorker msgid globally
+	.MsgWorkers [ Msg.id ] = Mw
+
+	Mw::publish(Self, Msg, Subscribers)
+
+	# v2 - use pool
+	Mw  = Pool::get(type=msgworker)
+	Mw::publish(Self, Msg, Subscribers)
+
+	# v3 - send to queue
+	MsgQueue::write(Msg, Subscribers)
+
+# MsgWorker
+MsgWorker::publish (Client, Msg, Subscribers)
+	DB::Store(Msg)
+	.MsgID = Msg.id
+	.Publisher = Client
+
+	# QoS 2 :: PUBREC
+	.Publisher::send(#PUBREC)
+
+	foreach S (Subscribers);
+		S::send(#PUBLISH)
+		# msg delivery retry
+		Self::timeout(S, $timeout, #PUBLISH)
+
+
+#
+# receive PUBACK/PUBCOMP from subscriber clients
+#
+Client::ack (Msg)
+	# we need to find MsgWorker managing this MsgID
+
+	#
+	Mw::ack (Client, Msg)
+
+MsgWorker::ack (Client, Msg)
+	# remove msg delivery retry timeout
+	Self::reset(Client)
+
+	#
+	delete ( .Subscribers, Client)
+
+	# all messages delivered
+	if empty ( .Subscribers )
+        Selft::complete()
+
+MsgWorker::complete ( )
+    DB::delete ( .MsgID )
+    # send final response to publisher
+    .Publisher::send ( #PUBACK|#PUBCOMP )
+    if ( fails and not .Publisher.clean-session )
+        DB:store(#PUBACK|#PUBCOMP)
+
+    # v1
+    Self::destroy ()
+
+    # v2
+    Pool::free(Self)
+
+#
+# retransmissions
+#
+MsgWorker::retry ( Subscriber, #PUBLISH )
+    S::send(#PUBLISH)
+    Self::timeout ( Subscriber, $timeout, #PUBLISH )
+
+
+#
+# TODO:
+#   - support retransmission for #PUBACK/#PUBCOMP
+#   - offline storage (subscriber disconnected)
+#           use of offline storage
+#           what is a subscriber goes offline btw message received from publisher and message sent ?
+#   - offline storage (publisher disconnected)
+#           if publisher is not online when message delivery is complete, what to do with #PUBACK/#PUBCOMP ?
+#           (same for #PUBREC)
+#
+#           if clean-session not set, store response messages and reemit when client reconnects
+#           if clean-session = 1, trash messages (fire & forget)
+#
+#   - publisher/subscribers disconnects & reconnects btw message received & message sent
+#       (Client gen_server has changed)
+#
