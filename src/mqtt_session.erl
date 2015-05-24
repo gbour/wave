@@ -163,7 +163,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
             % if connection is successful, we need to check if we have offline messages
             Topics1 = mqtt_offline:recover(DeviceID),
             lager:info("offline topics: ~p", [Topics1]),
-            [ mqtt_topic_registry:subscribe(Topic, {?MODULE,publish,self()}) || {Topic,_} <- Topics1 ],
+            [ mqtt_topic_registry:subscribe(Topic, Qos, {?MODULE,publish,self()}) || {Topic,Qos,_} <- Topics1 ],
             % flush is async
             case Topics1 of
                 [] -> ok;
@@ -173,7 +173,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
 
             Topics2 = wave_redis:topic(DeviceID, 0),
             lager:debug("qos 0 saved topics= ~p", [Topics2]),
-            lists:foreach(fun({T,_}) -> mqtt_topic_registry:subscribe(T, {?MODULE,publish,self()}) end, Topics2),
+            lists:foreach(fun({T,_}) -> mqtt_topic_registry:subscribe(T, 0, {?MODULE,publish,self()}) end, Topics2),
 
             {0, Topics1++Topics2};
 
@@ -221,7 +221,7 @@ connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=Ref,keepalive
     gen_fsm:cancel_timer(Ref),
     {reply, undefined, connected, StateData#session{pingid=undefined}, round(Ka*1.5)};
 
-connected(Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, _, StateData=#session{deviceid=_DeviceID,keepalive=Ka}) ->
+connected(Msg=#mqtt_msg{type='PUBLISH'}, _, StateData=#session{deviceid=_DeviceID,keepalive=Ka}) ->
     %TODO: save message in DB
     %      pass MsgID to message_worker
     {ok, MsgWorker} = mqtt_message_worker:start_link(),
@@ -235,7 +235,7 @@ connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T
     Topics = proplists:get_value(topics, P),
 
     % subscribe to all listed topics (creating it if it don't exists)
-    [ mqtt_topic_registry:subscribe(Topic, {?MODULE,publish,self()}) || {Topic,_Qos} <- Topics ],
+    [ mqtt_topic_registry:subscribe(Topic, Qos, {?MODULE,publish,self()}) || {Topic, Qos} <- Topics ],
 
 	Resp  = #mqtt_msg{type='SUBACK', payload=[{msgid,MsgId},{qos,[1]}]},
 

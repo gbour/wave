@@ -30,7 +30,7 @@ start_link(Conf) ->
 init([Conf]) ->
     lager:info("starting ~p module ~p", [?MODULE, Conf]),
 
-    mqtt_topic_registry:subscribe(<<"$/mqtt/CONNECT">>, {?MODULE, notify, self()}),
+    mqtt_topic_registry:subscribe(<<"$/mqtt/CONNECT">>, 0, {?MODULE, notify, self()}),
     {ok, undefined}.
 
 %%

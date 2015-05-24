@@ -39,7 +39,7 @@ init([Conf]) ->
 
     [
         %lager:info("topic= ~p", [Topic]),
-        mqtt_topic_registry:subscribe(erlang:list_to_binary(Topic), {?MODULE,trigger,self()})
+        mqtt_topic_registry:subscribe(erlang:list_to_binary(Topic), 0, {?MODULE,trigger,self()})
         
         || Topic <- proplists:get_value(topics, Conf)
     ],

@@ -78,7 +78,7 @@ handle_call(dump, _, State=#state{registrations=R}) ->
     {reply, ok, State};
 
 handle_call({register, Topic, Qos, DeviceID}, _, State=#state{registrations=R}) ->
-    mqtt_topic_registry:subscribe(Topic, {?MODULE, event, self()}),
+    mqtt_topic_registry:subscribe(Topic, Qos, {?MODULE, event, self()}),
 
     {reply, ok, State#state{registrations=[{Topic, Qos, DeviceID}|R]}};
 

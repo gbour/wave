@@ -69,7 +69,7 @@ start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}}, State)
 
     Subscribers = mqtt_topic_registry:match(Topic),
     lager:info("subscribers= ~p", [Subscribers]),
-    Qoses = lists:map(fun({TopicMatch, Subscriber={_,_,Pid}, _}) ->
+    Qoses = lists:map(fun({TopicMatch, SQos, Subscriber={_,_,Pid}, _}) ->
             case is_process_alive(Pid) of
                 true ->
                     send(Subscriber, {Topic, TopicMatch}, Content, Qos);
