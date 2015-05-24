@@ -87,7 +87,7 @@ route(Socket, Transport, Session, Raw) ->
             stop;
 
         {ok, Msg, Rest} ->
-            lager:info("ok ~p", [Msg]),
+            lager:info("MQTT msg decoded: ~p", [Msg]),
 
             %case answer(Msg) of
             case mqtt_session:handle(Session, Msg) of

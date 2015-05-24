@@ -221,56 +221,13 @@ connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=Ref,keepalive
     gen_fsm:cancel_timer(Ref),
     {reply, undefined, connected, StateData#session{pingid=undefined}, round(Ka*1.5)};
 
-connected(#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, _, StateData=#session{deviceid=_DeviceID,keepalive=Ka}) ->
-    Topic   = proplists:get_value(topic, P),
-    Content = proplists:get_value(data, P),
+connected(Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, _, StateData=#session{deviceid=_DeviceID,keepalive=Ka}) ->
+    %TODO: save message in DB
+    %      pass MsgID to message_worker
+    {ok, MsgWorker} = mqtt_message_worker:start_link(),
+    mqtt_message_worker:publish(MsgWorker, self(), Msg), % async
 
-    MatchList = mqtt_topic_registry:match(Topic),
-    lager:info("matchlist= ~p", [MatchList]),
-    [
-        case is_process_alive(Pid) of
-            true ->
-                %TODO: add MatchTopic in parameters
-                %      ie the matching topic rx that lead to executing this callback
-                %
-                %      in case of error (socket closed), subscriber is automatically registered
-                %      to offline
-                lager:info("candidate: pid=~p, topic=~p, content=~p", [Pid, Topic, Content]),
-                Ret = Mod:Fun(Pid, {Topic,TopicMatch}, Content, Qos),
-                lager:info("publish to client: ~p", [Ret]),
-                case {Qos, Ret} of
-                    {0, disconnect} ->
-                        lager:debug("client ~p disconnected but QoS = 0. message dropped", [Pid]);
-
-                    {_, disconnect} ->
-                        lager:debug("client ~p disconnected while sending message", [Pid]),
-%                        mqtt_topic_registry:unsubscribe(Subscr),
-%                        mqtt_offline:register(Topic, DeviceID),
-                        mqtt_offline:event(undefined, {Topic, Qos}, Content),
-                        ok;
-
-                    _ ->
-                        ok
-                end;
-
-            _ ->
-                % SHOULD NEVER HAPPEND
-                lager:error("deadbeef ~p", [Pid])
-
-        end
-
-        || _Subscr={TopicMatch, {Mod,Fun,Pid}, _Fields} <- MatchList
-    ],
-
-    Resp = case Qos of
-        2 ->
-            #mqtt_msg{type='PUBREC', payload=[{msgid,1}]};
-        1 ->
-	        #mqtt_msg{type='PUBACK', payload=[{msgid,1}]};
-        _ ->
-            undefined
-    end,
-	{reply, Resp, connected, StateData, round(Ka*1.5)};
+    {reply, undefined, connected, StateData, round(Ka*1.5)};
 
 %TODO: prevent subscribing multiple times to the same topic
 connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T, keepalive=Ka}) ->
