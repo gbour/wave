@@ -133,7 +133,7 @@ decode_payload('CONNACK', _, {Len, <<_:8, RetCode:8/integer>>}) ->
     lager:debug("CONNACK"),
     {ok, [{retcode, RetCode}]};
 
-decode_payload('PUBACK', _, {Len, <<MsgID:16>>}) ->
+decode_payload('PUBACK', _, {Len=2, <<MsgID:16>>}) ->
     lager:debug("PUBACK. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
@@ -192,7 +192,7 @@ rlength(<<1:1, Len:7/integer, Rest/binary>>, Mult, Acc) ->
 
 
 encode(#mqtt_msg{retain=Retain, qos=Qos, dup=Dup, type=Type, payload=Payload}) ->
-    P = encode_payload(Type, Payload),
+    P = encode_payload(Type, Qos, Payload),
 
     lager:info("~p ~p", [P, is_binary(P)]),
 	%<<Retain/integer, Qos, Dup, atom2type(Type)>>.
@@ -204,7 +204,7 @@ encode(#mqtt_msg{retain=Retain, qos=Qos, dup=Dup, type=Type, payload=Payload}) -
 		P/binary
     >>.
 
-encode_payload('CONNECT', Opts) ->
+encode_payload('CONNECT', _Qos, Opts) ->
     ClientID = proplists:get_value(clientid, Opts),
     Username = proplists:get_value(username, Opts),
     Password = proplists:get_value(password, Opts),
@@ -226,19 +226,29 @@ encode_payload('CONNECT', Opts) ->
     >>;
 
 
-encode_payload('PUBLISH', Opts) ->
+encode_payload('PUBLISH', Qos=0, Opts) ->
+    Topic = proplists:get_value(topic, Opts),
+    Content = proplists:get_value(content, Opts),
+
+    <<
+        (encode_string(Topic))/binary,
+        % payload
+        (bin(Content))/binary
+    >>;
+
+encode_payload('PUBLISH', Qos, Opts) ->
     Topic = proplists:get_value(topic, Opts),
     MsgID = proplists:get_value(msgid, Opts),
     Content = proplists:get_value(content, Opts),
 
     <<
         (encode_string(Topic))/binary,
-        %MsgID:16,
+        MsgID:16,
         % payload
         (bin(Content))/binary
     >>;
 
-encode_payload('SUBSCRIBE', Opts) ->
+encode_payload('SUBSCRIBE', _Qos, Opts) ->
     Topic = proplists:get_value(topic, Opts),
     lager:info("topic= ~p", [Topic]),
 
@@ -248,7 +258,7 @@ encode_payload('SUBSCRIBE', Opts) ->
         0:8 % QoS
     >>;
 
-encode_payload('CONNACK', [{retcode, RetCode}]) ->
+encode_payload('CONNACK', _Qos, [{retcode, RetCode}]) ->
     <<
       % var headers
       0:8,
@@ -256,21 +266,21 @@ encode_payload('CONNACK', [{retcode, RetCode}]) ->
       RetCode:8
     >>;
 
-encode_payload('PUBACK', Opts) ->
+encode_payload('PUBACK', _Qos, Opts) ->
     MsgID = proplists:get_value(msgid, Opts),
 
     <<
         MsgID:16
     >>;
 
-encode_payload('PUBREC', Opts) ->
+encode_payload('PUBREC', _Qos, Opts) ->
     MsgID = proplists:get_value(msgid, Opts),
 
     <<
         MsgID:16
     >>;
 
-encode_payload('SUBACK', Opts) ->
+encode_payload('SUBACK', _Qos, Opts) ->
 	MsgId = proplists:get_value(msgid, Opts),
 	Qos   = proplists:get_value(qos, Opts),
 
@@ -279,12 +289,12 @@ encode_payload('SUBACK', Opts) ->
 	  (encode_qos(Qos))/binary
 	>>;
 
-encode_payload('UNSUBACK', [{msgid, MsgID}]) ->
+encode_payload('UNSUBACK', _Qos, [{msgid, MsgID}]) ->
 	<<MsgID:16>>;
 
-encode_payload('PINGREQ', _) ->
+encode_payload('PINGREQ', _Qos, _) ->
     <<>>;
-encode_payload('PINGRESP', _) ->
+encode_payload('PINGRESP', _Qos, _) ->
 	<<>>.
 
 encode_string(undefined) ->
