@@ -27,7 +27,7 @@
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
--export([handle/2, publish/4, is_alive/1, garbage_collect/1, disconnect/2]).
+-export([handle/2, publish/5, ack/3, is_alive/1, garbage_collect/1, disconnect/2]).
 -export([initiate/3, connected/2, connected/3]).
 %
 % role
@@ -68,7 +68,11 @@
     transport,
     opts,
     pingid = undefined,
-    keepalive
+    keepalive,
+    %TODO: use maps instead (test performances improvement)
+    inflight = [],
+    %TODO: initialize with random value
+    next_msgid = 1
 }).
 
 -define(CONNECT_TIMEOUT  , 5000). % ms
@@ -116,8 +120,11 @@ garbage_collect(_Pid) ->
 %
 % a message is published for me
 %
-publish(Pid, Topic, Content, Qos) ->
-    gen_fsm:sync_send_event(Pid, {publish, Topic, Content, Qos}).
+publish(Pid, From, Topic, Content, Qos) ->
+    gen_fsm:send_event(Pid, {publish, From, Topic, Content, Qos}).
+
+ack(Pid, MsgID, Qos) ->
+    gen_fsm:send_event(Pid, {ack, MsgID, Qos}).
 
 %% STATES
 
@@ -229,6 +236,17 @@ connected(Msg=#mqtt_msg{type='PUBLISH'}, _, StateData=#session{deviceid=_DeviceI
 
     {reply, undefined, connected, StateData, round(Ka*1.5)};
 
+connected(Msg=#mqtt_msg{type='PUBACK', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->
+    %TODO: find matching
+    MsgID  = proplists:get_value(msgid, P),
+    %Worker = gproc:where({n,l,{msgworker, MsgID}}),
+    Worker = proplists:get_value(MsgID, Inflight),
+    lager:debug("received PUBACK (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
+
+    mqtt_message_worker:ack(Worker, self(), Msg),
+
+    {reply, undefined, connected, StateData#session{inflight=proplists:delete(MsgID, Inflight)}, round(Ka*1.5)};
+
 %TODO: prevent subscribing multiple times to the same topic
 connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T, keepalive=Ka}) ->
 	MsgId  = proplists:get_value(msgid, P),
@@ -259,29 +277,6 @@ connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _, StateData=#session{topics
     lager:info("Ka=~p ~p", [Ka, OldTopics]),
     {reply, Resp, connected, StateData#session{topics=NewTopics}, round(Ka*1.5)};
 
-connected({publish, {Topic,_}, Content, Qos}, _,
-          StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
-    lager:debug("~p: publish message to client with QoS=~p", [self(), Qos]),
-
-    Msg   = #mqtt_msg{type='PUBLISH', payload=[{topic,Topic}, {content, Content}]},
-    State = case Qos of
-        0 ->
-            Callback:send(Transport, Socket, Msg);
-
-        _ ->
-            %TODO
-            lager:error("NOT IMPLEMENTED"),
-            ok
-    end,
-
-	lager:info("publish msg status= ~p", [State]),
-	case State of
-		{error, _Err} ->
-			{stop, normal, disconnect, StateData};
-
-		ok ->
-			{reply, ok, connected, StateData, round(Ka*1.5)}
-	end;
 
 connected(ping, _, StateData=#session{transport={Callback,Transport,Socket}}) ->
     Ret = Callback:crlfping(Transport, Socket),
@@ -300,6 +295,60 @@ connected(_,_, _StateData) ->
 connected({timeout, _, timeout1}, _StateData) ->
 	lager:info("timeout after connection"),
 	{stop, disconnect, []};
+
+% ASYNC
+
+% publish message with QoS 0 (fire n forget)
+connected({publish, _, {Topic,_}, Content, Qos=0},
+          StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
+    lager:debug("~p: publish message to subscriber with QoS=~p", [self(), Qos]),
+
+    Msg   = #mqtt_msg{type='PUBLISH', qos=Qos, payload=[{topic,Topic}, {content, Content}]},
+    State = Callback:send(Transport, Socket, Msg),
+    lager:info("publish msg status= ~p", [State]),
+
+    case State of
+        {error, _Err} ->
+            {stop, normal};
+
+        ok ->
+            lager:debug("OK, continue"),
+            {next_state, connected, StateData, round(Ka*1.5)}
+    end;
+
+% QoS 1 or 2
+connected({publish, From, {Topic,_}, Content, Qos},
+          StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka,inflight=Inflight,next_msgid=MsgID}) ->
+    lager:debug("~p: publish message to subscriber with QoS=~p (msgid= ~p)", [self(), Qos, MsgID]),
+
+    Msg   = #mqtt_msg{type='PUBLISH', qos=Qos, payload=[{topic,Topic}, {msgid, MsgID}, {content, Content}]},
+    State = Callback:send(Transport, Socket, Msg),
+    lager:info("publish msg status= ~p", [State]),
+
+    case State of
+        {error, _Err} ->
+            {stop, normal};
+
+        ok ->
+            lager:debug("OK, continue"),
+            {next_state, connected,
+             StateData#session{next_msgid=MsgID+1,inflight=[{MsgID, From}|Inflight]}, round(Ka*1.5)
+            }
+    end;
+
+%
+% sending PUBACK acknowledgement (QOS=1)
+%
+connected({ack, MsgID, _Qos=1}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
+    lager:debug("sending PUBACK"),
+    Msg = #mqtt_msg{type='PUBACK', payload=[{msgid, MsgID}]},
+    case Callback:send(Transport, Socket, Msg) of
+        {error, _} ->
+            {stop, normal};
+
+        ok ->
+            {next_state, connected, StateData, round(Ka*1.5)}
+    end;
 
 connected(timeout, StateData=#session{transport={Callback,Transport,Socket}}) ->
     %lager:info("5s timeout"),
