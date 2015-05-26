@@ -133,20 +133,28 @@ decode_payload('CONNACK', _, {Len, <<_:8, RetCode:8/integer>>}) ->
     lager:debug("CONNACK"),
     {ok, [{retcode, RetCode}]};
 
-decode_payload('PUBACK', _, {Len=2, <<MsgID:16>>}) ->
+decode_payload('PUBACK', _Qos, {Len=2, <<MsgID:16>>}) ->
     lager:debug("PUBACK. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
-decode_payload('PUBREC', _, {Len, <<MsgID:16>>}) ->
+decode_payload('PUBREC', _Qos, {Len, <<MsgID:16>>}) ->
     lager:debug("PUBREC. MsgID= ~p", [MsgID]),
+    {ok, [{msgid, MsgID}]};
+
+decode_payload('PUBREL', _Qos=1, {Len, <<MsgID:16>>}) ->
+    lager:debug("PUBREL. MsgID= ~p", [MsgID]),
+    {ok, [{msgid, MsgID}]};
+
+decode_payload('PUBCOMP', _Qos, {Len, <<MsgID:16>>}) ->
+    lager:debug("PUBREL. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
 decode_payload('SUBACK', _, {Len, <<MsgID:16, Qos/binary>>}) ->
     lager:debug("SUBACK. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
-decode_payload(Cmd, _, Args) ->
-    lager:info("invalid:: ~p: ~p", [Cmd, Args]),
+decode_payload(Cmd, Qos, Args) ->
+    lager:info("invalid command ~p (qos=~p, payload=~p)", [Cmd, Qos, Args]),
 
     {error, disconnect}.
 
@@ -274,6 +282,20 @@ encode_payload('PUBACK', _Qos, Opts) ->
     >>;
 
 encode_payload('PUBREC', _Qos, Opts) ->
+    MsgID = proplists:get_value(msgid, Opts),
+
+    <<
+        MsgID:16
+    >>;
+
+encode_payload('PUBREL', _Qos, Opts) ->
+    MsgID = proplists:get_value(msgid, Opts),
+
+    <<
+        MsgID:16
+    >>;
+
+encode_payload('PUBCOMP', _Qos, Opts) ->
     MsgID = proplists:get_value(msgid, Opts),
 
     <<
