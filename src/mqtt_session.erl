@@ -27,7 +27,7 @@
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
--export([handle/2, publish/5, ack/3, is_alive/1, garbage_collect/1, disconnect/2]).
+-export([handle/2, publish/5, ack/3, provisional/3, is_alive/1, garbage_collect/1, disconnect/2]).
 -export([initiate/3, connected/2, connected/3]).
 %
 % role
@@ -122,6 +122,11 @@ garbage_collect(_Pid) ->
 %
 publish(Pid, From, Topic, Content, Qos) ->
     gen_fsm:send_event(Pid, {publish, From, Topic, Content, Qos}).
+
+provisional(request, Pid, MsgID) ->
+    gen_fsm:send_event(Pid, {provreq, MsgID});
+provisional(response, Pid, MsgID) ->
+    gen_fsm:send_event(Pid, {provresp, MsgID}).
 
 ack(Pid, MsgID, Qos) ->
     gen_fsm:send_event(Pid, {ack, MsgID, Qos}).
@@ -228,13 +233,25 @@ connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=Ref,keepalive
     gen_fsm:cancel_timer(Ref),
     {reply, undefined, connected, StateData#session{pingid=undefined}, round(Ka*1.5)};
 
-connected(Msg=#mqtt_msg{type='PUBLISH'}, _, StateData=#session{deviceid=_DeviceID,keepalive=Ka}) ->
+
+connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _, StateData=#session{deviceid=_DeviceID,keepalive=Ka}) ->
     %TODO: save message in DB
     %      pass MsgID to message_worker
     {ok, MsgWorker} = mqtt_message_worker:start_link(),
     mqtt_message_worker:publish(MsgWorker, self(), Msg), % async
 
     {reply, undefined, connected, StateData, round(Ka*1.5)};
+
+% qos > 0
+connected(Msg=#mqtt_msg{type='PUBLISH', payload=P}, _,
+          StateData=#session{deviceid=_DeviceID,keepalive=Ka,inflight=Inflight}) ->
+    %TODO: save message in DB
+    MsgID = proplists:get_value(msgid, P),
+    %      pass MsgID to message_worker
+    {ok, MsgWorker} = mqtt_message_worker:start_link(),
+    mqtt_message_worker:publish(MsgWorker, self(), Msg), % async
+
+    {reply, undefined, connected, StateData#session{inflight=[{MsgID,MsgWorker}|Inflight]}, round(Ka*1.5)};
 
 connected(Msg=#mqtt_msg{type='PUBACK', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->
     %TODO: find matching
@@ -244,6 +261,24 @@ connected(Msg=#mqtt_msg{type='PUBACK', payload=P}, _, StateData=#session{keepali
     lager:debug("received PUBACK (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
 
     mqtt_message_worker:ack(Worker, self(), Msg),
+
+    {reply, undefined, connected, StateData#session{inflight=proplists:delete(MsgID, Inflight)}, round(Ka*1.5)};
+
+connected(Msg=#mqtt_msg{type='PUBREC', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->
+    MsgID  = proplists:get_value(msgid, P),
+    Worker = proplists:get_value(MsgID, Inflight),
+    lager:debug("received PUBREC (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
+
+    mqtt_message_worker:provisional(request, Worker, self(), Msg),
+
+    {reply, undefined, connected, StateData, round(Ka*1.5)};
+
+connected(Msg=#mqtt_msg{type='PUBREL', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->
+    MsgID  = proplists:get_value(msgid, P),
+    Worker = proplists:get_value(MsgID, Inflight),
+    lager:debug("received PUBREL (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
+
+    mqtt_message_worker:provisional(response, Worker, self(), Msg),
 
     {reply, undefined, connected, StateData#session{inflight=proplists:delete(MsgID, Inflight)}, round(Ka*1.5)};
 
@@ -337,11 +372,52 @@ connected({publish, From, {Topic,_}, Content, Qos},
     end;
 
 %
+% send provisional request PUBREC (QoS 2)
+% (to publisher)
+%
+connected({provreq, MsgID}, StateData=#session{transport={Clb,Transport,Sock},keepalive=Ka}) ->
+    lager:debug("sending PUBREC"),
+    Msg = #mqtt_msg{type='PUBREC', qos=2, payload=[{msgid, MsgID}]},
+    case Clb:send(Transport, Sock, Msg) of
+        {error, _} ->
+            {stop, normal};
+
+        ok ->
+            {next_state, connected, StateData, round(Ka*1.5)}
+    end;
+
+%
+% send provisional response - PUBREL (QoS 2)
+% (to subscriber)
+%
+connected({provresp, MsgID}, StateData=#session{transport={Clb,Transport,Sock},keepalive=Ka}) ->
+    lager:debug("sending PUBREL"),
+    Msg = #mqtt_msg{type='PUBREL', qos=2, payload=[{msgid, MsgID}]},
+    case Clb:send(Transport, Sock, Msg) of
+        {error, _} ->
+            {stop, normal};
+
+        ok ->
+            {next_state, connected, StateData, round(Ka*1.5)}
+    end;
+
+%
 % sending PUBACK acknowledgement (QOS=1)
 %
 connected({ack, MsgID, _Qos=1}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
     lager:debug("sending PUBACK"),
-    Msg = #mqtt_msg{type='PUBACK', payload=[{msgid, MsgID}]},
+    Msg = #mqtt_msg{type='PUBACK', qos=1, payload=[{msgid, MsgID}]},
+    case Callback:send(Transport, Socket, Msg) of
+        {error, _} ->
+            {stop, normal};
+
+        ok ->
+            {next_state, connected, StateData, round(Ka*1.5)}
+    end;
+% PUBCOMP (QOS=2)
+connected({ack, MsgID, _Qos=2}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
+    lager:debug("sending PUBCOMP"),
+    Msg = #mqtt_msg{type='PUBCOMP', qos=2, payload=[{msgid, MsgID}]},
     case Callback:send(Transport, Socket, Msg) of
         {error, _} ->
             {stop, normal};
