@@ -280,6 +280,15 @@ connected(Msg=#mqtt_msg{type='PUBREL', payload=P}, _, StateData=#session{keepali
 
     mqtt_message_worker:provisional(response, Worker, self(), Msg),
 
+    {reply, undefined, connected, StateData, round(Ka*1.5)};
+
+connected(Msg=#mqtt_msg{type='PUBCOMP', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->
+    MsgID  = proplists:get_value(msgid, P),
+    Worker = proplists:get_value(MsgID, Inflight),
+    lager:debug("received PUBCOMP (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
+
+    mqtt_message_worker:ack(Worker, self(), Msg),
+
     {reply, undefined, connected, StateData#session{inflight=proplists:delete(MsgID, Inflight)}, round(Ka*1.5)};
 
 %TODO: prevent subscribing multiple times to the same topic

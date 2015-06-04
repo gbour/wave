@@ -90,6 +90,7 @@ class Qos1(TestSuite):
         if not isinstance(e, EventPublish) or e.msg.qos != 2 or e.msg.payload != "foobar2":
             return False
 
+        # subscriber: send PUBREC after having received PUBLISH message
         sub.pubrec(e.msg.mid, read_response=False)
         e2 = sub.recv()
         if not isinstance(e2, EventPubrel) or e2.mid != e.msg.mid:

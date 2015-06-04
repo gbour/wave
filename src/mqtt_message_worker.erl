@@ -29,7 +29,7 @@
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 % INTERNAL STATES
--export([start/2, waitacks/2]).
+-export([start/2, provisional/2, waitacks/2]).
 
 -record(state, {
     publisher,
@@ -111,8 +111,14 @@ provisional({provresp, From, Msg=#mqtt_msg{type='PUBREL', payload=P}}, State=#st
             {next_state, waitacks, State#state{subscribers=Subscribers}}
     end.
 
+%
+% waiting subscribers acknowledgements
+%
+% for QOS 1, they must send back a PUBACK message
+% for QOS 2, they must send back a PUBREC, then latter on a PUBCOMP
+%
 
-waitacks({provisional, From, Msg}, State=#state{subscribers=S}) ->
+waitacks({provreq, From, Msg=#mqtt_msg{payload=P}}, State=#state{subscribers=S}) ->
     lager:debug("received provisional response from ~p: ~p", [From, Msg]),
     case lists:partition(fun({_,_,Pid,_}) -> Pid =:= From end, S) of
         {[], _} ->
@@ -123,8 +129,12 @@ waitacks({provisional, From, Msg}, State=#state{subscribers=S}) ->
             lager:info("Provisional response duplicate for ~", [From]),
             {next_state, waitacks, State};
 
+        % PUBREC
         {[{2,published,From,Args}], S2} ->
             lager:debug("~p: matched provisional response. waiting acknowledgment", [From]),
+            MsgID = proplists:get_value(msgid, P),
+            send(provresp, From, MsgID, 2),
+
             {next_state, waitacks, State#state{subscribers=[{2,provisional,From,Args}|S2]}};
 
         {[{Qos,_,_,_}], _}              ->
@@ -198,14 +208,8 @@ code_change(_OldVsn, StateName, StateData, _Extra) ->
 
 
 %
-% QoS=0 => fire and forget
-send(publish, {Mod,Fun,Pid}, Topic, Payload, Qos=0) ->
-    Mod:Fun(Pid, self(), Topic, Payload, Qos),
-    0;
-
-send(publish, {Mod,Fun,Pid}, Topic, Payload, Qos=1) ->
-    Mod:Fun(Pid, self(), Topic, Payload, Qos),
-    0.
+send(publish, {Mod,Fun,Pid}, Topic, Payload, Qos) ->
+    Mod:Fun(Pid, self(), Topic, Payload, Qos).
 
 % send provisional response (PUBREC)
 % ONLY for QoS 2
@@ -215,13 +219,16 @@ send(provreq, Publisher, MsgID, _Qos=2) ->
 send(provreq, _, _, _) ->
     pass;
 
+send(provresp, Peer, MsgID, _Qos=2) ->
+    mqtt_session:provisional(response, Peer, MsgID);
+
 send(ack, Publisher, MsgID, Qos) ->
     mqtt_session:ack(Publisher, MsgID, Qos).
 
 
 
 publish_to_subscribers(_From, #mqtt_msg{type='PUBLISH', qos=Qos, payload=P}) ->
-    MsgID   = proplists:get_value(msgid, P),
+    %MsgID   = proplists:get_value(msgid, P),
     Topic   = proplists:get_value(topic, P),
     Content = proplists:get_value(data, P),
 
