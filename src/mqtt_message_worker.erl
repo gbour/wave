@@ -175,8 +175,8 @@ waitacks({ack, From, Msg}, State=#state{publisher=Pub, subscribers=S, message=#m
 
         Invalid ->
             lager:error("smth is going wrong: ~p", [Invalid]),
-            {next_state, wait_acks, State}
-    end.
+            {next_state, waitacks, State}
+    end;
 
 %%
 %% GENERIC FSM CALLBACKS
