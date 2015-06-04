@@ -178,6 +178,10 @@ waitacks({ack, From, Msg}, State=#state{publisher=Pub, subscribers=S, message=#m
             {next_state, waitacks, State}
     end;
 
+waitacks({Event, From, Msg}, State) ->
+    lager:info("~p: invalid ~p event in waitacks state: ~p. Ignored", [From, Event, Msg]),
+    {next_state, waitacks, State}.
+
 %%
 %% GENERIC FSM CALLBACKS
 %%
