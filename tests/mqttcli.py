@@ -1,16 +1,20 @@
 #!/usr/bin/env python
 # -*- coding: UTF8 -*-
 
+import os
 import time
 import random
+import logging
 from nyamuk import nyamuk
 from nyamuk.event import *
 import nyamuk.nyamuk_const as NC
 
 class MqttClient(object):
     def __init__(self, prefix, rand=True, **kwargs):
-        self._c = nyamuk.Nyamuk("test:{0}:{1}".format(prefix, random.randint(0,9999) if rand else 0), None, None, 'localhost',
-            **kwargs)
+        loglevel  = logging.DEBUG if os.environ.get('DEBUG', 0) == '1' else logging.WARNING
+
+        self._c = nyamuk.Nyamuk("test:{0}:{1}".format(prefix, random.randint(0,9999) if rand else 0),
+            None, None, 'localhost', log_level=loglevel, **kwargs)
 
     def disconnect(self):
         self._c.disconnect(); self._c.packet_write()
