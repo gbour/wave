@@ -27,7 +27,8 @@
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
--export([handle/2, publish/5, ack/3, provisional/3, is_alive/1, garbage_collect/1, disconnect/2]).
+-export([handle/2, publish/5, ack/3, provisional/3, is_alive/1, garbage_collect/1, disconnect/2,
+         landed/2]).
 -export([initiate/3, connected/2, connected/3]).
 %
 % role
@@ -92,6 +93,9 @@ handle(Pid, Msg) ->
 	lager:info("return: ~p", [Resp]),
 
 	{ok, Resp}.
+
+landed(Pid, MsgID) ->
+    gen_fsm:send_event(Pid, {'msg-landed', MsgID}).
 
 % peer client disconnection
 %
@@ -262,7 +266,7 @@ connected(Msg=#mqtt_msg{type='PUBACK', payload=P}, _, StateData=#session{keepali
 
     mqtt_message_worker:ack(Worker, self(), Msg),
 
-    {reply, undefined, connected, StateData#session{inflight=proplists:delete(MsgID, Inflight)}, round(Ka*1.5)};
+    {reply, undefined, connected, StateData, round(Ka*1.5)};
 
 connected(Msg=#mqtt_msg{type='PUBREC', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->
     MsgID  = proplists:get_value(msgid, P),
@@ -289,7 +293,7 @@ connected(Msg=#mqtt_msg{type='PUBCOMP', payload=P}, _, StateData=#session{keepal
 
     mqtt_message_worker:ack(Worker, self(), Msg),
 
-    {reply, undefined, connected, StateData#session{inflight=proplists:delete(MsgID, Inflight)}, round(Ka*1.5)};
+    {reply, undefined, connected, StateData, round(Ka*1.5)};
 
 %TODO: prevent subscribing multiple times to the same topic
 connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T, keepalive=Ka}) ->
@@ -434,6 +438,13 @@ connected({ack, MsgID, _Qos=2}, StateData=#session{transport={Callback,Transport
         ok ->
             {next_state, connected, StateData, round(Ka*1.5)}
     end;
+
+%
+%TODO: what if peer disconnected between ack received and message landed ?
+%      do a pre-check when message received (qos1 = PUBACK, qos2 = PUBCOMP) ? 
+connected({'msg-landed', MsgID}, StateData=#session{keepalive=Ka, inflight=Inflight}) ->
+    lager:debug("#~p message-id is no more in-flight", [MsgID]),
+    {next_state, connected, StateData#session{inflight=proplists:delete(MsgID, Inflight)}, round(Ka*1.5)};
 
 connected(timeout, StateData=#session{transport={Callback,Transport,Socket}}) ->
     %lager:info("5s timeout"),
