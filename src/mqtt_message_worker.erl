@@ -109,7 +109,12 @@ provisional({provresp, From, Msg=#mqtt_msg{type='PUBREL', payload=P}}, State=#st
         _ ->
             % wait subscribers acknowledgement
             {next_state, waitacks, State#state{subscribers=Subscribers}}
-    end.
+    end;
+
+provisional({Event, From, Msg}, State) ->
+    lager:warning("received invalid ~p event (~p) from ~p while in provisional state", [Event, Msg, From]),
+    {next_state, provisional, State}.
+
 
 %
 % waiting subscribers acknowledgements
@@ -122,11 +127,11 @@ waitacks({provreq, From, Msg=#mqtt_msg{payload=P}}, State=#state{subscribers=S})
     lager:debug("received provisional response from ~p: ~p", [From, Msg]),
     case lists:partition(fun({_,_,Pid,_}) -> Pid =:= From end, S) of
         {[], _} ->
-            lager:error("~ not found in message subscribers", [From]),
+            lager:error("~p not found in message subscribers", [From]),
             {next_state, waitacks, State};
 
         {[{2,provisional,From,_}], _} ->
-            lager:info("Provisional response duplicate for ~", [From]),
+            lager:info("Provisional response duplicate for ~p", [From]),
             {next_state, waitacks, State};
 
         % PUBREC
@@ -138,48 +143,29 @@ waitacks({provreq, From, Msg=#mqtt_msg{payload=P}}, State=#state{subscribers=S})
             {next_state, waitacks, State#state{subscribers=[{2,provisional,From,Args}|S2]}};
 
         {[{Qos,_,_,_}], _}              ->
-            lager:info("~p: no provisional response needed for ~p QoS", [Qos]),
+            lager:info("~p: no provisional response needed for ~p QoS", [From, Qos]),
             {next_state, waitacks, State}
     end;
 
-waitacks({ack, From, Msg}, State=#state{publisher=Pub, subscribers=S, message=#mqtt_msg{qos=Qos, payload=P}}) ->
+waitacks({ack, From, Msg=#mqtt_msg{type=MsgType, payload=P}}, State=#state{subscribers=S}) ->
     lager:debug("received ack from ~p: ~p", [From, Msg]),
-    case lists:partition(fun({_,_,Pid,_}) -> Pid =:= From end, S) of
-        {[], _} ->
-            lager:error("~ not found in message subscribers", [From]),
+
+    {Match, Rest} = lists:partition(fun({_,_,Pid,_}) -> Pid =:= From end, S),
+    case checkack(MsgType, Match, Rest, State) of
+        pass  ->
             {next_state, waitacks, State};
 
-        {[{Qos,Status,From,_}], []} ->
-            if
-                {Qos, Status} =:= {2, published} ->
-                    lager:info("~p: provisional response not received before acknowledgement. accepted anyway");
-                true ->
-                    pass
-            end,
-
-            lager:debug("message delivery acknowledged by all subscribers: sending ack to publisher"),
+        stop  ->
             MsgID = proplists:get_value(msgid, P),
-            send(ack, Pub, MsgID, Qos),
             {stop, normal, State};
 
-        {[{Qos,Status,From,_}], S2} ->
-            if
-                {Qos, Status} =:= {2, published} ->
-                    lager:info("~p: provisional response not received before acknowledgement. accepted anyway");
-                true ->
-                    pass
-            end,
-
-            lager:debug("waiting all acknowledgements (~p remaining)", [length(S2)]),
-            {next_state, waitacks, State#state{subscribers=S2}};
-
-        Invalid ->
-            lager:error("smth is going wrong: ~p", [Invalid]),
-            {next_state, waitacks, State}
+        acked ->
+            MsgID = proplists:get_value(msgid, P),
+            {next_state, waitacks, State#state{subscribers=Rest}}
     end;
 
 waitacks({Event, From, Msg}, State) ->
-    lager:info("~p: invalid ~p event in waitacks state: ~p. Ignored", [From, Event, Msg]),
+    lager:warning("~p: invalid ~p event in waitacks state: ~p. Ignored", [From, Event, Msg]),
     {next_state, waitacks, State}.
 
 %%
@@ -260,4 +246,58 @@ publish_to_subscribers(_From, #mqtt_msg{type='PUBLISH', qos=Qos, payload=P}) ->
     ),
     lager:debug("Subscrivers w/ qos > 0 = ~p", [S2]),
     S2.
+
+
+checkack(_, _Match=[], _, _) ->
+    lager:error("~p not found in message subscribers", ["Subscriber"]),
+    pass;
+
+% qos 1
+% no remaining subscribers waiting for acknowledgement 
+% we send acknowledgement back to publisher
+checkack('PUBACK', [{_EQos=1, _,_,_}], [], #state{publisher=Pub, message=#mqtt_msg{qos=Qos, payload=P}}) ->
+    lager:debug("message delivery acknowledged by all subscribers: sending ack to publisher"),
+    MsgID = proplists:get_value(msgid, P),
+    send(ack, Pub, MsgID, Qos),
+    stop;
+
+checkack('PUBACK', [{_EQos=1, _,_,_}], Rest, _) ->
+    lager:debug("waiting all acknowledgements (~p remaining)", [length(Rest)]),
+    acked;
+
+% qos 2
+% no remaining subscribers 
+% we send
+checkack('PUBCOMP', [{_EQos=2, Status, _,_}], [], #state{publisher=Pub, message=#mqtt_msg{qos=Qos, payload=P}}) ->
+    case Status of
+        published ->
+            lager:info("~p: provisional response not received before acknowledgement. accepted anyway");
+        _         ->
+            pass
+    end,
+
+    lager:debug("message delivery acknowledged by all subscribers: sending ack to publisher"),
+    MsgID = proplists:get_value(msgid, P),
+    send(ack, Pub, MsgID, Qos),
+    stop;
+
+checkack('PUBCOMP', [{_EQos=2, Status, _,_}], Rest, _) ->
+    case Status of
+        published ->
+            lager:info("~p: provisional response not received before acknowledgement. accepted anyway");
+        _         ->
+            pass
+    end,
+
+    lager:debug("waiting all acknowledgements (~p remaining)", [length(Rest)]),
+    acked;
+
+checkack(MsgType, [{EQos, _,_,_}], _,_) ->
+    lager:warning("invalid ~p message for Qos ~p ", [MsgType, EQos]),
+    pass;
+
+checkack(MsgType, Invalid, _, _) ->
+    lager:error("smth is going wrong: ~p, mst type= ~p", [Invalid, MsgType]),
+    pass.
+
 
