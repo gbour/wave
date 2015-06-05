@@ -110,4 +110,35 @@ class Qos1(TestSuite):
 
         return True
 
+    @catch
+    @desc("invalid qos 1 acknowledgement while transaction is qos 2")
+    def test_010(self):
+        sub = self.newclient('sub')
+        sub.subscribe('a/b', 2)
+
+        pub = self.newclient('pub')
+        pub.publish('a/b', "foobar2", qos=2, read_response=False)
+        
+        pub.pubrec(pub.get_last_mid())
+
+        # PUBREC
+        pub.recv()
+
+        pub.pubrec(pub.get_last_mid())
+        pub.puback(pub.get_last_mid())
+        pub.pubcomp(pub.get_last_mid())
+
+
+        # finally send correct PUBREL message
+        pub.pubrel(pub.get_last_mid())
+
+        # PUBLISH received by subscriber
+        evt = sub.recv()
+
+        sub.pubrel(sub.get_last_mid())
+        sub.puback(sub.get_last_mid())
+        sub.pubcomp(sub.get_last_mid())
+
+        return True
+
     #TODO: delivery timeout (no acknowledgement) => message retransmitted

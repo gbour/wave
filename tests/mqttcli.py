@@ -47,3 +47,9 @@ class MqttClient(object):
             
         return _
 
+    # quite of "unproper" release
+    # force TCP socket to close immediatly
+    def destroy(self):
+        self._c.sock.shutdown(socket.SHUT_RDWR)
+        self._c.sock.close()
+
