@@ -18,8 +18,20 @@ class Qos1(TestSuite):
         return c
 
     @catch
-    @desc("downgraded delivery to qos 0")
+    @desc("SUBSCRIBE/SUBACK")
     def test_001(self):
+        sub = self.newclient("sub")
+        suback_evt = sub.subscribe('foo/bar', 2)
+        if not isinstance(suback_evt, EventSuback) or \
+            suback_evt.mid != sub.get_last_mid() or \
+            suback_evt.granted_qos[0] != 2:
+                return False
+
+        return True
+
+    @catch
+    @desc("downgraded delivery to qos 0")
+    def test_002(self):
         sub = self.newclient('sub')
         sub.subscribe('a/b', 2)
 
@@ -40,7 +52,7 @@ class Qos1(TestSuite):
 
     @catch
     @desc("downgraded delivery to qos 1")
-    def test_002(self):
+    def test_003(self):
         sub = self.newclient('sub')
         sub.subscribe('a/b', 2)
 
@@ -69,7 +81,7 @@ class Qos1(TestSuite):
 
     @catch
     @desc("qos 2 delivery")
-    def test_003(self):
+    def test_004(self):
         sub = self.newclient('sub')
         sub.subscribe('a/b', 2)
 

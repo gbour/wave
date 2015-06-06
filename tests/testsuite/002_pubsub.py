@@ -57,7 +57,11 @@ class PubSub(TestSuite):
         msg = 'foobar'
 
         sub = self.newclient('sub')
-        sub.subscribe(subtopic, 0)
+        suback_evt = sub.subscribe(subtopic, 0)
+        if not isinstance(suback_evt, EventSuback) or \
+            suback_evt.mid != sub.get_last_mid() or \
+            suback_evt.granted_qos[0] != 0:
+                return False
 
         pub = self.newclient('pub')
         pub.publish(pubtopic, msg)

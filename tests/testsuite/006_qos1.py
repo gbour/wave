@@ -18,8 +18,20 @@ class Qos1(TestSuite):
         return c
 
     @catch
-    @desc("downgraded delivery qos")
+    @desc("SUBSCRIBE/SUBACK")
     def test_001(self):
+        sub = self.newclient("sub")
+        suback_evt = sub.subscribe('foo/bar', 1)
+        if not isinstance(suback_evt, EventSuback) or \
+            suback_evt.mid != sub.get_last_mid() or \
+            suback_evt.granted_qos[0] != 1:
+                return False
+
+        return True
+
+    @catch
+    @desc("downgraded delivery qos")
+    def test_002(self):
         sub = self.newclient('sub')
         sub.subscribe('a/b', 1)
 
@@ -40,7 +52,7 @@ class Qos1(TestSuite):
 
     @catch
     @desc("QOS 1 published message - acknowledged")
-    def test_002(self):
+    def test_003(self):
         sub = self.newclient('sub')
         sub.subscribe('a/b', 1)
 
@@ -69,7 +81,7 @@ class Qos1(TestSuite):
 
     @catch
     @desc("destroyed socket (no subscriber, waiting PUBACK)")
-    def test_003(self):
+    def test_004(self):
         pub = self.newclient('pub')
         pub.publish('a/b', "foobar2", qos=1)
 
@@ -78,7 +90,7 @@ class Qos1(TestSuite):
 
     @catch
     @desc("destroyed socket (1 subscriber, waiting PUBACK)")
-    def test_004(self):
+    def test_005(self):
         sub = self.newclient('sub')
         sub.subscribe('a/b', 1)
 
@@ -98,7 +110,7 @@ class Qos1(TestSuite):
 
     @catch
     @desc("invalid qos 2 messages while transaction is qos 1")
-    def test_005(self):
+    def test_006(self):
         sub = self.newclient('sub')
         sub.subscribe('a/b', 1)
 

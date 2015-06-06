@@ -301,9 +301,14 @@ connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T
     Topics = proplists:get_value(topics, P),
 
     % subscribe to all listed topics (creating it if it don't exists)
-    [ mqtt_topic_registry:subscribe(Topic, Qos, {?MODULE,publish,self()}) || {Topic, Qos} <- Topics ],
+    EQoses = lists:map(fun({Topic, TQos}) ->
+            mqtt_topic_registry:subscribe(Topic, TQos, {?MODULE, publish, self()}),
 
-	Resp  = #mqtt_msg{type='SUBACK', payload=[{msgid,MsgId},{qos,[1]}]},
+            TQos
+        end, Topics
+    ),
+
+    Resp  = #mqtt_msg{type='SUBACK', payload=[{msgid,MsgId},{qos, EQoses}]},
 
     lager:info("Ka=~p", [Ka]),
     {reply, Resp, connected, StateData#session{topics=Topics++T}, round(Ka*1.5)};
