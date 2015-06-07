@@ -196,20 +196,39 @@ rlength(_, 5, _) ->
 rlength(<<0:1, Len:7/integer, Rest/binary>>, Mult, Acc) ->
     {Acc + Mult*Len, Rest};
 rlength(<<1:1, Len:7/integer, Rest/binary>>, Mult, Acc) ->
-    rlength(Rest, Mult+1, Acc + Mult*Len).
+    rlength(Rest, Mult*128, Acc + Mult*Len).
+
+
+encode_rlength(Payload) ->
+    encode_rlength(erlang:byte_size(Payload), <<"">>).
+
+% shortcut for 1 byte only rlength (< 128)
+encode_rlength(Size, <<"">>) when Size < 128 ->
+    <<Size:8>>;
+encode_rlength(0, RLen)     ->
+    RLen;
+encode_rlength(Size, RLen) ->
+    RLen2 = Size bsr 7, % division by 128
+    Digit = (Size rem 128) + ( if
+        RLen2 > 0 -> 128;
+        true      -> 0
+    end ),
+
+    encode_rlength(RLen2, <<RLen/binary, Digit:8>>).
 
 
 encode(#mqtt_msg{retain=Retain, qos=Qos, dup=Dup, type=Type, payload=Payload}) ->
     P = encode_payload(Type, Qos, Payload),
 
     lager:info("~p ~p", [P, is_binary(P)]),
-	%<<Retain/integer, Qos, Dup, atom2type(Type)>>.
+
 	<<
         % fixed headers
         (atom2type(Type)):4, Dup:1, Qos:2, Retain:1,
         % remaining length
-        (erlang:size(P)):8,
-		P/binary
+        (encode_rlength(P))/binary,
+        % variable headers + payload
+        P/binary
     >>.
 
 encode_payload('CONNECT', _Qos, Opts) ->
