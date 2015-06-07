@@ -68,7 +68,11 @@ class PubSub(TestSuite):
         pub.disconnect()
 
         e = sub.recv()
-        sub.unsubscribe(subtopic)
+        unsuback_evt = sub.unsubscribe(subtopic)
+        if not isinstance(unsuback_evt, EventUnsuback) or \
+            unsuback_evt.mid != sub.get_last_mid():
+                return False
+
         sub.disconnect()
         #print e, e.msg.topic, e.msg.payload
         if not isinstance(e, EventPublish) or \

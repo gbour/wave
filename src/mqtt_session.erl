@@ -325,7 +325,7 @@ connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _, StateData=#session{topics
     ),
 
     NewTopics = lists:subtract(OldTopics, Topics),
-	Resp  = #mqtt_msg{type='SUBACK', payload=[{msgid,MsgId},{qos,[1]}]},
+	Resp  = #mqtt_msg{type='UNSUBACK', payload=[{msgid,MsgId}]},
 
     lager:info("Ka=~p ~p", [Ka, OldTopics]),
     {reply, Resp, connected, StateData#session{topics=NewTopics}, round(Ka*1.5)};
