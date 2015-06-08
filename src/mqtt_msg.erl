@@ -149,16 +149,16 @@ decode_payload('UNSUBSCRIBE', Qos, {Len, <<MsgID:16, Payload/binary>>}) ->
     {ok, [{msgid, MsgID}, {topics, Topics}]};
 
 decode_payload('PINGREQ', _, {0, <<>>}) ->
-	{ok, undefined};
+    {ok, []};
 decode_payload('PINGRESP', _, {0, <<>>}) ->
-    {ok, undefined};
+    {ok, []};
 
 decode_payload('DISCONNECT', _, {0, <<>>}) ->
     lager:debug("DISCONNECT"),
     % not a real error, we just want to close the connection
     %TODO: return a disconnect object; and do cleanup upward
     %{error, disconnect};
-    {ok, undefined};
+    {ok, []};
 
 decode_payload('CONNECT', _, {Len, <<0:8, 4:8, "MQTT", Level:8/integer, Flags:8, Rest/binary>>}) ->
     lager:debug("CONNECT"),
