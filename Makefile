@@ -8,7 +8,7 @@ build:
 	./rebar prepare-deps
 
 debug:
-	erl -pa ebin/ `find deps -name ebin` -s $(APP) -s sync -config $(CFG)
+	erl -pa ebin/ `find deps -name ebin` -s $(APP) -s sync -config $(CFG) -s observer
 
 test:
 	cd tests && DEBUG=1 PYTHONPATH=./nyamuk ./run
