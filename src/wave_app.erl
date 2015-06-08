@@ -19,7 +19,7 @@
 -behaviour(application).
 
 %% Application callbacks
--export([start/0, start/2, stop/1]).
+-export([start/0, start/2, stop/1, loglevel/1]).
 
 %% ===================================================================
 %% Application callbacks
@@ -27,7 +27,6 @@
 
 start() ->
     lager:start(),
-    lager:set_loglevel(lager_console_backend, debug),
 
     application:ensure_all_started(gproc),
     application:ensure_all_started(shotgun),
@@ -121,3 +120,5 @@ check_ciphers(Ciphers) ->
         Ciphers
     ).
 
+loglevel(Level) ->
+    lager:set_loglevel(lager_console_backend, Level).
