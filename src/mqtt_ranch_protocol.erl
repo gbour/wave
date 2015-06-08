@@ -38,24 +38,26 @@ init(Ref, Socket, Transport, _Opts = []) ->
 
     {ok, Session} = mqtt_session:start_link({?MODULE, Transport, Socket}, [{addr, Addr}]),
     lager:debug("fsm= ~p (~p : ~p) from ~p", [Session, Transport, Socket, Addr]),
-    loop(Socket, Transport, Session).
+    loop(Socket, Transport, Session, <<"">>, 0).
 
-loop(Socket, Transport, Session) ->
+loop(Socket, Transport, Session, Buffer, Length) ->
     %TODO: do not use *infinity* timeout (handle incorrectly closed sockets)
     %      we can use PINGS to check socket state
-    case Transport:recv(Socket, 0, infinity) of %5000) of
+    case Transport:recv(Socket, Length, infinity) of %5000) of
         {ok, Data} ->
-            case route(Socket, Transport, Session, Data) of
+            case route(Socket, Transport, Session, <<Buffer/binary, Data/binary>>) of
+                {extend, Extend, Rest} ->
+                    loop(Socket, Transport, Session, Rest, Extend);
                 continue ->
-                    loop(Socket, Transport, Session);
+                    loop(Socket, Transport, Session, <<"">>, 0);
                 _ ->
                     stop
             end;
 
         {error, timeout} ->
-            lager:debug("socket timeout. Sending ping"),
+            lager:notice("socket timeout. Sending ping"),
             Transport:send(Socket, mqtt_msg:encode(#mqtt_msg{type='PINGREQ'})),
-            loop(Socket, Transport, Session);
+            loop(Socket, Transport, Session, Buffer, Length);
 
         % socket closed by peer
         {error, closed} ->
@@ -81,8 +83,12 @@ route(_,_,_, <<>>) ->
     continue;
 route(Socket, Transport, Session, Raw) ->
     case mqtt_msg:decode(Raw) of
-        {error, disconnect, _} ->
-            lager:info("closing connection"),
+        {error, size, Extend} ->
+            lager:notice("Packet is too short, missing ~p bytes", [Extend]),
+            {extend, Extend, Raw};
+
+        {error, Reason} ->
+            lager:error("closing connection. Reason: ~p", [Reason]),
             Transport:close(Socket),
             stop;
 

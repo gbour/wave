@@ -117,3 +117,29 @@ class Errors(TestSuite):
                 return False
 
         return True
+
+    @catch
+    @desc("PUBLISH remaining length header : 3 bytes long")
+    def test_013(self):
+        pub = self.newclient('pub', autoconnect=True)
+        sub = self.newclient('sub', autoconnect=True)
+        sub.subscribe('a/b', 0)
+
+        # NOTE: remaining length value is message length + 5 bytes (topic encoded) + 2 bytes (msgid)
+        msglen = 17000
+        msg = ''.join([chr(48+random.randint(0,42)) for x in xrange(msglen)])
+        #print "msg=", msg, len(msg)
+
+        puback_evt = pub.publish('a/b', msg, qos=1)
+        if not isinstance(puback_evt, EventPuback) or \
+            puback_evt.mid != pub.get_last_mid():
+                return False
+
+        publish_evt = sub.recv()
+        if not isinstance(publish_evt, EventPublish) or \
+            publish_evt.msg.payloadlen != msglen or \
+            publish_evt.msg.payload != msg:
+                return False
+
+        return True
+

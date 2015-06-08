@@ -21,32 +21,67 @@
 
 -include("include/mqtt_msg.hrl").
 
-decode(<<Type:4, Dup:1, Qos:2, Retain:1, Rest/binary>>) ->
-	T = type2atom(Type),
-    {Len, Rest2} = rlength(Rest),
-    <<P:Len/binary, Rest3/binary>> = Rest2,
+%
+% messages length:
+%
+% exactly 3 bytes (type + flags + rle, rle = 0):
+%  - PINREQ
+%  - PINRESP
+%  - DISCONNECT
+%
+% exactly 5 bytes (type + flags + rle = 2 + varheader):
+%  - CONNACK
+%  - PUBACK
+%  - PUBREC
+%  - PUBREL
+%  - PUBCOMP
+%  - UNSUBACK
+%
+% more than 3 bytes (type + flags + rle + varheader + payload):
+%  - CONNECT     (min 13 bytes)
+%  - PUBLISH     (min 3)
+%  - SUBSCRIBE   (min 3)
+%  - SUBACK      (min 3)
+%  - UNSUBSCRIBE (min 3)
+%
+decode(<<Type:4, Flags:4, Rest/binary>>) ->
+    decode(type2atom(Type), <<Flags:4>>, decode_rlength(Rest, erlang:byte_size(Rest), minlen(Type))).
 
+% invalid MQTT type
+decode({invalid, T}, _, _) ->
+    {error, {type, T}};
+% invalid Remaining Length header or not enough buffer to decode RLen
+decode(_, _, {error, overflow}) ->
+    {error, overflow};
+% buffer is too short to decode remaining-length header
+decode(_Type, _, {error, size, Size}) ->
+    lager:warning("~p: not enough data to decode rlen. missing ~p bytes", [_Type, Size]),
+    {error, size, Size};
+% Buffer is too short (do not contains the whole MQTT message)
+decode(_, _, {ESize, RSize, _}) when ESize > RSize ->
+    {error, size, ESize-RSize};
 
-    Msg = case decode_payload(T, Qos, {Len, P}) of
+decode(Type, <<Dup:1, Qos:2, Retain:1>>, {RLen, _, Rest}) ->
+    <<BPayload:RLen/binary, Rest2/binary>> = Rest,
+
+    Msg = case decode_payload(Type, Qos, {RLen, BPayload}) of
         {ok, Payload} ->
             {ok, #mqtt_msg{
-                type=T,
+                type=Type,
                 retain=Retain,
                 qos=Qos,
                 dup=Dup,
 
                 payload = Payload
-            }, Rest3};
+            }, Rest2};
 
         {error, Err} ->
-            {error, Err, Rest3}
+            {error, Err, Rest2}
     end,
 
     %lager:debug("~p", [Msg]),
     Msg.
 
-decode_payload(_, _, overflow) ->
-    error;
 
 %
 % CONNECT
@@ -85,7 +120,7 @@ decode_payload('CONNECT', Qos, {Len, <<0:8, 6:8, "MQIsdp", Version:8/integer, Fl
     ]};
 
 decode_payload('PUBLISH', Qos, {Len, Rest}) ->
-    lager:debug("PUBLISH (qos=~p) ~p ~p", [Qos, Len, Rest]),
+    %lager:debug("PUBLISH (qos=~p) ~p ~p", [Qos, Len, Rest]),
 
     {Topic, Rest2} = decode_string(Rest),
     Ret = if
@@ -96,7 +131,7 @@ decode_payload('PUBLISH', Qos, {Len, Rest}) ->
             [{topic,Topic}, {msgid,MsgID}, {data, Rest3}]
     end,
     %{Topic, <<MsgID:16, Rest2/binary>>} = decode_string(Rest),
-    lager:debug("ret= ~p", [Ret]),
+    %lager:debug("ret= ~p", [Ret]),
 
     {ok, Ret};
 
@@ -187,16 +222,18 @@ decode_string(Pkt) ->
 %    'connack_0x01';
 %validate('CONNECT', <<
 
-rlength(Pkt) ->
-    rlength(Pkt, 1, 0).
+decode_rlength(Pkt, PktSize, MinLen) when PktSize < MinLen ->
+    {error, size, MinLen-PktSize};
+decode_rlength(Pkt, _, _) ->
+    p_decode_rlength(Pkt, 1, 0).
 
-rlength(_, 5, _) ->
+p_decode_rlength(_, 5, _) ->
     % remaining length overflow
-    overflow;
-rlength(<<0:1, Len:7/integer, Rest/binary>>, Mult, Acc) ->
-    {Acc + Mult*Len, Rest};
-rlength(<<1:1, Len:7/integer, Rest/binary>>, Mult, Acc) ->
-    rlength(Rest, Mult*128, Acc + Mult*Len).
+    {error, overflow};
+p_decode_rlength(<<0:1, Len:7/integer, Rest/binary>>, Mult, Acc) ->
+    {Acc + Mult*Len, erlang:byte_size(Rest), Rest};
+p_decode_rlength(<<1:1, Len:7/integer, Rest/binary>>, Mult, Acc) ->
+    p_decode_rlength(Rest, Mult*128, Acc + Mult*Len).
 
 
 encode_rlength(Payload) ->
@@ -383,7 +420,24 @@ type2atom(11) -> 'UNSUBACK';
 type2atom(12) -> 'PINGREQ';
 type2atom(13) -> 'PINGRESP';
 type2atom(14) -> 'DISCONNECT';
-type2atom(_)  -> invalid.
+type2atom(T)  -> {invalid, T}.
+
+minlen(1)  -> 3;
+minlen(2)  -> 3;
+minlen(3)  -> 3;
+minlen(4)  -> 3;
+minlen(5)  -> 3;
+minlen(6)  -> 3;
+minlen(7)  -> 3;
+minlen(8)  -> 3;
+minlen(9)  -> 3;
+minlen(10) -> 3;
+minlen(11) -> 3;
+minlen(12) -> 1;
+minlen(13) -> 1;
+minlen(14) -> 1;
+minlen(_)  -> -1.
+
 
 setflag(undefined) -> 0;
 setflag(_)         -> 1.
