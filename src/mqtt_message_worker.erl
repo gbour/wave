@@ -88,6 +88,8 @@ start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}}, State)
             % send PUBACK/PUBREL immediately
             MsgID   = proplists:get_value(msgid, P),
             send(ack, From, MsgID, Qos),
+            mqtt_session:landed(From, MsgID), % message no more in in-flight mode
+
             {stop, normal, State};
 
         {_, _} ->
@@ -104,6 +106,8 @@ provisional({provresp, From, Msg=#mqtt_msg{type='PUBREL', payload=P}}, State=#st
             % send PUBCOMP immediately
             MsgID   = proplists:get_value(msgid, P),
             send(ack, From, MsgID, 2),
+            mqtt_session:landed(From, MsgID), % message no more in in-flight mode
+
             {stop, normal, State};
 
         _ ->
