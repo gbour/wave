@@ -515,7 +515,7 @@ terminate(_Reason, StateName, _StateData=#session{deviceid=DeviceID, topics=T, o
                             wave_redis:topic(DeviceID, Topic, Qos);
 
                         _ ->
-                            mqtt_offline:register(Topic, DeviceID)
+                            mqtt_offline:register(Topic, Qos, DeviceID)
                     end
                 end,
                 T
