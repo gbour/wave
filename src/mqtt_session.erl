@@ -398,7 +398,7 @@ connected({publish, From, {Topic,_}, Content, Qos},
 %
 connected({provreq, MsgID}, StateData=#session{transport={Clb,Transport,Sock},keepalive=Ka}) ->
     lager:debug("sending PUBREC"),
-    Msg = #mqtt_msg{type='PUBREC', qos=2, payload=[{msgid, MsgID}]},
+    Msg = #mqtt_msg{type='PUBREC', qos=0, payload=[{msgid, MsgID}]},
     case Clb:send(Transport, Sock, Msg) of
         {error, _} ->
             {stop, normal};
@@ -413,7 +413,7 @@ connected({provreq, MsgID}, StateData=#session{transport={Clb,Transport,Sock},ke
 %
 connected({provresp, MsgID}, StateData=#session{transport={Clb,Transport,Sock},keepalive=Ka}) ->
     lager:debug("sending PUBREL"),
-    Msg = #mqtt_msg{type='PUBREL', qos=2, payload=[{msgid, MsgID}]},
+    Msg = #mqtt_msg{type='PUBREL', qos=1, payload=[{msgid, MsgID}]},
     case Clb:send(Transport, Sock, Msg) of
         {error, _} ->
             {stop, normal};
@@ -427,7 +427,7 @@ connected({provresp, MsgID}, StateData=#session{transport={Clb,Transport,Sock},k
 %
 connected({ack, MsgID, _Qos=1}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
     lager:debug("sending PUBACK"),
-    Msg = #mqtt_msg{type='PUBACK', qos=1, payload=[{msgid, MsgID}]},
+    Msg = #mqtt_msg{type='PUBACK', qos=0, payload=[{msgid, MsgID}]},
     case Callback:send(Transport, Socket, Msg) of
         {error, _} ->
             {stop, normal};
@@ -438,7 +438,7 @@ connected({ack, MsgID, _Qos=1}, StateData=#session{transport={Callback,Transport
 % PUBCOMP (QOS=2)
 connected({ack, MsgID, _Qos=2}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
     lager:debug("sending PUBCOMP"),
-    Msg = #mqtt_msg{type='PUBCOMP', qos=2, payload=[{msgid, MsgID}]},
+    Msg = #mqtt_msg{type='PUBCOMP', qos=0, payload=[{msgid, MsgID}]},
     case Callback:send(Transport, Socket, Msg) of
         {error, _} ->
             {stop, normal};
