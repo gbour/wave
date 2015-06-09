@@ -85,13 +85,15 @@ handle_call({register, Topic, Qos, DeviceID}, _, State=#state{registrations=R}) 
 handle_call({recover, DeviceID}, _, State=#state{registrations=R}) ->
     {R2, DTopics} = lists:partition(fun({_Topic, _Qos, DeviceID2}) -> DeviceID2 =/= DeviceID end, R),
     lager:info("~p / ~p", [R2, DTopics]),
-    lists:foreach(fun({Topic, _, _}) ->
-            mqtt_topic_registry:unsubscribe(Topic, {?MODULE,event,self()})
+    DTopics2 = lists:map(fun({Topic, Qos, _DeviceID}) ->
+            mqtt_topic_registry:unsubscribe(Topic, {?MODULE,event,self()}),
+
+            {Topic, Qos}
         end,
         DTopics
     ),
 
-    {reply, DTopics, State#state{registrations=R2}};
+    {reply, DTopics2, State#state{registrations=R2}};
 
 %TODO: add MatchTopic in parameters
 %      ie the matching topic rx that lead to executing this callback
