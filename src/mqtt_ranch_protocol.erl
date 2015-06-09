@@ -87,7 +87,7 @@ route(Socket, Transport, Session, Raw) ->
             lager:notice("Packet is too short, missing ~p bytes", [Extend]),
             {extend, Extend, Raw};
 
-        {error, Reason} ->
+        {error, Reason, _} ->
             lager:error("closing connection. Reason: ~p", [Reason]),
             Transport:close(Socket),
             stop;
