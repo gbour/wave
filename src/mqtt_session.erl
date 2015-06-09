@@ -144,7 +144,10 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
     DeviceID = proplists:get_value(clientid, P),
     User     = proplists:get_value(username, P),
     Pwd      = proplists:get_value(password, P),
-    KeepAlive = proplists:get_value(keepalive, P, ?DEFAULT_KEEPALIVE) * 1000,
+    Ka       = case proplists:get_value(keepalive, P, ?DEFAULT_KEEPALIVE) of
+        0   -> infinity;
+        _Ka -> round(_Ka * 1000 * 1.5)
+    end,
     Clean    = proplists:get_value(clean, P, 1),
 
     % load device settings from db
@@ -217,7 +220,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
     end,
 
     Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
-    {reply, Resp, NextState, StateData#session{deviceid=DeviceID, keepalive=KeepAlive, opts=Vals, topics=Topics}, round(KeepAlive*1.5)};
+    {reply, Resp, NextState, StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, topics=Topics}, Ka};
 initiate(#mqtt_msg{}, _, _StateData) ->
 	% close socket
 	{stop, disconnect, []};
@@ -230,12 +233,12 @@ connected(#mqtt_msg{type='DISCONNECT'}, _, StateData) ->
 
 connected(#mqtt_msg{type='PINGREQ'}, _, StateData=#session{keepalive=Ka}) ->
     Resp = #mqtt_msg{type='PINGRESP'},
-    {reply, Resp, connected, StateData, round(Ka*1.5)};
+    {reply, Resp, connected, StateData, Ka};
 
 connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=Ref,keepalive=Ka}) ->
     lager:info("received PINGRESP"),
     gen_fsm:cancel_timer(Ref),
-    {reply, undefined, connected, StateData#session{pingid=undefined}, round(Ka*1.5)};
+    {reply, undefined, connected, StateData#session{pingid=undefined}, Ka};
 
 
 connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _, StateData=#session{deviceid=_DeviceID,keepalive=Ka}) ->
@@ -244,7 +247,7 @@ connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _, StateData=#session{deviceid=_
     {ok, MsgWorker} = mqtt_message_worker:start_link(),
     mqtt_message_worker:publish(MsgWorker, self(), Msg), % async
 
-    {reply, undefined, connected, StateData, round(Ka*1.5)};
+    {reply, undefined, connected, StateData, Ka};
 
 % qos > 0
 connected(Msg=#mqtt_msg{type='PUBLISH', payload=P}, _,
@@ -255,7 +258,7 @@ connected(Msg=#mqtt_msg{type='PUBLISH', payload=P}, _,
     {ok, MsgWorker} = mqtt_message_worker:start_link(),
     mqtt_message_worker:publish(MsgWorker, self(), Msg), % async
 
-    {reply, undefined, connected, StateData#session{inflight=[{MsgID,MsgWorker}|Inflight]}, round(Ka*1.5)};
+    {reply, undefined, connected, StateData#session{inflight=[{MsgID,MsgWorker}|Inflight]}, Ka};
 
 connected(Msg=#mqtt_msg{type='PUBACK', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->
     %TODO: find matching
@@ -266,7 +269,7 @@ connected(Msg=#mqtt_msg{type='PUBACK', payload=P}, _, StateData=#session{keepali
 
     mqtt_message_worker:ack(Worker, self(), Msg),
 
-    {reply, undefined, connected, StateData, round(Ka*1.5)};
+    {reply, undefined, connected, StateData, Ka};
 
 connected(Msg=#mqtt_msg{type='PUBREC', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->
     MsgID  = proplists:get_value(msgid, P),
@@ -275,7 +278,7 @@ connected(Msg=#mqtt_msg{type='PUBREC', payload=P}, _, StateData=#session{keepali
 
     mqtt_message_worker:provisional(request, Worker, self(), Msg),
 
-    {reply, undefined, connected, StateData, round(Ka*1.5)};
+    {reply, undefined, connected, StateData, Ka};
 
 connected(Msg=#mqtt_msg{type='PUBREL', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->
     MsgID  = proplists:get_value(msgid, P),
@@ -284,7 +287,7 @@ connected(Msg=#mqtt_msg{type='PUBREL', payload=P}, _, StateData=#session{keepali
 
     mqtt_message_worker:provisional(response, Worker, self(), Msg),
 
-    {reply, undefined, connected, StateData, round(Ka*1.5)};
+    {reply, undefined, connected, StateData, Ka};
 
 connected(Msg=#mqtt_msg{type='PUBCOMP', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->
     MsgID  = proplists:get_value(msgid, P),
@@ -293,7 +296,7 @@ connected(Msg=#mqtt_msg{type='PUBCOMP', payload=P}, _, StateData=#session{keepal
 
     mqtt_message_worker:ack(Worker, self(), Msg),
 
-    {reply, undefined, connected, StateData, round(Ka*1.5)};
+    {reply, undefined, connected, StateData, Ka};
 
 %TODO: prevent subscribing multiple times to the same topic
 connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T, keepalive=Ka}) ->
@@ -311,7 +314,7 @@ connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T
     Resp  = #mqtt_msg{type='SUBACK', payload=[{msgid,MsgId},{qos, EQoses}]},
 
     lager:info("Ka=~p", [Ka]),
-    {reply, Resp, connected, StateData#session{topics=Topics++T}, round(Ka*1.5)};
+    {reply, Resp, connected, StateData#session{topics=Topics++T}, Ka};
 
 connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _, StateData=#session{topics=OldTopics, keepalive=Ka}) ->
 	MsgId  = proplists:get_value(msgid, P),
@@ -328,7 +331,7 @@ connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _, StateData=#session{topics
 	Resp  = #mqtt_msg{type='UNSUBACK', payload=[{msgid,MsgId}]},
 
     lager:info("Ka=~p ~p", [Ka, OldTopics]),
-    {reply, Resp, connected, StateData#session{topics=NewTopics}, round(Ka*1.5)};
+    {reply, Resp, connected, StateData#session{topics=NewTopics}, Ka};
 
 
 connected(ping, _, StateData=#session{transport={Callback,Transport,Socket}}) ->
@@ -366,7 +369,7 @@ connected({publish, _, {Topic,_}, Content, Qos=0},
 
         ok ->
             lager:debug("OK, continue"),
-            {next_state, connected, StateData, round(Ka*1.5)}
+            {next_state, connected, StateData, Ka}
     end;
 
 % QoS 1 or 2
@@ -385,7 +388,7 @@ connected({publish, From, {Topic,_}, Content, Qos},
         ok ->
             lager:debug("OK, continue"),
             {next_state, connected,
-             StateData#session{next_msgid=MsgID+1,inflight=[{MsgID, From}|Inflight]}, round(Ka*1.5)
+             StateData#session{next_msgid=MsgID+1,inflight=[{MsgID, From}|Inflight]}, Ka
             }
     end;
 
@@ -401,7 +404,7 @@ connected({provreq, MsgID}, StateData=#session{transport={Clb,Transport,Sock},ke
             {stop, normal};
 
         ok ->
-            {next_state, connected, StateData, round(Ka*1.5)}
+            {next_state, connected, StateData, Ka}
     end;
 
 %
@@ -416,7 +419,7 @@ connected({provresp, MsgID}, StateData=#session{transport={Clb,Transport,Sock},k
             {stop, normal};
 
         ok ->
-            {next_state, connected, StateData, round(Ka*1.5)}
+            {next_state, connected, StateData, Ka}
     end;
 
 %
@@ -430,7 +433,7 @@ connected({ack, MsgID, _Qos=1}, StateData=#session{transport={Callback,Transport
             {stop, normal};
 
         ok ->
-            {next_state, connected, StateData, round(Ka*1.5)}
+            {next_state, connected, StateData, Ka}
     end;
 % PUBCOMP (QOS=2)
 connected({ack, MsgID, _Qos=2}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
@@ -441,7 +444,7 @@ connected({ack, MsgID, _Qos=2}, StateData=#session{transport={Callback,Transport
             {stop, normal};
 
         ok ->
-            {next_state, connected, StateData, round(Ka*1.5)}
+            {next_state, connected, StateData, Ka}
     end;
 
 %
@@ -449,7 +452,7 @@ connected({ack, MsgID, _Qos=2}, StateData=#session{transport={Callback,Transport
 %      do a pre-check when message received (qos1 = PUBACK, qos2 = PUBCOMP) ? 
 connected({'msg-landed', MsgID}, StateData=#session{keepalive=Ka, inflight=Inflight}) ->
     lager:debug("#~p message-id is no more in-flight", [MsgID]),
-    {next_state, connected, StateData#session{inflight=proplists:delete(MsgID, Inflight)}, round(Ka*1.5)};
+    {next_state, connected, StateData#session{inflight=proplists:delete(MsgID, Inflight)}, Ka};
 
 connected(timeout, StateData=#session{transport={Callback,Transport,Socket}}) ->
     %lager:info("5s timeout"),
