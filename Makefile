@@ -24,4 +24,12 @@ cert:
 		-nodes \
 		-subj '/CN=FR/O=wave/CN=wave.acme.org'
 
+#
+#
+subscriber:
+	mosquitto_sub -d -k 9999 -t foo/#
+
+publisher:
+	mosquitto_pub -t foo/bar -m plop#$(shell bash -c 'echo $$RANDOM')
+
 .PHONY: test
