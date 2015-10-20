@@ -38,7 +38,10 @@ start() ->
     application:start(ssl),
 
     application:start(ranch),
-	application:start(wave).
+	application:start(wave),
+    
+    % webservices
+    application:start(cowboy).
 
 
 start(_StartType, _StartArgs) ->
@@ -84,7 +87,12 @@ start(_StartType, _StartArgs) ->
 
         ], mqtt_ranch_protocol, []),
 
-    wave_sup:start_link().
+    wave_sup:start_link(),
+
+    % start http listener
+    start_http_service(),
+
+    ok.
 
 stop(_State) ->
     ok.
@@ -122,3 +130,16 @@ check_ciphers(Ciphers) ->
 
 loglevel(Level) ->
     lager:set_loglevel(lager_console_backend, Level).
+
+start_http_service() ->
+    Dispatch = cowboy_router:compile([
+        {'_', [
+            {"/ws/[...]", webservice, []}
+        ]}
+    ]),
+
+    {ok, _} = cowboy:start_http(http, 100, [{port, 8080}], [
+        {env, [{dispatch, Dispatch}]}
+    ]),
+
+    ok.

@@ -14,23 +14,26 @@
 %%    You should have received a copy of the GNU Affero General Public License
 %%    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-{erl_opts, [
-	debug_info, 
-	fail_on_warning,
-	{parse_transform, lager_transform}
-]}.
-%{require_otp_vsn, "17"}.
+-module(webservice).
+-author("Guillaume Bour <guillaume@bour.cc>").
 
-{sub_dirs, ["rel"]}.
-%{plugins, [erlson_rebar_plugin]}.
+-export([init/2, content_types_provided/2, handle/2, terminate/2]).
 
 
-%
-{deps, [
-    {sync, ".*", {git, "git://github.com/rustyio/sync.git"}},
-    {lager   , ".*", {git, "https://github.com/basho/lager.git" , {branch, "master"}}},
-    {ranch   , ".*", {git, "https://github.com/ninenines/ranch.git", {branch, "master"}}},
-    {cowboy  , ".*", {git, "https://github.com/ninenines/cowboy.git", {branch, "master"}}},
-    {gproc   , ".*", {git, "https://github.com/uwiger/gproc.git", {branch, "master"}}},
-	{eredis  , ".*", {git, "https://github.com/wooga/eredis.git", {branch, "master"}}}
-]}.
+init(Req, Opts) ->
+    {cowboy_rest, Req, Opts}.
+
+content_types_provided(Req, State) ->
+    {[
+        {<<"application/json">>, handle}
+    ], Req, State}.
+
+handle(Req, State) ->
+    io:format("plop ~p~n",[Req]),
+
+    Body = <<"{\"rest\": \"Hello World!\"}">>,
+    {Body, Req, State}.
+
+terminate(Req, State) ->
+    ok.
+
