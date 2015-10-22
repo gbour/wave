@@ -77,7 +77,7 @@ start(_StartType, _StartArgs) ->
             {keyfile , filename:join([filename:dirname(code:which(wave_app)), "..", "etc", "wave_key.pem"])},
 
             % increase security level
-            {secure_renegotiation, true},
+            %{secure_renegotiation, true},
             {reuse_sessions, false},
             {honor_cipher_order, true},
             {versions, env([ssl, versions])},
@@ -134,7 +134,8 @@ loglevel(Level) ->
 start_http_service() ->
     Dispatch = cowboy_router:compile([
         {'_', [
-            {"/ws/[...]", webservice, []}
+            {"/foo/[...]", webservice, []},
+            {"/ws/user/new", wave_mod_ws_usercreate, []}
         ]}
     ]),
 
