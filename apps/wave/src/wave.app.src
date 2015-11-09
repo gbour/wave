@@ -4,14 +4,19 @@
   {description, ""},
   {vsn, "1"},
   {registered, []},
+  {mod, { wave_app, []}},
   {applications, [
 	  kernel,
 	  stdlib,
       gproc,
       lager
   ]},
-  {mod, { wave_app, []}},
-  {env, []}
+  {env, []},
+  {modules, []},
+
+  {contributors, []},
+  {licenses, []},
+  {links, []}
 ]}.
 
 

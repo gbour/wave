@@ -19,7 +19,7 @@
 
 -export([encode/1, decode/1]).
 
--include("include/mqtt_msg.hrl").
+-include("mqtt_msg.hrl").
 
 %
 % messages length:

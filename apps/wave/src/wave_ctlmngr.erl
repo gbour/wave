@@ -23,7 +23,7 @@
 -author("Guillaume Bour <guillaume@bour.cc>").
 -behaviour(gen_server).
 
--include("include/mqtt_msg.hrl").
+-include("mqtt_msg.hrl").
 
 -record(state, {
 }).

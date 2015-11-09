@@ -19,7 +19,10 @@
 -behaviour(application).
 
 %% Application callbacks
--export([start/0, start/2, stop/1, loglevel/1]).
+-export([start/0, start/2, stop/1, loglevel/1, fuzz/0]).
+
+fuzz() ->
+    io:format("fuzz~n").
 
 %% ===================================================================
 %% Application callbacks
@@ -70,8 +73,11 @@ start(_StartType, _StartArgs) ->
     {ok, _} = ranch:start_listener(wave_ssl, 1, ranch_ssl, [
             {port    , env([ssl, port])},
             {keepalive, true},
-            {certfile, filename:join([filename:dirname(code:which(wave_app)), "..", "etc", "wave_cert.pem"])},
-            {keyfile , filename:join([filename:dirname(code:which(wave_app)), "..", "etc", "wave_key.pem"])},
+            {certfile, filename:join([
+                                      filename:dirname(code:which(wave_app)),
+                                      "../../../../..", "etc", "wave_cert.pem"])},
+            {keyfile , filename:join([filename:dirname(code:which(wave_app)),
+                                      "../../../../..", "etc", "wave_key.pem"])},
 
             % increase security level
             {secure_renegotiation, true},

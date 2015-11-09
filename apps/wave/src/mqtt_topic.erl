@@ -18,7 +18,7 @@
 -author("Guillaume Bour <guillaume@bour.cc>").
 -behaviour(gen_server).
 
--include("include/mqtt_msg.hrl").
+-include("mqtt_msg.hrl").
 
 %
 -export([get/1, subscribe/2, publish/2]).

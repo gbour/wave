@@ -23,7 +23,7 @@
 -author("Guillaume Bour <guillaume@bour.cc>").
 -behaviour(gen_server).
 
--include("include/mqtt_msg.hrl").
+-include("mqtt_msg.hrl").
 
 -record(state, {
     registrations = [],
@@ -85,15 +85,13 @@ handle_call({register, Topic, Qos, DeviceID}, _, State=#state{registrations=R}) 
 handle_call({recover, DeviceID}, _, State=#state{registrations=R}) ->
     {R2, DTopics} = lists:partition(fun({_Topic, _Qos, DeviceID2}) -> DeviceID2 =/= DeviceID end, R),
     lager:info("~p / ~p", [R2, DTopics]),
-    DTopics2 = lists:map(fun({Topic, Qos, _DeviceID}) ->
-            mqtt_topic_registry:unsubscribe(Topic, {?MODULE,event,self()}),
-
-            {Topic, Qos}
+    lists:foreach(fun({Topic, _, _}) ->
+            mqtt_topic_registry:unsubscribe(Topic, {?MODULE,event,self()})
         end,
         DTopics
     ),
 
-    {reply, DTopics2, State#state{registrations=R2}};
+    {reply, DTopics, State#state{registrations=R2}};
 
 %TODO: add MatchTopic in parameters
 %      ie the matching topic rx that lead to executing this callback

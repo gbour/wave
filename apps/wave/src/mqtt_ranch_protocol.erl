@@ -23,7 +23,7 @@
 
 -export([ping/2, crlfping/2, send/3, close/2]).
 
--include("include/mqtt_msg.hrl").
+-include("mqtt_msg.hrl").
 
 start_link(Ref, Socket, Transport, Opts) ->
     Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts]),
@@ -87,7 +87,7 @@ route(Socket, Transport, Session, Raw) ->
             lager:notice("Packet is too short, missing ~p bytes", [Extend]),
             {extend, Extend, Raw};
 
-        {error, Reason, _} ->
+        {error, Reason} ->
             lager:error("closing connection. Reason: ~p", [Reason]),
             Transport:close(Socket),
             stop;

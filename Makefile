@@ -5,10 +5,10 @@ CFG=etc/wave
 all: build
 
 build:
-	./rebar prepare-deps
+	./rebar3 compile
 
 debug:
-	erl -pa ebin/ `find deps -name ebin` -s $(APP) -s sync -config $(CFG) -s observer
+	erl -pa `find _build -name ebin` -s $(APP) -s sync -config $(CFG) -s observer
 
 test:
 	cd tests && DEBUG=1 PYTHONPATH=./nyamuk ./run
