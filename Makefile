@@ -14,10 +14,10 @@ test:
 	cd tests && DEBUG=1 PYTHONPATH=./nyamuk ./run
 
 release:
-	./rebar generate
+	./rebar3 release
 
 clean:
-	./rebar clean
+	./rebar3 clean
 
 cert:
 	openssl req -x509 -newkey rsa:2048 -keyout ./etc/wave_key.pem -out ./etc/wave_cert.pem -days 365 \
