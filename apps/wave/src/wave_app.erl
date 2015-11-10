@@ -80,7 +80,7 @@ start(_StartType, _StartArgs) ->
                                       "../../../../..", "etc", "wave_key.pem"])},
 
             % increase security level
-            {secure_renegotiation, true},
+            {secure_renegotiate, true},
             {reuse_sessions, false},
             {honor_cipher_order, true},
             {versions, env([ssl, versions])},
