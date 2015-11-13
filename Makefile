@@ -8,7 +8,7 @@ build:
 	./rebar3 compile
 
 debug:
-	erl -pa `find _build -name ebin` -s $(APP) -s sync -config $(CFG) -s observer
+	erl -pa `find _build -name ebin` -s $(APP) -s sync -config $(CFG) -s observer -init debug +v
 
 test:
 	cd tests && DEBUG=1 PYTHONPATH=./nyamuk ./run

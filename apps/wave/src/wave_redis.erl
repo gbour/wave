@@ -22,22 +22,18 @@
 %
 % new device connects
 connect(DeviceID, Values) ->
-    {ok, C} = application:get_env(wave, redis),
-
     Key   = "wave:deviceid:" ++ DeviceID,
-    case eredis:q(C, ["HGET", Key, "state"]) of
+    case wave_db:get({h, Key, "state"}) of
         {ok, <<"connected">>} ->
             {error, exists};
 
         _             ->
             Pairs = lists:foldr(fun ({X,Y},Acc) -> [X,Y|Acc] end, [], Values),
-            eredis:q(C, ["HMSET", Key|Pairs])
+            wave_db:set({h, Key}, Pairs)
     end.
 
 update(DeviceID, Key, Value) ->
-    {ok, C} = application:get_env(wave, redis),
-
-    eredis:q(C, ["HSET", "wave:deviceid:" ++ DeviceID, Key, Value]).
+    wave_db:set({h, "wave:deviceid:" ++ DeviceID, Key}, Value).
 
 % save registered topic
 % topics are stored in a redis list, per QOS
@@ -45,8 +41,7 @@ update(DeviceID, Key, Value) ->
 % i.e: wave:deviceid:foobar:qos:0:topics -> [topic1, topic2, ...]
 %
 topic(DeviceID, Topic, Qos) ->
-    {ok, C} = application:get_env(wave, redis),
-    eredis:q(C, ["LPUSH", <<"wave:deviceid:", DeviceID/binary, ":qos:", (erlang:integer_to_binary(Qos))/binary, ":topics">>, Topic]).
+    wave_db:append(<<"wave:deviceid:", DeviceID/binary, ":qos:", (erlang:integer_to_binary(Qos))/binary, ":topics">>, Topic).
 
 
 % returns saved topics
@@ -55,8 +50,7 @@ topic(DeviceID, Topic, Qos) ->
 % returns: [{Topic1, Qos}, {Topic2, Qos}, ...]
 %
 topic(DeviceID, Qos) ->
-    {ok, C} = application:get_env(wave, redis),
-    {ok, Topics} = eredis:q(C, ["LRANGE", <<"wave:deviceid:", DeviceID/binary, ":qos:", (erlang:integer_to_binary(Qos))/binary, ":topics">>, 0, -1]),
+    {ok, Topics} = wave_db:range(<<"wave:deviceid:", DeviceID/binary, ":qos:", (erlang:integer_to_binary(Qos))/binary, ":topics">>),
 
     lists:map(fun(T) -> {T, 0} end, Topics).
 
@@ -73,8 +67,7 @@ device({deviceid, DeviceID}) ->
     device({id, eget(<<"d:", DeviceID/binary, ":id">>)}).
 
 eget(Q) ->
-    {ok, C} = application:get_env(wave, redis),
-    case eredis:q(C, ["GET", Q]) of
+    case wave_db:get({s, Q}) of
         {error, Err}    ->
             {error, Err};
         {ok, undefined} ->

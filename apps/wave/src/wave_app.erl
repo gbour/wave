@@ -34,6 +34,9 @@ start() ->
     application:ensure_all_started(gproc),
     application:ensure_all_started(shotgun),
 
+    % redis pool
+    ok = application:start(sharded_eredis),
+
     % HTTP server (+dependencies)
     application:start(crypto),
     application:start(asn1),
@@ -41,15 +44,13 @@ start() ->
     application:start(ssl),
 
     application:start(ranch),
-	application:start(wave).
+
+    % our main application
+    application:start(wave).
 
 
 start(_StartType, _StartArgs) ->
 	lager:debug("starting wave app"),
-
-    % start redis connection
-    {ok, Conn} = eredis:start_link("127.0.0.1", 6379, 1),
-    application:set_env(wave, redis, Conn),
 
     % start topics registry
     % TODO: use supervisor
