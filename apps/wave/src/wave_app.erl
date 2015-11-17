@@ -58,11 +58,6 @@ start(_StartType, _StartArgs) ->
     mqtt_offline:start_link(),
     wave_ctlmngr:start_link(),
 
-    % start modules
-    {ok, Mods} = application:get_env(wave, modules),
-    lager:info("~p", [Mods]),
-    load_module(Mods),
-
 	% start mqtt listeners
     {ok, _} = ranch:start_listener(wave, 1, ranch_tcp, [
             {port, env([plain, port])}
@@ -91,18 +86,14 @@ start(_StartType, _StartArgs) ->
 
         ], mqtt_ranch_protocol, []),
 
-    wave_sup:start_link().
+    App = wave_sup:start_link(),
+
+    %% loading modules
+    ok = load_modules(),
+
+    App.
 
 stop(_State) ->
-    ok.
-
-load_module([{Mod, Args} |T]) ->
-    lager:info("load ~p", [Mod]),
-    (erlang:list_to_atom("wave_mod_"++erlang:atom_to_list(Mod))):start_link(Args),
-
-    load_module(T);
-
-load_module([]) ->
     ok.
 
 
@@ -129,3 +120,34 @@ check_ciphers(Ciphers) ->
 
 loglevel(Level) ->
     lager:set_loglevel(lager_console_backend, Level).
+
+
+%%
+%% MODULES MANAGEMENT
+%%
+
+load_modules() ->
+    {ok, Mods} = application:get_env(wave, modules),
+
+    Enabled = proplists:get_value(enabled, Mods),
+    Opts    = proplists:get_value(settings, Mods, []),
+
+    module_init(Enabled, Opts).
+
+module_init([], Opts) ->
+    ok;
+module_init([Modname|Rest], Opts) ->
+    lager:info("initializing ~p module", [Modname]),
+    M = (wave_utils:atom("wave_mod_" ++ wave_utils:str(Modname))),
+
+    % webservice entries
+    case erlang:function_exported(M, ws, 0) of
+        true  -> M:ws();
+        false -> ok
+    end,
+
+    % start module
+    M:start(proplists:get_value(Modname, Opts, [])),
+
+    module_init(Rest, Opts).
+
