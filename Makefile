@@ -24,4 +24,10 @@ cert:
 		-nodes \
 		-subj '/CN=FR/O=wave/CN=wave.acme.org'
 
+## testing freemobile sms module
+## faking a ssh connection
+test_sms:
+	mosquitto_pub -t '/secu/ssh' -m '{"action": "login", "user":"luke", "server": "darkstar", "from":"tatooine", "at": "year 0"}'
+
+
 .PHONY: test

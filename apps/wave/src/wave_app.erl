@@ -134,7 +134,7 @@ load_modules() ->
 
     module_init(Enabled, Opts).
 
-module_init([], Opts) ->
+module_init([], _) ->
     ok;
 module_init([Modname|Rest], Opts) ->
     lager:info("initializing ~p module", [Modname]),

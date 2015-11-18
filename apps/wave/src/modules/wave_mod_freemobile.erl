@@ -16,6 +16,7 @@
 
 -module(wave_mod_freemobile).
 -author("Guillaume Bour <guillaume@bour.cc>").
+-behaviour(wave_module).
 -behaviour(gen_server).
 
 
@@ -24,10 +25,27 @@
     password    
 }).
 
-%
--export([trigger/4]).
+% wave_module API
+-export([start/1, stop/0]).
 % gen_server API
 -export([start_link/1, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+% module public functions
+-export([trigger/5]).
+
+%%
+%%
+%%
+
+start(Opts) ->
+    case start_link(Opts) of
+        {ok, _}         -> ok;
+        {error, Reason} -> {error, Reason};
+        Err             -> {error, Err}
+    end.
+
+% do nothing for now
+stop() ->
+    ok.
 
 start_link(Conf) ->
     gen_server:start_link({local,?MODULE}, ?MODULE, [Conf], []).
@@ -50,7 +68,7 @@ init([Conf]) ->
 %%
 
 %
-trigger(Pid, Topic, Payload, _Qos) ->
+trigger(Pid, _, _Topic, Payload, _Qos) ->
     P = jiffy:decode(Payload, [return_maps]),
     lager:info("trigger ~p", [P]),
 
@@ -110,7 +128,7 @@ send_sms({Username, Password}, User, Srv, From, Date) ->
     Msg = <<"[SEC] ",Srv/binary,":: *",User/binary, 
         "* successfully connected from _",From/binary,"_ at ",Date/binary>>,
 
-    lager:info("msg= ~p", [Msg]),
+    lager:debug("message sent: ~p", [Msg]),
     {ok, Conn} = shotgun:open("smsapi.free-mobile.fr", 443, https),
     R = shotgun:get(Conn, "/sendmsg?user="++Username++"&pass="++Password++"&msg="++ 
         http_uri:encode(erlang:binary_to_list(Msg))),
