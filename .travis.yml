@@ -4,6 +4,7 @@ otp_release:
 services:
     - redis-server
 install:
+    - make init
     - make build
     - make cert
     # need to enable TLSv1 as python2.7 do not support TLS >= 1.1
