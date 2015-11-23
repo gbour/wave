@@ -47,9 +47,9 @@ route(Topic, Msg) ->
         case is_process_alive(Pid) of
             true ->
                 lager:info("candidate: pid=~p, topic=~p, content=~p", [Pid, Topic, Content]),
-                Ret = Mod:Fun(Pid, {Topic,TopicMatch}, Content, Qos),
+                Ret = Mod:Fun(Pid, {Topic,TopicMatch}, Content, SQos),
                 lager:info("publish to client: ~p", [Ret]),
-                case {Qos, Ret} of
+                case {SQos, Ret} of
                     {0, disconnect} ->
                         lager:debug("client ~p disconnected but QoS = 0. message dropped", [Pid]);
 
@@ -57,7 +57,7 @@ route(Topic, Msg) ->
                         lager:debug("client ~p disconnected while sending message", [Pid]),
 %                        mqtt_topic_registry:unsubscribe(Subscr),
 %                        mqtt_offline:register(Topic, DeviceID),
-                        mqtt_offline:event(undefined, {Topic, Qos}, Content),
+                        mqtt_offline:event(undefined, {Topic, SQos}, Content),
                         ok;
 
                     _ ->
@@ -70,7 +70,7 @@ route(Topic, Msg) ->
 
         end
 
-        || _Subscr={TopicMatch, {Mod,Fun,Pid}, _Fields} <- MatchList
+        || _Subscr={TopicMatch, SQos, {Mod,Fun,Pid}, _Fields} <- MatchList
     ],
 
     ok.
