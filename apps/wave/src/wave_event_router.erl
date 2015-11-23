@@ -47,7 +47,8 @@ route(Topic, Msg) ->
         case is_process_alive(Pid) of
             true ->
                 lager:info("candidate: pid=~p, topic=~p, content=~p", [Pid, Topic, Content]),
-                Ret = Mod:Fun(Pid, {Topic,TopicMatch}, Content, SQos),
+                % use self() or undef as sender Pid ?
+                Ret = Mod:Fun(Pid, self(), {Topic,TopicMatch}, Content, SQos),
                 lager:info("publish to client: ~p", [Ret]),
                 case {SQos, Ret} of
                     {0, disconnect} ->
