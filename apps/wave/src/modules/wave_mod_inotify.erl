@@ -53,8 +53,9 @@ init([Conf]) ->
 
 notify(_Pid, _, {<<"$/mqtt/CONNECT">>,_}, P, _Qos) ->
     lager:debug("notify connect"),
-    Dev = proplists:get_value(deviceid, P),
-    Ret = proplists:get_value(retcode, P),
+    {P2} = jiffy:decode(P),
+    Dev = proplists:get_value(<<"deviceid">>, P2),
+    Ret = proplists:get_value(<<"retcode">> , P2),
 
     display(<<Dev/binary, " connects (retcode=", Ret/integer,")">>),
     ok.

@@ -37,44 +37,68 @@ init([Conf]) ->
 %% PUBLIC API
 %%
 
+
 route(Topic, Msg) ->
-    lager:debug("routing ~p", [Topic]),
     MatchList = mqtt_topic_registry:match(Topic),
-    Qos = 0,
-    Content = Msg,
+    lager:debug("routing ~p, match ~p", [Topic, MatchList]),
 
-    [
-        case is_process_alive(Pid) of
-            true ->
-                lager:info("candidate: pid=~p, topic=~p, content=~p", [Pid, Topic, Content]),
-                % use self() or undef as sender Pid ?
-                Ret = Mod:Fun(Pid, self(), {Topic,TopicMatch}, Content, SQos),
-                lager:info("publish to client: ~p", [Ret]),
-                case {SQos, Ret} of
-                    {0, disconnect} ->
-                        lager:debug("client ~p disconnected but QoS = 0. message dropped", [Pid]);
+    route2(MatchList, Topic, Msg).
 
-                    {_, disconnect} ->
-                        lager:debug("client ~p disconnected while sending message", [Pid]),
+route2([], _, _) ->
+    ok;
+
+%
+% NOTE:
+%  - internal module (inotify) is expecting an erlang native fmt (ie proplists or maps)
+%  - mqtt worker (client proxy) is awaiting binary only
+%
+%  NOW: we use binary fmt only
+%  IN THE FUTURE: each topic subscriber specify awaited format at registration, and we adapt
+%
+% i.e
+%   mqtt_session:initiate(CONNECT) -> emit "$/mqtt/CONNECT" with [{deviceid, X},{retcode, Y}]
+%
+
+%
+% encoding proplists
+route2(MatchList, Topic, Msg) when is_list(Msg) ->
+    JSon = jiffy:encode({Msg}),
+    route3(MatchList, Topic, JSon).
+
+%
+% propagating message to subscribers
+route3([], _, _) ->
+    ok;
+route3([Subscr|T], Topic, Content) ->
+    {TopicMatch, SQos, {Mod,Fun,Pid}, _Fields} = Subscr,
+
+    case is_process_alive(Pid) of
+        true ->
+            lager:info("candidate: pid=~p, topic=~p, content=~p", [Pid, Topic, Content]),
+            % use self() or undef as sender Pid ?
+            Ret = Mod:Fun(Pid, self(), {Topic,TopicMatch}, Content, SQos),
+            lager:info("publish to client: ~p", [Ret]),
+            case {SQos, Ret} of
+                {0, disconnect} ->
+                    lager:debug("client ~p disconnected but QoS = 0. message dropped", [Pid]);
+
+                {_, disconnect} ->
+                    lager:debug("client ~p disconnected while sending message", [Pid]),
 %                        mqtt_topic_registry:unsubscribe(Subscr),
 %                        mqtt_offline:register(Topic, DeviceID),
-                        mqtt_offline:event(undefined, {Topic, SQos}, Content),
-                        ok;
+                    mqtt_offline:event(undefined, {Topic, SQos}, Content),
+                    ok;
 
-                    _ ->
-                        ok
-                end;
+                _ ->
+                    ok
+            end;
 
-            _ ->
-                % SHOULD NEVER HAPPEND
-                lager:error("deadbeef ~p", [Pid])
+        _ ->
+            % SHOULD NEVER HAPPEND
+            lager:error("deadbeef ~p", [Pid])
+    end,
 
-        end
-
-        || _Subscr={TopicMatch, SQos, {Mod,Fun,Pid}, _Fields} <- MatchList
-    ],
-
-    ok.
+    route3(T, Topic, Content).
 
 
 %%
