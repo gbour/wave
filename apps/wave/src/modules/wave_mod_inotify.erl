@@ -16,13 +16,27 @@
 
 -module(wave_mod_inotify).
 -author("Guillaume Bour <guillaume@bour.cc>").
+-behaviour(wave_module).
 -behaviour(gen_server).
 
 
-%
--export([notify/4]).
+% wave_module API
+-export([start/1, stop/0]).
 % gen_server API
 -export([start_link/1, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+% public functions
+-export([notify/5]).
+
+start(Opts) ->
+    case start_link(Opts) of
+        {ok, _}         -> ok;
+        {error, Reason} -> {error, Reason};
+        Err             -> {error, Err}
+    end.
+
+% do nothing for now
+stop() ->
+    ok.
 
 start_link(Conf) ->
     gen_server:start_link({local,?MODULE}, ?MODULE, [Conf], []).
@@ -37,11 +51,11 @@ init([Conf]) ->
 %% PUBLIC API
 %%
 
-%
-
-notify(Pid, {<<"$/mqtt/CONNECT">>,_}, P, Qos) ->
-    Dev = proplists:get_value(deviceid, P),
-    Ret = proplists:get_value(retcode, P),
+notify(_Pid, _, {<<"$/mqtt/CONNECT">>,_}, P, _Qos) ->
+    lager:debug("notify connect"),
+    {P2} = jiffy:decode(P),
+    Dev = proplists:get_value(<<"deviceid">>, P2),
+    Ret = proplists:get_value(<<"retcode">> , P2),
 
     display(<<Dev/binary, " connects (retcode=", Ret/integer,")">>),
     ok.

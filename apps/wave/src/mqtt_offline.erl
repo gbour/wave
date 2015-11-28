@@ -23,11 +23,10 @@
 -author("Guillaume Bour <guillaume@bour.cc>").
 -behaviour(gen_server).
 
--include("include/mqtt_msg.hrl").
+-include("mqtt_msg.hrl").
 
 -record(state, {
-    registrations = [],
-    redis % redis connection
+    registrations = []
 }).
 
 %
@@ -40,9 +39,7 @@ start_link() ->
     gen_server:start_link({local,?MODULE}, ?MODULE, [], []).
 
 init(_) ->
-    {ok, Redis} = application:get_env(wave, redis),
-
-    {ok, #state{redis=Redis}}.
+    {ok, #state{}}.
 
 %%
 %% PUBLIC API
@@ -97,20 +94,20 @@ handle_call({recover, DeviceID}, _, State=#state{registrations=R}) ->
 
 %TODO: add MatchTopic in parameters
 %      ie the matching topic rx that lead to executing this callback
-handle_call({event, {Topic,TopicMatch}, Content}, _, State=#state{registrations=R, redis=Redis}) ->
+handle_call({event, {Topic,TopicMatch}, Content}, _, State=#state{registrations=R}) ->
     lager:info("received event on ~p (matched with ~s)", [Topic, TopicMatch]),
 
     %TODO: optimisation: for messages shorted than len(HMAC),
     %      store directly the message in the queue
     MsgID = erlang:list_to_binary(hmac:hexlify(hmac:hmac("", Content))),
-    Ret = eredis:q(Redis, ["SET", <<"msg:", MsgID/binary>>, Content]),
+    Ret = wave_db:set({s, <<"msg:", MsgID/binary>>}, Content),
     lager:info("~p", [Ret]),
 
     [
         case T2 of
             TopicMatch ->
-                eredis:q(Redis, ["RPUSH", <<"queue:", DeviceID/binary>>, Topic, MsgID]),
-                eredis:q(Redis, ["INCR",  <<"msg:", MsgID/binary, ":refcount">>]);
+                wave_db:push(<<"queue:", DeviceID/binary>>, [Topic, MsgID]),
+                wave_db:inc(<<"msg:", MsgID/binary, ":refcount">>);
 
             _     ->
                 pass
@@ -124,14 +121,14 @@ handle_call({event, {Topic,TopicMatch}, Content}, _, State=#state{registrations=
 handle_call(_,_,State) ->
     {reply, ok, State}.
 
-handle_cast({flush, DeviceID, Device={_M,_F,_Pid}}, State=#state{redis=Redis}) ->
+handle_cast({flush, DeviceID, Device={_M,_F,_Pid}}, State) ->
     lager:info("flush ~p", [DeviceID]),
 
-    {ok, MsgIDs} = eredis:q(Redis, ["LRANGE", <<"queue:", DeviceID/binary>>, 0, -1]),
-    priv_flush(Redis, MsgIDs, Device),
+    {ok, MsgIDs} = wave_db:range(<<"queue:", DeviceID/binary>>),
+    priv_flush(MsgIDs, Device),
 
-    %TODO: delete queue
-    eredis:q(Redis, ["LTRIM", <<"queue:",DeviceID/binary>>, length(MsgIDs), -1]),
+    %TODO: delete queue item
+    wave_db:del(<<"queue:",DeviceID/binary>>, length(MsgIDs)),
 
     {noreply, State};
 
@@ -151,26 +148,26 @@ code_change(_, State, _) ->
     {ok, State}.
 
 
-priv_flush(C, [Topic, MsgID |T], Device={M,F,Pid}) ->
-    {ok, Msg} = eredis:q(C, ["GET", <<"msg:", MsgID/binary>>]),
+priv_flush([Topic, MsgID |T], Device={M,F,Pid}) ->
+    {ok, Msg} = wave_db:get({s, <<"msg:", MsgID/binary>>}),
     lager:info("flush msg: ~p (id: ~p, topic= ~p)", [Msg, MsgID, Topic]),
     M:F(Pid, {Topic, undefined}, Msg),
 
     %TODO: operation must be atomic (including the LRANGE ?)
     %      use MULTI/EXEC
-    {ok, Cnt} = eredis:q(C, ["DECR", <<"msg:", MsgID/binary,":refcount">>]),
+    {ok, Cnt} = wave_db:decr(<<"msg:", MsgID/binary,":refcount">>),
     Cnt2 = erlang:binary_to_integer(Cnt),
     if 
         Cnt2 =< 0 ->
-            eredis:q(C, ["DEL", <<"msg:", MsgID/binary>>]),
-            eredis:q(C, ["DEL", <<"msg:", MsgID/binary, ":refcount">>]);
+            wave_db:del(<<"msg:", MsgID/binary>>),
+            wave_db:del(<<"msg:", MsgID/binary, ":refcount">>);
 
         true ->
             ok
     end,
 
     % next queued message
-    priv_flush(C, T, Device);
+    priv_flush(T, Device);
 
-priv_flush(_, [], _) ->
+priv_flush([], _) ->
     ok.

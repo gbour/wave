@@ -2,26 +2,36 @@
 APP=wave_app
 CFG=etc/wave
 
-all: build
+all: init build
+
+init:
+	./rebar3 update
 
 build:
-	./rebar prepare-deps
+	./rebar3 as prod compile
 
 debug:
-	erl -pa ebin/ `find deps -name ebin` -s $(APP) -s sync -config $(CFG) -s observer
+	./rebar3 as dev compile
+	erl -pa `find -L _build/dev -name ebin` -s $(APP) -s sync -config $(CFG) -s observer -init debug +v
 
 test:
 	cd tests && DEBUG=1 PYTHONPATH=./nyamuk ./run
 
 release:
-	./rebar generate
+	./rebar3 release
 
 clean:
-	./rebar clean
+	./rebar3 clean
 
 cert:
 	openssl req -x509 -newkey rsa:2048 -keyout ./etc/wave_key.pem -out ./etc/wave_cert.pem -days 365 \
 		-nodes \
 		-subj '/CN=FR/O=wave/CN=wave.acme.org'
+
+## testing freemobile sms module
+## faking a ssh connection
+test_sms:
+	mosquitto_pub -t '/secu/ssh' -m '{"action": "login", "user":"luke", "server": "darkstar", "from":"tatooine", "at": "year 0"}'
+
 
 .PHONY: test

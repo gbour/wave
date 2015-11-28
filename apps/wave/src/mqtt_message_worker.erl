@@ -18,7 +18,7 @@
 -author("Guillaume Bour <guillaume@bour.cc>").
 -behaviour(gen_fsm).
 
--include("include/mqtt_msg.hrl").
+-include("mqtt_msg.hrl").
 
 -export([start_link/0]).
 

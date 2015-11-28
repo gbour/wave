@@ -23,7 +23,7 @@
 
 -export([ping/2, crlfping/2, send/3, close/2]).
 
--include("include/mqtt_msg.hrl").
+-include("mqtt_msg.hrl").
 
 start_link(Ref, Socket, Transport, Opts) ->
     Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts]),

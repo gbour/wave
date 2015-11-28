@@ -19,7 +19,10 @@
 -behaviour(application).
 
 %% Application callbacks
--export([start/0, start/2, stop/1, loglevel/1]).
+-export([start/0, start/2, stop/1, loglevel/1, fuzz/0]).
+
+fuzz() ->
+    io:format("fuzz~n").
 
 %% ===================================================================
 %% Application callbacks
@@ -31,6 +34,9 @@ start() ->
     application:ensure_all_started(gproc),
     application:ensure_all_started(shotgun),
 
+    % redis pool
+    ok = application:start(sharded_eredis),
+
     % HTTP server (+dependencies)
     application:start(crypto),
     application:start(asn1),
@@ -38,26 +44,19 @@ start() ->
     application:start(ssl),
 
     application:start(ranch),
-	application:start(wave).
+
+    % our main application
+    application:start(wave).
 
 
 start(_StartType, _StartArgs) ->
 	lager:debug("starting wave app"),
-
-    % start redis connection
-    {ok, Conn} = eredis:start_link("127.0.0.1", 6379, 1),
-    application:set_env(wave, redis, Conn),
 
     % start topics registry
     % TODO: use supervisor
     mqtt_topic_registry:start_link(),
     mqtt_offline:start_link(),
     wave_ctlmngr:start_link(),
-
-    % start modules
-    {ok, Mods} = application:get_env(wave, modules),
-    lager:info("~p", [Mods]),
-    load_module(Mods),
 
 	% start mqtt listeners
     {ok, _} = ranch:start_listener(wave, 1, ranch_tcp, [
@@ -70,11 +69,14 @@ start(_StartType, _StartArgs) ->
     {ok, _} = ranch:start_listener(wave_ssl, 1, ranch_ssl, [
             {port    , env([ssl, port])},
             {keepalive, true},
-            {certfile, filename:join([filename:dirname(code:which(wave_app)), "..", "etc", "wave_cert.pem"])},
-            {keyfile , filename:join([filename:dirname(code:which(wave_app)), "..", "etc", "wave_key.pem"])},
+            {certfile, filename:join([
+                                      filename:dirname(code:which(wave_app)),
+                                      "../../../../..", "etc", "wave_cert.pem"])},
+            {keyfile , filename:join([filename:dirname(code:which(wave_app)),
+                                      "../../../../..", "etc", "wave_key.pem"])},
 
             % increase security level
-            {secure_renegotiation, true},
+            {secure_renegotiate, true},
             {reuse_sessions, false},
             {honor_cipher_order, true},
             {versions, env([ssl, versions])},
@@ -84,18 +86,14 @@ start(_StartType, _StartArgs) ->
 
         ], mqtt_ranch_protocol, []),
 
-    wave_sup:start_link().
+    App = wave_sup:start_link(),
+
+    %% loading modules
+    ok = load_modules(),
+
+    App.
 
 stop(_State) ->
-    ok.
-
-load_module([{Mod, Args} |T]) ->
-    lager:info("load ~p", [Mod]),
-    (erlang:list_to_atom("wave_mod_"++erlang:atom_to_list(Mod))):start_link(Args),
-
-    load_module(T);
-
-load_module([]) ->
     ok.
 
 
@@ -122,3 +120,34 @@ check_ciphers(Ciphers) ->
 
 loglevel(Level) ->
     lager:set_loglevel(lager_console_backend, Level).
+
+
+%%
+%% MODULES MANAGEMENT
+%%
+
+load_modules() ->
+    {ok, Mods} = application:get_env(wave, modules),
+
+    Enabled = proplists:get_value(enabled, Mods),
+    Opts    = proplists:get_value(settings, Mods, []),
+
+    module_init(Enabled, Opts).
+
+module_init([], _) ->
+    ok;
+module_init([Modname|Rest], Opts) ->
+    lager:info("initializing ~p module", [Modname]),
+    M = (wave_utils:atom("wave_mod_" ++ wave_utils:str(Modname))),
+
+    % webservice entries
+    case erlang:function_exported(M, ws, 0) of
+        true  -> M:ws();
+        false -> ok
+    end,
+
+    % start module
+    M:start(proplists:get_value(Modname, Opts, [])),
+
+    module_init(Rest, Opts).
+
