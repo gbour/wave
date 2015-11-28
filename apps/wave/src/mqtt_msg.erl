@@ -83,41 +83,63 @@ decode(Type, <<Dup:1, Qos:2, Retain:1>>, {RLen, _, Rest}) ->
     Msg.
 
 
-%
-% CONNECT
-decode_payload('CONNECT', Qos, {Len, <<0:8, 6:8, "MQIsdp", Version:8/integer, Flags:8, Ka:16, Rest/binary>>}) ->
-    lager:debug("CONNECTv3.1: ~p", [Flags]),
-    Len2 = Len-12,
+%%
+%% @doc «CONNECT» message
+%% support both MQTT 3.1 and 3.1.1 versions
+%%
+decode_payload('CONNECT', _Qos, {Len, <<
+        PLen:16,
+        Protocol:PLen/binary,
+        Version:8/integer,
+        Flags:7,
+        0:1,                  % enforcing reserved flags field is set to 0
+        Ka:16,
+        Rest/binary>>}) when
+            (Protocol =:= <<"MQIsdp">> andalso Version =:= 3) orelse
+            (Protocol =:= <<"MQTT">>   andalso Version =:= 4) ->
 
-    <<User:1, Pwd:1, Retain:1, Qos:2, Will:1, Clean:1, _:1>> = <<Flags>>,
+    lager:debug("CONNECT: ~p/~p, ~p/~p", [Protocol, Version, Flags, erlang:is_integer(Flags)]),
 
+    % CONNECT flags
+    <<User:1, Pwd:1, WillRetain:1, WillQos:2, WillFlag:1, Clean:1>> = <<Flags:7/integer>>,
+    lager:debug("~p/~p/~p/~p/~p/~p", [User,Pwd,WillRetain,WillQos,WillFlag,Clean]),
+
+    % decoding Client-ID
     {ClientID, Rest2} = decode_string(Rest),
 
-    {Topic, Message, Rest3} = case Will of
+    % decoding will topic & message
+    {WillTopic, WillMsg, Rest3} = case WillFlag of
         1 ->
-            {_T, _R}  = decode_string(Rest2),
-            {_M, _R2} = decode_string(_R),
-            {_T, _M, _R2};
+            {_WillTopic, _R}  = decode_string(Rest2),
+            {_WillMsg  , _R2} = decode_string(_R),
+            {_WillTopic, _WillMsg, _R2};
         _ -> {undefined, undefined, Rest2}
     end,
 
+    % decoding username
     {Username , Rest4} = case User of
         1 -> decode_string(Rest3);
         _ -> {undefined, Rest3}
     end,
 
+    % decoding password
     {Password, Rest5} = case Pwd of
         1 -> decode_string(Rest4);
         _ -> {undefined, Rest4}
     end,
 
-    lager:debug("~p / ~p / ~p / ~p / ~p, keepalive=~p", [ClientID, Topic, Message, Username, Password,
-                                                        Ka]),
-
-    {ok, [{clientid, ClientID}, {topic, Topic}, {message, Message}, {username, Username}, {password, Password},
+    lager:debug("~p / ~p / ~p / ~p / ~p, keepalive=~p", [ClientID, WillTopic, WillMsg, Username, Password, Ka]),
+    {ok, [
+        {clientid , ClientID},
+        {topic    , WillTopic},
+        {message  , WillMsg},
+        {username , Username},
+        {password , Password},
         {keepalive, Ka},
-        {clean, Clean}
+        {clean    , Clean},
+        {version  , Version}
     ]};
+
 
 decode_payload('PUBLISH', Qos, {Len, Rest}) ->
     %lager:debug("PUBLISH (qos=~p) ~p ~p", [Qos, Len, Rest]),
@@ -159,10 +181,6 @@ decode_payload('DISCONNECT', _, {0, <<>>}) ->
     %TODO: return a disconnect object; and do cleanup upward
     %{error, disconnect};
     {ok, []};
-
-decode_payload('CONNECT', _, {Len, <<0:8, 4:8, "MQTT", Level:8/integer, Flags:8, Rest/binary>>}) ->
-    lager:debug("CONNECT"),
-    {error, disconnect};
 
 decode_payload('CONNACK', _, {Len, <<_:8, RetCode:8/integer>>}) ->
     lager:debug("CONNACK"),
