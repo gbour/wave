@@ -228,6 +228,10 @@ initiate({timeout, _, timeout1}, _, _StateData) ->
 	lager:info("initiate timeout"),
 	{stop, disconnect, []}.
 
+initiate(timeout, StateData) ->
+    lager:error("initiate:: timeout"),
+    {stop, disconnect, StateData}.
+
 connected(#mqtt_msg{type='DISCONNECT'}, _, StateData) ->
     {stop, normal, disconnect, StateData};
 
