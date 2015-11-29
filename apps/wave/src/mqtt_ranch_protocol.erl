@@ -87,7 +87,7 @@ route(Socket, Transport, Session, Raw) ->
             lager:notice("Packet is too short, missing ~p bytes", [Extend]),
             {extend, Extend, Raw};
 
-        {error, Reason} ->
+        {error, Reason, _} ->
             lager:error("closing connection. Reason: ~p", [Reason]),
             Transport:close(Socket),
             stop;
@@ -99,7 +99,8 @@ route(Socket, Transport, Session, Raw) ->
             case mqtt_session:handle(Session, Msg) of
                 {ok, Resp=#mqtt_msg{}} ->
                     lager:info("sending resp ~p", [Resp]),
-                    Transport:send(Socket, mqtt_msg:encode(Resp)),
+                    Res = Transport:send(Socket, mqtt_msg:encode(Resp)),
+                    lager:debug("msg send result= ~p", [Res]),
                     route(Socket, Transport, Session, Rest);
 
                 {ok, undefined}  ->
@@ -110,7 +111,11 @@ route(Socket, Transport, Session, Raw) ->
                     lager:info("closing socket"),
                     %Transport:close(Socket),
                     stop
-            end
+            end;
+
+
+        _CatchAll ->
+            lager:error("MQTT Msg unknown decoding error: ~p", [_CatchAll])
     end.
 
 answer(#mqtt_msg{type='CONNECT'}) ->
