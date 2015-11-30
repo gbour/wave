@@ -499,6 +499,10 @@ handle_info(_Info, _StateName, StateData) ->
 %   - gen_fsm/erlang issue (gen_fsm is terminated)
 %
 %
+terminate(_Reason, StateName, undefined) ->
+    lager:info("session terminate with undefined state: ~p", [_Reason]),
+    terminate;
+
 terminate(_Reason, StateName, _StateData=#session{deviceid=DeviceID, topics=T, opts=Opts}) ->
     lager:info("session terminate(~p): ~p (~p ~p)", [DeviceID, _Reason, StateName, _StateData]),
 
