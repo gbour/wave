@@ -243,3 +243,37 @@ class V311(TestSuite):
             return False
 
         return True
+
+    @catch
+    @desc("[MQTT-3.1.2-22] if username flag is not set, password flag must not be set")
+    def test_105(self):
+        c = MqttClient("conformity")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.connect(('127.0.0.1', 1883))
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            sock.setblocking(0)
+        except Exception as e:
+            return False
+
+        c._c.sock = sock
+
+        pkt = MqttPkt()
+        pkt.command = NC.CMD_CONNECT
+        pkt.remaining_length = 12 + 4 # client_id = "ff"
+        pkt.alloc()
+
+        pkt.write_string("MQTT")
+        pkt.write_byte(NC.PROTOCOL_VERSION_4)
+        pkt.write_byte(1 << 6) # set password flag
+        pkt.write_uint16(60)   # keepalive
+        pkt.write_string("ff") # client id
+
+        c._c.packet_queue(pkt)
+        c._c.packet_write()
+
+        ret = c._c.loop()
+        if ret != NC.ERR_CONN_LOST:
+            return False
+
+        return True

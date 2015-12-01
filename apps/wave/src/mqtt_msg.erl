@@ -191,6 +191,9 @@ decode_connect(Protocol, _, _, _) ->
     lager:notice("CONNECT: invalid protocol name (~p)", [Protocol]),
     {error, conformity}.
 
+decode_connect2(Version, {<<0:1, 1:1, _:5>>, _, _}) ->
+    lager:notice("CONNECT: password flag is set while username flag is not"),
+    {error, conformity};
 decode_connect2(Version,
         {<<User:1, Pwd:1, WillRetain:1, WillQos:2, WillFlag:1, Clean:1>>, Ka, Rest}) ->
     lager:debug("CONNECT ~p (~p/~p/~p/~p/~p/~p)",
