@@ -138,10 +138,11 @@ ack(Pid, MsgID, Qos) ->
 %% STATES
 
 initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts}) ->
-	lager:info("received CONNECT"),
 	%gen_fsm:start_timer(5000, timeout1),
 	%lager:info("timeout set"),
     DeviceID = proplists:get_value(clientid, P),
+    lager:info("received CONNECT - deviceid = <<\"~ts\">>", [DeviceID]),
+
     User     = proplists:get_value(username, P),
     Pwd      = proplists:get_value(password, P),
     Ka       = case proplists:get_value(keepalive, P, ?DEFAULT_KEEPALIVE) of

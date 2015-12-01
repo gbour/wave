@@ -363,3 +363,113 @@ class V311(TestSuite):
             return False
 
         return True
+
+    @catch
+    @desc("[MQTT-3.1.3-5] 0-length clientid")
+    def test_108(self):
+        c = MqttClient("conformity")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.connect(('127.0.0.1', 1883))
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            sock.setblocking(0)
+        except Exception as e:
+            return False
+
+        c._c.sock = sock
+
+        pkt = MqttPkt()
+        pkt.command = NC.CMD_CONNECT
+        pkt.remaining_length = 12 # + 4 # client_id = "ff"
+        pkt.alloc()
+
+        pkt.write_string("MQTT")
+        pkt.write_byte(NC.PROTOCOL_VERSION_4)
+        pkt.write_byte(0)      # flags
+        pkt.write_uint16(10)   # keepalive
+        pkt.write_string("")   # client id
+
+        c._c.packet_queue(pkt)
+        c._c.packet_write()
+        c._c.loop()
+        evt = c._c.pop_event()
+
+        if not isinstance(evt, EventConnack) or evt.ret_code != 0:
+            return False
+
+        return True
+
+    @catch
+    @desc("[MQTT-3.1.3-5] > 23 characters clientid")
+    def test_109(self):
+        c = MqttClient("conformity")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.connect(('127.0.0.1', 1883))
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            sock.setblocking(0)
+        except Exception as e:
+            return False
+
+        c._c.sock = sock
+
+        pkt = MqttPkt()
+        pkt.command = NC.CMD_CONNECT
+        pkt.remaining_length = 12 + 26 # client_id = "ff"
+        pkt.alloc()
+
+        pkt.write_string("MQTT")
+        pkt.write_byte(NC.PROTOCOL_VERSION_4)
+        pkt.write_byte(0)      # flags
+        pkt.write_uint16(10)   # keepalive
+        pkt.write_string("ABCDEFGHIJKLMNOPQRSTUVWXYZ") # client id - 26 chars
+
+        c._c.packet_queue(pkt)
+        c._c.packet_write()
+        c._c.loop()
+        evt = c._c.pop_event()
+        print evt
+
+        if not isinstance(evt, EventConnack) or evt.ret_code != 0:
+            return False
+
+        return True
+
+    @catch
+    @desc("[MQTT-3.1.3-5] clientid utf-8 characters")
+    def test_110(self):
+        c = MqttClient("conformity")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.connect(('127.0.0.1', 1883))
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            sock.setblocking(0)
+        except Exception as e:
+            return False
+
+        c._c.sock = sock
+
+        clientid = "é!;~«ä"
+        #clientid = clientid.decode('utf8')
+
+        pkt = MqttPkt()
+        pkt.command = NC.CMD_CONNECT
+        pkt.remaining_length = 12 + len(clientid) # client_id 
+        pkt.alloc()
+
+        pkt.write_string("MQTT")
+        pkt.write_byte(NC.PROTOCOL_VERSION_4)
+        pkt.write_byte(0)      # flags
+        pkt.write_uint16(10)   # keepalive
+        pkt.write_string(clientid) # client id - 6 chars
+
+        c._c.packet_queue(pkt)
+        c._c.packet_write()
+        c._c.loop()
+
+        evt = c._c.pop_event()
+        if not isinstance(evt, EventConnack) or evt.ret_code != 0:
+            return False
+
+        return True
+
