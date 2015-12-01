@@ -92,66 +92,10 @@ decode_payload('CONNECT', _Qos, {Len, <<
         Protocol:PLen/binary,
         Version:8/integer,
         Flags:7,
-        0:1,                  % enforcing reserved flags field is set to 0
+        Reserved:1,
         Ka:16,
-        Rest/binary>>}) when
-            (Protocol =:= <<"MQIsdp">> andalso Version =:= 3) orelse
-            (Protocol =:= <<"MQTT">>   andalso Version =:= 4) ->
-
-    lager:debug("CONNECT: ~p/~p, ~p/~p", [Protocol, Version, Flags, erlang:is_integer(Flags)]),
-
-    % CONNECT flags
-    <<User:1, Pwd:1, WillRetain:1, WillQos:2, WillFlag:1, Clean:1>> = <<Flags:7/integer>>,
-    lager:debug("~p/~p/~p/~p/~p/~p", [User,Pwd,WillRetain,WillQos,WillFlag,Clean]),
-
-    % decoding Client-ID
-    {ClientID, Rest2} = decode_string(Rest),
-
-    % decoding will topic & message
-    {WillTopic, WillMsg, Rest3} = case WillFlag of
-        1 ->
-            {_WillTopic, _R}  = decode_string(Rest2),
-            {_WillMsg  , _R2} = decode_string(_R),
-            {_WillTopic, _WillMsg, _R2};
-        _ -> {undefined, undefined, Rest2}
-    end,
-
-    % decoding username
-    {Username , Rest4} = case User of
-        1 -> decode_string(Rest3);
-        _ -> {undefined, Rest3}
-    end,
-
-    % decoding password
-    {Password, Rest5} = case Pwd of
-        1 -> decode_string(Rest4);
-        _ -> {undefined, Rest4}
-    end,
-
-    lager:debug("~p / ~p / ~p / ~p / ~p, keepalive=~p", [ClientID, WillTopic, WillMsg, Username, Password, Ka]),
-    {ok, [
-        {clientid , ClientID},
-        {topic    , WillTopic},
-        {message  , WillMsg},
-        {username , Username},
-        {password , Password},
-        {keepalive, Ka},
-        {clean    , Clean},
-        {protocol , Protocol},
-        {version  , Version}
-    ]};
-
-% match wrong protocol versions
-decode_payload('CONNECT', _, {_,
-        <<PLen:16, Protocol:PLen/binary, Version:8/integer, _/binary>>}) when
-            (Protocol =:= <<"MQIsdp">> orelse Protocol =:= <<"MQTT">>) ->
-    lager:notice("CONNECT: invalid protocol version (~p/~p)", [Protocol, Version]),
-    {error, protocol_version};
-
-% match wring protocol names
-decode_payload('CONNECT', _, {_, <<PLen:16, Protocol:PLen/binary, _/binary>>}) ->
-    lager:notice("CONNECT: invalid protocol name (~p)", [Protocol]),
-    {error, conformity};
+        Rest/binary>>}) ->
+    decode_connect(Protocol, Version, Reserved, {<<Flags:7/integer>>, Ka, Rest});
 
 
 decode_payload('PUBLISH', Qos, {Len, Rest}) ->
@@ -223,6 +167,72 @@ decode_payload(Cmd, Qos, Args) ->
     lager:info("invalid command ~p (qos=~p, payload=~p)", [Cmd, Qos, Args]),
 
     {error, disconnect}.
+
+
+%%%
+
+% match wrong protocol versions
+% VALID
+decode_connect(<<"MQIsdp">>, Vers=3, 0, Payload) ->
+    decode_connect2(Vers, Payload);
+decode_connect(<<"MQTT">>  , Vers=4, 0, Payload) ->
+    decode_connect2(Vers, Payload);
+% ERRORS
+decode_connect(_, _, _Reserved=1, _) ->
+    lager:notice("CONNECT: reserved flag MUST be 0"),
+    {error, conformity};
+decode_connect(Protocol= <<"MQIsdp">>, Version, _, _) ->
+    lager:notice("CONNECT: invalid protocol version (~p/~p)", [Protocol, Version]),
+    {error, protocol_version};
+decode_connect(Protocol= <<"MQTT">>, Version, _, _) ->
+    lager:notice("CONNECT: invalid protocol version (~p/~p)", [Protocol, Version]),
+    {error, protocol_version};
+decode_connect(Protocol, _, _, _) ->
+    lager:notice("CONNECT: invalid protocol name (~p)", [Protocol]),
+    {error, conformity}.
+
+decode_connect2(Version,
+        {<<User:1, Pwd:1, WillRetain:1, WillQos:2, WillFlag:1, Clean:1>>, Ka, Rest}) ->
+    lager:debug("CONNECT ~p (~p/~p/~p/~p/~p/~p)",
+        [Version, User,Pwd,WillRetain,WillQos,WillFlag,Clean]),
+
+    % decoding Client-ID
+    {ClientID, Rest2} = decode_string(Rest),
+
+    % decoding will topic & message
+    {WillTopic, WillMsg, Rest3} = case WillFlag of
+        1 ->
+            {_WillTopic, _R}  = decode_string(Rest2),
+            {_WillMsg  , _R2} = decode_string(_R),
+            {_WillTopic, _WillMsg, _R2};
+        _ -> {undefined, undefined, Rest2}
+    end,
+
+    % decoding username
+    {Username , Rest4} = case User of
+        1 -> decode_string(Rest3);
+        _ -> {undefined, Rest3}
+    end,
+
+    % decoding password
+    {Password, Rest5} = case Pwd of
+        1 -> decode_string(Rest4);
+        _ -> {undefined, Rest4}
+    end,
+
+    lager:debug("~p / ~p / ~p / ~p / ~p, keepalive=~p", [ClientID, WillTopic, WillMsg, Username, Password, Ka]),
+    {ok, [
+        {clientid , ClientID},
+        {topic    , WillTopic},
+        {message  , WillMsg},
+        {username , Username},
+        {password , Password},
+        {keepalive, Ka},
+        {clean    , Clean},
+        {version  , Version}
+    ]}.
+
+
 
 get_topics(<<>>, Topics, _) ->
 	Topics;
