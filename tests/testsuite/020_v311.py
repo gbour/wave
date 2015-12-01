@@ -133,3 +133,41 @@ class V311(TestSuite):
             c._c.sock.getpeername()
         except socket.error as e:
             return True
+
+        return False
+
+    @catch
+    @desc("[MQTT-3.1.2-1] protocol name validation")
+    def test_102(self):
+        c = MqttClient("conformity")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.connect(('127.0.0.1', 1883))
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            sock.setblocking(0)
+        except Exception as e:
+            return False
+
+        c._c.sock = sock
+
+        pkt = MqttPkt()
+        pkt.command = NC.CMD_CONNECT
+        pkt.remaining_length = 12 + 4 # client_id = "ff"
+        pkt.alloc()
+
+        pkt.write_string("MqTt")
+        pkt.write_byte(NC.PROTOCOL_VERSION_4) # = 4
+        pkt.write_string("ff")
+
+        c._c.packet_queue(pkt)
+        c._c.packet_write()
+        c._c.loop()
+
+        try:
+            c.send_pingreq()
+            c._c.sock.getpeername()
+        except socket.error as e:
+            return True
+
+        return False
+

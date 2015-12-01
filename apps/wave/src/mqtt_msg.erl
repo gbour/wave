@@ -140,6 +140,11 @@ decode_payload('CONNECT', _Qos, {Len, <<
         {version  , Version}
     ]};
 
+% match wring protocol names
+decode_payload('CONNECT', _, {_, <<PLen:16, Protocol:PLen/binary, _/binary>>}) ->
+    lager:notice("CONNECT: invalid protocol name (~p)", [Protocol]),
+    {error, conformity};
+
 
 decode_payload('PUBLISH', Qos, {Len, Rest}) ->
     %lager:debug("PUBLISH (qos=~p) ~p ~p", [Qos, Len, Rest]),

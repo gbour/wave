@@ -89,6 +89,7 @@ route(Socket, Transport, Session, Raw) ->
 
         {error, Reason, _} ->
             lager:error("closing connection. Reason: ~p", [Reason]),
+            gen_fsm:stop(Session, normal, 50),
             Transport:close(Socket),
             stop;
 
@@ -115,7 +116,9 @@ route(Socket, Transport, Session, Raw) ->
 
 
         _CatchAll ->
-            lager:error("MQTT Msg unknown decoding error: ~p", [_CatchAll])
+            lager:error("MQTT Msg unknown decoding error: ~p", [_CatchAll]),
+            gen_fsm:stop(Session, normal, 50),
+            Transport:close(Socket)
     end.
 
 answer(#mqtt_msg{type='CONNECT'}) ->
