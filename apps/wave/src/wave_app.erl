@@ -34,6 +34,9 @@ start() ->
     application:ensure_all_started(gproc),
     application:ensure_all_started(shotgun),
 
+    % uuid generator
+    {ok, _} = application:ensure_all_started(uuid),
+
     % redis pool
     ok = application:start(sharded_eredis),
 

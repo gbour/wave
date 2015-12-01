@@ -9,7 +9,8 @@
 	  kernel,
 	  stdlib,
       gproc,
-      lager
+      lager,
+      uuid
   ]},
   {env, []},
   {modules, []},
