@@ -221,9 +221,10 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
 
     Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
     {reply, Resp, NextState, StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, topics=Topics}, Ka};
-initiate(#mqtt_msg{}, _, _StateData) ->
-	% close socket
-	{stop, disconnect, []};
+initiate(#mqtt_msg{type=Type}, _, _StateData=#session{transport={Callback,Transport,Sock}}) ->
+    lager:info("first packet MUST be CONNECT (is ~p)", [Type]),
+    Callback:close(Transport, Sock),
+    {stop, normal, disconnect, undefined};
 initiate({timeout, _, timeout1}, _, _StateData) ->
 	lager:info("initiate timeout"),
 	{stop, disconnect, []}.

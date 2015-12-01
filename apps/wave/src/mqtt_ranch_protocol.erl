@@ -146,6 +146,7 @@ send(Transport, Socket, Msg) ->
     Transport:send(Socket, mqtt_msg:encode(Msg)).
 
 close(Transport, Socket) ->
+    lager:debug("closing ~p TCP sock", [Socket]),
     Transport:close(Socket).
 
 peername(ranch_ssl, Socket) ->

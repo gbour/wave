@@ -4,6 +4,10 @@
 from TestSuite import TestSuite, desc, catch
 from mqttcli import MqttClient
 from nyamuk.event import *
+from nyamuk.mqtt_pkt import MqttPkt
+
+import socket
+
 
 class V311(TestSuite):
     def __init__(self):
@@ -74,4 +78,36 @@ class V311(TestSuite):
         return isinstance(e, EventPingResp)
 
 
+
+    #
+    # ==== conformity tests ====
+    #
+
+    @catch
+    @desc("[MQTT-3.1.0-1] 1st pkt MUST be connect")
+    def test_100(self):
+        c = MqttClient('conformity')
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.connect(('127.0.0.1', 1883))
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            sock.setblocking(0)
+        except Exception as e:
+            return False
+
+        c._c.sock = sock
+        e = c.subscribe("foo/bar", 0)
+        if e is not None:
+            return False
+
+        # socket MUST be disconnected
+        try:
+            e = c.publish("foo", "bar")
+            sock.getpeername()
+        except socket.error as e:
+            #print e
+            return True
+
+        return False
 
