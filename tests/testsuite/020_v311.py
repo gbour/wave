@@ -6,6 +6,7 @@ from mqttcli import MqttClient
 from nyamuk.event import *
 from nyamuk.mqtt_pkt import MqttPkt
 
+import time
 import socket
 
 
@@ -272,6 +273,91 @@ class V311(TestSuite):
         c._c.packet_queue(pkt)
         c._c.packet_write()
 
+        ret = c._c.loop()
+        if ret != NC.ERR_CONN_LOST:
+            return False
+
+        return True
+
+    @catch
+    @desc("[MQTT-3.1.2-24] client is disconnected after expired KeepAlive (test 1)")
+    def test_106(self):
+        c = MqttClient("conformity")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.connect(('127.0.0.1', 1883))
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            sock.setblocking(0)
+        except Exception as e:
+            return False
+
+        c._c.sock = sock
+
+        pkt = MqttPkt()
+        pkt.command = NC.CMD_CONNECT
+        pkt.remaining_length = 12 + 4 # client_id = "ff"
+        pkt.alloc()
+
+        pkt.write_string("MQTT")
+        pkt.write_byte(NC.PROTOCOL_VERSION_4)
+        pkt.write_byte(0)      # flags
+        pkt.write_uint16(10)   # keepalive
+        pkt.write_string("ff") # client id
+
+        c._c.packet_queue(pkt)
+        c._c.packet_write()
+        c._c.loop()
+        evt = c._c.pop_event()
+
+        if not isinstance(evt, EventConnack) or evt.ret_code != 0:
+            return False
+
+        time.sleep(15.5)
+        ret = c._c.loop()
+        if ret != NC.ERR_CONN_LOST:
+            return False
+
+        return True
+
+    @catch
+    @desc("[MQTT-3.1.2-24] client is disconnected after expired KeepAlive (test 2)")
+    def test_107(self):
+        c = MqttClient("conformity")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.connect(('127.0.0.1', 1883))
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            sock.setblocking(0)
+        except Exception as e:
+            return False
+
+        c._c.sock = sock
+
+        pkt = MqttPkt()
+        pkt.command = NC.CMD_CONNECT
+        pkt.remaining_length = 12 + 4 # client_id = "ff"
+        pkt.alloc()
+
+        pkt.write_string("MQTT")
+        pkt.write_byte(NC.PROTOCOL_VERSION_4)
+        pkt.write_byte(0)      # flags
+        pkt.write_uint16(10)   # keepalive
+        pkt.write_string("ff") # client id
+
+        c._c.packet_queue(pkt)
+        c._c.packet_write()
+        c._c.loop()
+        evt = c._c.pop_event()
+
+        if not isinstance(evt, EventConnack) or evt.ret_code != 0:
+            return False
+
+        time.sleep(2)
+        evt = c.publish("foo", "bar", 1)
+        if not isinstance(evt, EventPuback):
+            return False
+
+        time.sleep(15.5)
         ret = c._c.loop()
         if ret != NC.ERR_CONN_LOST:
             return False
