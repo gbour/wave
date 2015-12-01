@@ -87,6 +87,16 @@ route(Socket, Transport, Session, Raw) ->
             lager:notice("Packet is too short, missing ~p bytes", [Extend]),
             {extend, Extend, Raw};
 
+        {error, protocol_version, _} ->
+            % special error case: in case of wrong protocol version, the broker MUST return
+            % a CONNACK packet with 0x01 error code
+            % we bypass mqtt_session in this case
+            Transport:send(Socket, mqtt_msg:encode(
+                #mqtt_msg{type='CONNACK', payload=[{retcode, 1}]})),
+            gen_fsm:stop(Session, normal, 50),
+            Transport:close(Socket),
+            stop;
+
         {error, Reason, _} ->
             lager:error("closing connection. Reason: ~p", [Reason]),
             gen_fsm:stop(Session, normal, 50),

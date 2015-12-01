@@ -171,3 +171,41 @@ class V311(TestSuite):
 
         return False
 
+    @catch
+    @desc("[MQTT-3.1.2-2] protocol version validation")
+    def test_103(self):
+        c = MqttClient("conformity")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.connect(('127.0.0.1', 1883))
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            sock.setblocking(0)
+        except Exception as e:
+            return False
+
+        c._c.sock = sock
+
+        pkt = MqttPkt()
+        pkt.command = NC.CMD_CONNECT
+        pkt.remaining_length = 12 + 4 # client_id = "ff"
+        pkt.alloc()
+
+        pkt.write_string("MQTT")
+        pkt.write_byte(NC.PROTOCOL_VERSION_3)
+        pkt.write_byte(0)      # flags
+        pkt.write_uint16(60)   # keepalive
+        pkt.write_string("ff") # client id
+
+        c._c.packet_queue(pkt)
+        c._c.packet_write()
+        c._c.loop() # should return CONN_REFUSED
+        evt = c._c.pop_event()
+
+        if not isinstance(evt, EventConnack) or evt.ret_code != 1:
+            return False
+
+        ret = c._c.loop()
+        if ret != NC.ERR_CONN_LOST:
+            return False
+
+        return True

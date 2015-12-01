@@ -137,8 +137,16 @@ decode_payload('CONNECT', _Qos, {Len, <<
         {password , Password},
         {keepalive, Ka},
         {clean    , Clean},
+        {protocol , Protocol},
         {version  , Version}
     ]};
+
+% match wrong protocol versions
+decode_payload('CONNECT', _, {_,
+        <<PLen:16, Protocol:PLen/binary, Version:8/integer, _/binary>>}) when
+            (Protocol =:= <<"MQIsdp">> orelse Protocol =:= <<"MQTT">>) ->
+    lager:notice("CONNECT: invalid protocol version (~p/~p)", [Protocol, Version]),
+    {error, protocol_version};
 
 % match wring protocol names
 decode_payload('CONNECT', _, {_, <<PLen:16, Protocol:PLen/binary, _/binary>>}) ->
