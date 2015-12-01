@@ -111,3 +111,25 @@ class V311(TestSuite):
 
         return False
 
+    @catch
+    @desc("[MQTT-3.1.0-2] pkt following a successful connect MUST NOT be connect")
+    def test_101(self):
+        c = MqttClient("conformity")
+        evt = c.connect(version=4)
+
+        if not isinstance(evt, EventConnack) or \
+            evt.ret_code:
+            return False
+
+        # 2d connect pkt
+        pkt = MqttPkt()
+        pkt.connect_build(c._c, keepalive=60, clean_session=1, version=4)
+        c._c.packet_queue(pkt)
+        c._c.packet_write()
+        c._c.loop()
+
+        try:
+            c.publish("foo","bar")
+            c._c.sock.getpeername()
+        except socket.error as e:
+            return True
