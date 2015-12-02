@@ -1,0 +1,60 @@
+#!/usr/bin/env escript
+
+%% vim: filetype=erlang
+%%! -pa `find -L _build/dev -name ebin` -Wall debug verbose
+
+%%
+%%    Wave - MQTT Broker
+%%    Copyright (C) 2014 - Guillaume Bour
+%%
+%%    This program is free software: you can redistribute it and/or modify
+%%    it under the terms of the GNU Affero General Public License as published
+%%    by the Free Software Foundation, version 3 of the License.
+%%
+%%    This program is distributed in the hope that it will be useful,
+%%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%%    GNU Affero General Public License for more details.
+%%
+%%    You should have received a copy of the GNU Affero General Public License
+%%    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+%%
+%% requirements:
+%%   - bbmustache
+
+%%
+%% purpose: generates target config file from template + variables files
+%% author: Guillaume Bour <guillaume@bour.cc>
+%%
+
+main([_Tmpl, _Vars, Out]) ->
+    code:add_paths(filelib:wildcard("_build/dev/lib/*/ebin")),
+    %io:format("~p~n", [code:get_path()]),
+
+    Tmpl = bbmustache:parse_file(erlang:list_to_binary(_Tmpl)),
+    Vars = case file:consult(_Vars) of
+        {ok, Terms} -> atom2string(Terms);
+        _Err        -> 
+            io:format("~p", [_Err]),
+            halt(2)
+    end,
+
+    Result = bbmustache:compile(Tmpl, Vars),
+    %io:format("** tmpl= ~p~n** vars= ~p~n** result= ~p~n", [Tmpl, Vars, Result]),
+
+    file:write_file(Out, Result),
+    ok;
+main(_) ->
+    usage().
+
+usage() ->
+    io:format("usage: ~s template vars outfile\n", [escript:script_name()]),
+    halt(1).
+
+atom2string(Vars) ->
+    atom2string(Vars, []).
+atom2string([], Acc) ->
+    Acc;
+atom2string([{K,V}|T], Acc) ->
+    [{erlang:atom_to_list(K),V}|atom2string(T, Acc)].

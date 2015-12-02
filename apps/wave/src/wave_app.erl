@@ -54,11 +54,8 @@ start(_StartType, _StartArgs) ->
     {ok, _} = ranch:start_listener(wave_ssl, 1, ranch_ssl, [
             {port    , env([ssl, port])},
             {keepalive, true},
-            {certfile, filename:join([
-                                      filename:dirname(code:which(wave_app)),
-                                      "../../../../..", "etc", "wave_cert.pem"])},
-            {keyfile , filename:join([filename:dirname(code:which(wave_app)),
-                                      "../../../../..", "etc", "wave_key.pem"])},
+            {certfile, env([ssl, certfile])},
+            {keyfile , env([ssl, keyfile])},
 
             % increase security level
             {secure_renegotiate, true},

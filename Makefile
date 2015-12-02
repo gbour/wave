@@ -1,6 +1,8 @@
 
 APP=wave_app
-CFG=etc/wave
+TMPL_CFG=etc/wave.config
+DEV_VARS=config/vars.dev.config
+DEV_CFG=.wave.dev
 
 all: init build
 
@@ -12,7 +14,10 @@ build:
 
 debug:
 	./rebar3 as dev compile
-	erl -pa `find -L _build/dev -name ebin` -s $(APP) -s sync -config $(CFG) -s observer -init debug +v
+	# generate config file for local dev environment
+	./bin/build_dev_env $(TMPL_CFG) $(DEV_VARS) $(DEV_CFG).config
+	# run application in local dev env
+	erl -pa `find -L _build/dev -name ebin` -s $(APP) -s sync -config $(DEV_CFG) -s observer -init debug +v
 
 test:
 	cd tests && DEBUG=1 PYTHONPATH=./nyamuk ./run
