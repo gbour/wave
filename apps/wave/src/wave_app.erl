@@ -19,10 +19,8 @@
 -behaviour(application).
 
 %% Application callbacks
--export([start/0, start/2, stop/1, loglevel/1, fuzz/0]).
+-export([start/0, start/2, stop/1, loglevel/1]).
 
-fuzz() ->
-    io:format("fuzz~n").
 
 %% ===================================================================
 %% Application callbacks
@@ -30,27 +28,11 @@ fuzz() ->
 
 start() ->
     lager:start(),
+    lager:warning("Starting wave in debug mode"),
 
-    application:ensure_all_started(gproc),
-    application:ensure_all_started(shotgun),
-
-    % uuid generator
-    {ok, _} = application:ensure_all_started(uuid),
-
-    % redis pool
-    ok = application:start(sharded_eredis),
-
-    % HTTP server (+dependencies)
-    application:start(crypto),
-    application:start(asn1),
-    application:start(public_key),
-    application:start(ssl),
-
-    application:start(ranch),
-
-    % our main application
-    application:start(wave).
-
+    {ok, _Apps} = application:ensure_all_started(wave),
+    lager:debug("loaded apps: ~p", [_Apps]),
+    ok.
 
 start(_StartType, _StartArgs) ->
 	lager:debug("starting wave app"),
