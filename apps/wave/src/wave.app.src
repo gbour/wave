@@ -1,15 +1,18 @@
 %% vim: filetype=erlang
 
 {application, wave, [
-  {description, ""},
-  {vsn, "1"},
+  {description, "MQTT broker"},
+  {vsn, "0.0.1"},
   {registered, []},
   {mod, { wave_app, []}},
   {applications, [
-	  kernel,
-	  stdlib,
+      kernel,
+      stdlib,
       gproc,
+      ranch,
+      sharded_eredis,
       lager,
+      jiffy,
       uuid
   ]},
   {env, []},
