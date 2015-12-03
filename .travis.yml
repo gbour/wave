@@ -5,10 +5,13 @@ services:
     - redis-server
 install:
     - make init
-    - make build
+    # we need to build dev flavour now as we need to get bbmustache for configuration templating
+    #- make build
+    - ./rebar3 as dev compile
     - make cert
+    - ./bin/build_dev_env etc/wave.config config/vars.dev.config .wave.travis.config.tmp
     # need to enable TLSv1 as python2.7 do not support TLS >= 1.1
-    - sed -e "s/{versions, .*\}/{versions, ['tlsv1', 'tlsv1.1', 'tlsv1.2']}/g" etc/wave.config > etc/wave.config.tmp && mv etc/wave.config.tmp etc/wave.config
+    - sed -e "s/{versions, .*\}/{versions, ['tlsv1', 'tlsv1.1', 'tlsv1.2']}/g" .wave.travis.config.tmp > wave.travis.config
     - "git clone -b enhancement https://github.com/gbour/nyamuk.git tests/nyamuk"
 script:
     - ./.travis-run.sh
