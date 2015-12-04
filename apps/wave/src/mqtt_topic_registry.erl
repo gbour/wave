@@ -52,7 +52,7 @@ init(_) ->
 %
 % Name: TopicName | {TopicName, Fields}
 subscribe(Name, Qos, Subscriber) ->
-    lager:debug("~p subscribing to ~p topic", [Subscriber, Name]),
+    lager:debug("~p subscribing to ~p topic (qos ~p)", [Subscriber, Name, Qos]),
     gen_server:call(?MODULE, {subscribe, Name, Qos, Subscriber}).
 
 unsubscribe(Subscriber) ->

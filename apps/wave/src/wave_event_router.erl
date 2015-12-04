@@ -18,6 +18,7 @@
 -author("Guillaume Bour <guillaume@bour.cc>").
 -behaviour(gen_server).
 
+-include("mqtt_msg.hrl").
 
 %
 -export([route/2]).
@@ -39,67 +40,18 @@ init([Conf]) ->
 
 
 route(Topic, Msg) ->
-    MatchList = mqtt_topic_registry:match(Topic),
-    lager:debug("routing ~p, match ~p", [Topic, MatchList]),
+    lager:debug("routing internal message (~p)", [Topic]),
 
-    route2(MatchList, Topic, Msg).
-
-route2([], _, _) ->
-    ok;
-
-%
-% NOTE:
-%  - internal module (inotify) is expecting an erlang native fmt (ie proplists or maps)
-%  - mqtt worker (client proxy) is awaiting binary only
-%
-%  NOW: we use binary fmt only
-%  IN THE FUTURE: each topic subscriber specify awaited format at registration, and we adapt
-%
-% i.e
-%   mqtt_session:initiate(CONNECT) -> emit "$/mqtt/CONNECT" with [{deviceid, X},{retcode, Y}]
-%
-
-%
-% encoding proplists
-route2(MatchList, Topic, Msg) when is_list(Msg) ->
-    JSon = jiffy:encode({Msg}),
-    route3(MatchList, Topic, JSon).
-
-%
-% propagating message to subscribers
-route3([], _, _) ->
-    ok;
-route3([Subscr|T], Topic, Content) ->
-    {TopicMatch, SQos, {Mod,Fun,Pid}, _Fields} = Subscr,
-
-    case is_process_alive(Pid) of
-        true ->
-            lager:info("candidate: pid=~p, topic=~p, content=~p", [Pid, Topic, Content]),
-            % use self() or undef as sender Pid ?
-            Ret = Mod:Fun(Pid, self(), {Topic,TopicMatch}, Content, SQos),
-            lager:info("publish to client: ~p", [Ret]),
-            case {SQos, Ret} of
-                {0, disconnect} ->
-                    lager:debug("client ~p disconnected but QoS = 0. message dropped", [Pid]);
-
-                {_, disconnect} ->
-                    lager:debug("client ~p disconnected while sending message", [Pid]),
-%                        mqtt_topic_registry:unsubscribe(Subscr),
-%                        mqtt_offline:register(Topic, DeviceID),
-                    mqtt_offline:event(undefined, {Topic, SQos}, Content),
-                    ok;
-
-                _ ->
-                    ok
-            end;
-
-        _ ->
-            % SHOULD NEVER HAPPEND
-            lager:error("deadbeef ~p", [Pid])
-    end,
-
-    route3(T, Topic, Content).
-
+    {ok, Worker} = mqtt_message_worker:start_link(),
+    % async
+    %NOTE: for now, all internal events are sent using QoS 0
+    %      (because we have no fake publisher to receipt qos1/2 replies)
+    %TODO: respect subscriber qos (mqtt_router should mimic a mqtt_session then)
+    %TODO: config setting for internal events max qos
+    mqtt_message_worker:publish(Worker, self(),
+        #mqtt_msg{type='PUBLISH', qos=0, payload=[{topic, Topic},{data, jiffy:encode({Msg})}]}
+    ),
+    ok.
 
 %%
 %% PRIVATE API
