@@ -1,8 +1,15 @@
+sudo: required
+dist: trusty
+
 language: erlang
 otp_release:
     - 17.3
+    - 17.5
+    - 18.2.1
+
 services:
     - redis-server
+
 install:
     - make init
     # we need to build dev flavour now as we need to get bbmustache for configuration templating
@@ -13,7 +20,9 @@ install:
     # need to enable TLSv1 as python2.7 do not support TLS >= 1.1
     - sed -e "s/{versions, .*\}/{versions, ['tlsv1', 'tlsv1.1', 'tlsv1.2']}/g" .wave.travis.config.tmp > wave.travis.config
     - "git clone -b enhancement https://github.com/gbour/nyamuk.git tests/nyamuk"
+
 script:
     - ./.travis-run.sh
+
 notifications:
     email: "travis-wave@bour.cc"
