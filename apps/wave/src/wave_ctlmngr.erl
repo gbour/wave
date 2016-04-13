@@ -108,10 +108,12 @@ publish(Topic, Msg) ->
 
             _ ->
                 lager:info("deadbeef ~p", [Pid]),
-                mqtt_topic_registry:unsubscribe(Subscr)
+                mqtt_topic_registry:unsubscribe(Topic, Subscriber)
 
         end
 
-        || Subscr={_, _, {Mod,Fun,Pid}} <- MatchList
-    ].
+        || {_, _, Subscriber={Mod,Fun,Pid}, _} <- MatchList
+    ],
+
+    ok.
 
