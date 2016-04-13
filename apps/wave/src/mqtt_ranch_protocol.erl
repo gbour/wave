@@ -25,10 +25,16 @@
 
 -include("mqtt_msg.hrl").
 
+-type ranch_socket()    :: inet:socket()|ssl:sslsocket().
+-type ranch_transport() :: ranch_tcp|ranch_ssl.
+-type transport()       :: {Module::module(), RanchTransport::ranch_transport(), RanchSocket::ranch_socket()}.
+
+%-spec startlink()
 start_link(Ref, Socket, Transport, Opts) ->
     Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts]),
     {ok, Pid}.
 
+-spec init(Ref::ranch:ref(), Socket::ranch_socket(), Transport::ranch_transport(), Opts::any()) -> ok.
 init(Ref, Socket, Transport, _Opts = []) ->
     ok = ranch:accept_ack(Ref),
 
@@ -40,6 +46,7 @@ init(Ref, Socket, Transport, _Opts = []) ->
     lager:debug("fsm= ~p (~p : ~p) from ~p", [Session, Transport, Socket, Addr]),
     loop(Socket, Transport, Session, <<"">>, 0).
 
+-spec loop(ranch_socket(), ranch_transport(), Session::pid(), binary(), integer()) -> ok.
 loop(Socket, Transport, Session, Buffer, Length) ->
     %TODO: do not use *infinity* timeout (handle incorrectly closed sockets)
     %      we can use PINGS to check socket state
@@ -79,6 +86,10 @@ loop(Socket, Transport, Session, Buffer, Length) ->
     Transport:close(Socket),
     ok.
 
+
+-spec route(ranch_socket(), ranch_transport(), Session::pid(), binary()) -> ok | stop | continue
+                                                                            | {error, term()}
+                                                                            | {extend, integer(), binary()}.
 route(_,_,_, <<>>) ->
     continue;
 route(Socket, Transport, Session, Raw) ->
@@ -131,6 +142,7 @@ route(Socket, Transport, Session, Raw) ->
             Transport:close(Socket)
     end.
 
+-spec answer(mqtt_msg()) -> mqtt_msg() | ok | error.
 answer(#mqtt_msg{type='CONNECT'}) ->
 	#mqtt_msg{type='CONNACK', payload=[{retcode, 0}]};
 answer(#mqtt_msg{type='PUBLISH'}) ->
@@ -146,22 +158,38 @@ answer(#mqtt_msg{type='PINGRESP'}) ->
 answer(_) ->
     error.
 
+
+% send MQTT 'PINGREQ' message
+%
+%
+-spec ping(ranch_transport(), ranch_socket()) -> ok | {error, term()}.
 ping(Transport, Socket) ->
     %Transport:send(Socket, mqtt_msg:encode(#mqtt_msg{type='PINGREQ'})).
     %Msg = #mqtt_msg{type='PUBLISH', payload=[{topic,<<"foobar">>}, {msgid,1234}, {content, <<"chello">>}]},
     Msg = #mqtt_msg{type='PINGREQ'},
     Transport:send(Socket, mqtt_msg:encode(Msg)).
 
+% send kindof TCP keepalive
+%
+-spec crlfping(ranch_transport(), ranch_socket()) -> ok | {error, term()}.
 crlfping(T, S) ->
     T:send(S, <<"">>).
 
+% send MQTT message
+%
+-spec send(ranch_transport(), ranch_socket(), mqtt_msg()) -> ok | {error, term()}.
 send(Transport, Socket, Msg) ->
     Transport:send(Socket, mqtt_msg:encode(Msg)).
 
+% close underlying socket
+%
+-spec close(ranch_transport(), ranch_socket()) -> ok | {error, term()}.
 close(Transport, Socket) ->
     lager:debug("closing ~p TCP sock", [Socket]),
     Transport:close(Socket).
 
+-spec peername(ranch_ssl|ranch_tcp, inet:socket()) -> {ok, {inet:ipaddress(), inet:port_number()}} 
+                                                      | {error, any()}.
 peername(ranch_ssl, Socket) ->
     ssl:peername(Socket);
 peername(_, Socket) ->

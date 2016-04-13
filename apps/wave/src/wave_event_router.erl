@@ -38,7 +38,10 @@ init([Conf]) ->
 %% PUBLIC API
 %%
 
-
+%
+%NOTE: Msg is an erlang term, not a binary() or mqtt_msg()
+%
+-spec route(binary(), term()) -> ok.
 route(Topic, Msg) ->
     lager:debug("routing internal message (~p)", [Topic]),
 

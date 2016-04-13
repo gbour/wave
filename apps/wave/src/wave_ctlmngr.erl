@@ -47,7 +47,8 @@ init(_) ->
 
 %
 % todo: there may be wildcard in topic name => need to do a search
-%w
+%
+-spec process(pid(), binary(), binary()) -> ok.
 process(Pid, Topic, Content) ->
     P = jiffy:decode(Content, [return_maps]),
     lager:debug("process wavectl request: ~p > ~p", [Topic, P]),
@@ -94,7 +95,7 @@ code_change(_, State, _) ->
 %% 
 %% PRIVATE functions
 %%
-
+-spec publish(binary(), map()) -> ok.
 publish(Topic, Msg) ->
     Content   = jiffy:encode(Msg),
     lager:info("publishing to ~p: ~p", [Topic, Msg]),

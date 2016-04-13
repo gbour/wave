@@ -79,6 +79,7 @@ stop(_State) ->
     ok.
 
 
+-spec env([atom()]) -> term().
 env([Key|T]) ->
     env(application:get_env(wave, Key), T).
 
@@ -90,6 +91,7 @@ env({ok, Node}, []) ->
 env({ok, Node}, [Key|T]) ->
     env({ok, proplists:get_value(Key, Node)}, T).
 
+-spec check_ciphers(list(string())) -> list(string()).
 check_ciphers(Ciphers) ->
     lists:filter(fun(Cipher) ->
         try ssl_cipher:openssl_suite(Cipher) of
@@ -100,6 +102,8 @@ check_ciphers(Ciphers) ->
         Ciphers
     ).
 
+%TODO: what is lager:set_loglevel() return ?
+-spec loglevel(integer) -> any().
 loglevel(Level) ->
     lager:set_loglevel(lager_console_backend, Level).
 
@@ -108,6 +112,7 @@ loglevel(Level) ->
 %% MODULES MANAGEMENT
 %%
 
+-spec load_modules() -> ok.
 load_modules() ->
     {ok, Mods} = application:get_env(wave, modules),
 
@@ -116,6 +121,7 @@ load_modules() ->
 
     module_init(Enabled, Opts).
 
+-spec module_init(list(atom), any()) -> ok.
 module_init([], _) ->
     ok;
 module_init([Modname|Rest], Opts) ->

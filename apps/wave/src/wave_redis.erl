@@ -21,6 +21,8 @@
 
 %
 % new device connects
+-spec connect(DeviceID :: binary(), list({Key :: atom, Value :: any()})) -> {error, exists}
+                                                                            | wave_db:return().
 connect(DeviceID, Values) ->
     Key   = "wave:deviceid:" ++ DeviceID,
     case wave_db:get({h, Key, "state"}) of
@@ -32,6 +34,8 @@ connect(DeviceID, Values) ->
             wave_db:set({h, Key}, Pairs)
     end.
 
+
+-spec update(binary(), atom(), any()) -> wave_db:return().
 update(DeviceID, Key, Value) ->
     wave_db:set({h, "wave:deviceid:" ++ DeviceID, Key}, Value).
 
@@ -40,6 +44,7 @@ update(DeviceID, Key, Value) ->
 %
 % i.e: wave:deviceid:foobar:qos:0:topics -> [topic1, topic2, ...]
 %
+-spec topic(binary(), binary(), integer()) -> wave_db:return().
 topic(DeviceID, Topic, Qos) ->
     wave_db:append(<<"wave:deviceid:", DeviceID/binary, ":qos:", (erlang:integer_to_binary(Qos))/binary, ":topics">>, Topic).
 
@@ -49,23 +54,27 @@ topic(DeviceID, Topic, Qos) ->
 %
 % returns: [{Topic1, Qos}, {Topic2, Qos}, ...]
 %
+-spec topic(binary(), integer()) -> list({binary(), 0}). 
 topic(DeviceID, Qos) ->
     {ok, Topics} = wave_db:range(<<"wave:deviceid:", DeviceID/binary, ":qos:", (erlang:integer_to_binary(Qos))/binary, ":topics">>),
 
     lists:map(fun(T) -> {T, 0} end, Topics).
 
 
-
-device({id, Err={error, _}}) ->
-    Err;
-device({id, {ok, ID}})->
-    lager:info("id=~p", [ID]),
-    decode(eget(<<"d:", ID/binary>>));
-
+-spec device({deviceid, binary()}) -> {error, notfound} 
+                                        | {error, binary()|[binary()]} 
+                                        | {ok, jiffy:json_value()}.
 device({deviceid, DeviceID}) ->
     lager:info("id>=~p", [DeviceID]),
-    device({id, eget(<<"d:", DeviceID/binary, ":id">>)}).
+    device2({id, eget(<<"d:", DeviceID/binary, ":id">>)}).
 
+device2({id, Err={error, _}}) ->
+    Err;
+device2({id, {ok, ID}})->
+    lager:info("id=~p", [ID]),
+    decode(eget(<<"d:", ID/binary>>)).
+
+-spec eget(binary()) -> {error, notfound} | wave_db:return().
 eget(Q) ->
     case wave_db:get({s, Q}) of
         {error, Err}    ->

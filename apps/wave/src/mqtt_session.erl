@@ -64,41 +64,50 @@
 %       on ANY incoming message : reset timeout#1 ; ... ; set timeout #1
 
 -record(session, {
-    deviceid,
-    topics = [], % list of subscribed topics
-    transport,
-    opts,
-    pingid = undefined,
-    keepalive,
+    deviceid               :: binary(),
+    topics     = []        :: list({Topic::binary(), Qos::integer()}), % list of subscribed topics
+    transport              :: mqtt_ranch_protocol:transport(),
+    opts                   :: list({Key::atom(), Val::any()}),
+    pingid     = undefined :: undefined,
+    keepalive              :: integer(),
     %TODO: use maps instead (test performances improvement)
-    inflight = [],
+    %NOTE: not sure msgid is binary
+    %       theres a msgid in mqtt_msg() messages
+    %       another one generate by mqtt_session (integer)
+    inflight   = []        :: list({MsgID::binary(), MsgWorker::pid()}),
     %TODO: initialize with random value
-    next_msgid = 1
+    next_msgid = 1         :: integer()
 }).
+-type session() :: #session{}.
 
 -define(CONNECT_TIMEOUT  , 5000). % ms
 -define(DEFAULT_KEEPALIVE, 300).  % secs
 
+-spec start_link(mqtt_ranch_protocol:transport(), list({atom(), any()})) -> {ok, pid()} 
+                                                                            | ignore | {error, any()}.
 start_link(Transport, Opts) ->
     gen_fsm:start_link(?MODULE, [Transport, Opts], []).
 
+%-spec init(maybe_improper_list(tcp|ssl, list(any()))) -> {ok, atom(), session()}.
 init([Transport, Opts]) ->
     % timeout on socket connection: close socket is no CONNECT message received after timeout
     {ok, initiate, #session{transport=Transport, opts=Opts}, ?CONNECT_TIMEOUT}.
 
 %%
-
+-spec handle(pid(), mqtt_msg()) -> {ok, any()}.
 handle(Pid, Msg) ->
 	Resp = gen_fsm:sync_send_event(Pid, Msg),
 	lager:info("return: ~p", [Resp]),
 
 	{ok, Resp}.
 
+-spec landed(pid(), binary()) -> ok.
 landed(Pid, MsgID) ->
     gen_fsm:send_event(Pid, {'msg-landed', MsgID}).
 
 % peer client disconnection
 %
+-spec disconnect(pid(), atom()) -> ok.
 disconnect(Pid, Reason) ->
     gen_fsm:send_all_state_event(Pid, {disconnect, Reason}).
 
@@ -106,6 +115,7 @@ disconnect(Pid, Reason) ->
 %
 % return true if client connection still alive
 % (check socket status => kill mqtt_session if socket is in error (closed))
+-spec is_alive(pid()) -> true|false.
 is_alive(Pid) ->
     case is_process_alive(Pid) of
         true ->
@@ -118,20 +128,25 @@ is_alive(Pid) ->
             false
     end.
 
+%TODO: unused ?
+-spec garbage_collect(pid()) -> ok.
 garbage_collect(_Pid) ->
     ok.
 
 %
 % a message is published for me
 %
+-spec publish(pid(), pid(), binary(), binary(), integer()) -> ok.
 publish(Pid, From, Topic, Content, Qos) ->
     gen_fsm:send_event(Pid, {publish, From, Topic, Content, Qos}).
 
+-spec provisional(request|response, pid(), binary()) -> ok.
 provisional(request, Pid, MsgID) ->
     gen_fsm:send_event(Pid, {provreq, MsgID});
 provisional(response, Pid, MsgID) ->
     gen_fsm:send_event(Pid, {provresp, MsgID}).
 
+-spec ack(pid(), binary(), integer()) -> ok.
 ack(Pid, MsgID, Qos) ->
     gen_fsm:send_event(Pid, {ack, MsgID, Qos}).
 

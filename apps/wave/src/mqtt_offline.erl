@@ -50,19 +50,24 @@ init(_) ->
 %w
 %unsubscribe(Subscriber) ->
 %    gen_server:call(?MODULE, {unsubscribe, Subscriber}).
+-spec register(binary(), integer(), binary()) -> ok.
 register(Topic, Qos, DeviceID) ->
     gen_server:call(?MODULE, {register, Topic, Qos, DeviceID}).
 
 
+-spec recover(binary()) -> list({Topic:: binary(), Qos :: integer()}).
 recover(DeviceID) ->
     gen_server:call(?MODULE, {recover, DeviceID}).
 
+-spec flush(binary(), mqtt_topic_registry:subscriber()) -> ok.
 flush(DeviceID, Session) ->
     gen_server:cast(?MODULE, {flush, DeviceID, Session}).
 
+-spec dump() -> ok.
 dump() ->
     gen_server:call(?MODULE,dump).
 
+-spec event(pid(), binary(), binary()) -> ok.
 event(_Pid, Topic, Content) ->
     gen_server:call(?MODULE, {event, Topic, Content}).
 
@@ -147,7 +152,20 @@ terminate(_,_) ->
 code_change(_, State, _) ->
     {ok, State}.
 
+%%
+%% PRIVATE FUNS
+%%
 
+% "unstore" & "emit" messages from db
+%   - decrement message reference counter
+%   - if counter is 0, deletes message content
+%
+% MsgIDs: lists of serialized topic+msgid
+%           [topic1, msgid1, topic2, msgid2, ...]
+%
+-spec priv_flush(MsgIDs :: list(binary()), Device :: mqtt_topic_registry:subscriber()) -> ok.
+priv_flush([], _) ->
+    ok;
 priv_flush([Topic, MsgID |T], Device={M,F,Pid}) ->
     {ok, Msg} = wave_db:get({s, <<"msg:", MsgID/binary>>}),
     lager:info("flush msg: ~p (id: ~p, topic= ~p)", [Msg, MsgID, Topic]),
@@ -167,7 +185,5 @@ priv_flush([Topic, MsgID |T], Device={M,F,Pid}) ->
     end,
 
     % next queued message
-    priv_flush(T, Device);
+    priv_flush(T, Device).
 
-priv_flush([], _) ->
-    ok.

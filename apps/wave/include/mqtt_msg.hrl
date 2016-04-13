@@ -16,11 +16,15 @@
 
 
 -record(mqtt_msg, {
-	type,
-	retain = 0,
-	qos    = 0,
-	dup    = 0,
+    type           :: mqtt_verb(),
+    retain  = 0    :: integer(),
+    qos     = 0    :: integer(),
+    dup     = 0    :: integer(),
 
-	payload = []
+    payload = []   :: list({atom(), any()})
 }).
+
+-type mqtt_msg()  :: #mqtt_msg{}.
+-type mqtt_verb() :: 'CONNECT'|'CONNACK'|'PUBLISH'|'PUBACK'|'PUBREC'|'PUBREL'|'PUBCOMP'|'SUBSCRIBE'|'UNSUBSCRIBE'
+                    |'SUBACK'|'UNSUBACK'|'PINGREQ'|'PINGRESP'|'DISCONNECT'.
 

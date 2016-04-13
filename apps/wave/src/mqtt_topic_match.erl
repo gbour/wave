@@ -35,9 +35,18 @@
 %    union(
 %      validate(
 
+% Count wildcard characters
+%
+% fields(<<"foo/bar">>)     : []
+% fields(<<"foo/+/bar">>)   : [0]
+% fields(<<"foo/+/bar/+">>) : [0,1]
+% fields(<<"foo/bar/#">>)   : [0]
+%
+-spec fields(binary()) -> list(integer()).
 fields(TopicName) ->
     lists:seq(0, fields(TopicName, -1)).
 
+-spec fields(binary(), integer()) -> integer().
 fields(<<>>  , C) ->
     C;
 fields(<<$#>>, C) ->
@@ -50,6 +59,16 @@ fields(<<$+, Rest/binary>>, C)  ->
 fields(<<_:1/binary, Rest/binary>>, C) ->
     fields(Rest, C).
 
+
+% tries to match a message topic with a subscribed topic regex
+% if match, also extract values matching wildcards
+%
+%NOTE: BUG OR NOT ?? 
+%   11> mqtt_topic_match:match(<<"foo/ba+">>, {<<"foo/bar">>,[0]}).
+%   {ok,[{0,<<"r">>}]}
+%
+-spec match(Re :: binary(), {Topic :: binary(), Fields :: list(integer())}) -> 
+        fail | {ok, list(mqtt_topic_registry:match())}.
 match(Re, {Topic, Fields}) ->
     case match(Re, Topic, []) of
         {ok, []} ->
@@ -59,25 +78,38 @@ match(Re, {Topic, Fields}) ->
             {ok, fieldsmap(Matches, Fields, [])};
         fail ->
             fail
-    end;
-
-match(Re, Topic) ->
-    case match(Re, Topic, []) of
-        {ok, []} ->
-            {ok, []};
-        {ok, Matches} ->
-            % /!\ Matches was built in reverse order
-            {ok, fieldsmap(Matches, lists:reverse(lists:seq(0, length(Matches)-1)), [])};
-        fail ->
-            fail
     end.
 
+% USED ?
+%match(Re, Topic) ->
+%    case match(Re, Topic, []) of
+%        {ok, []} ->
+%            {ok, []};
+%        {ok, Matches} ->
+%            % /!\ Matches was built in reverse order
+%            {ok, fieldsmap(Matches, lists:reverse(lists:seq(0, length(Matches)-1)), [])};
+%        fail ->
+%            fail
+%    end.
 
+
+% match or not a topic with a subscription regex 
 %
-% /foo/bar
-% /foo/+
-% /foo/#
+% ie:
+%   /foo/bar MATCH         /foo/+
+%   /foo/bar MATCH        /foo/#
+%   /foo/bar MATCH        /foo/bar
+%   /foo/bar DO NOT MATCH /foo/baz
 %
+% if matches, returns 'sections' matching wildcards
+%
+% match(<<"/foo/bar">>, <<"/foo/bar">>) -> {ok, []}
+% match(<<"/foo/+">>  , <<"/foo/bar">>) -> {ok, [<<"bar">>]}
+% match(<<"/#">>      , <<"/foo/bar">>) -> {ok, [<<"foo/bar">>]}
+%
+% NOTE: returned matches are in reverse order (because of optimized list appending)
+%
+-spec match(Re :: binary(), Topic :: binary(), Matches :: list(binary())) -> fail | {ok, list(binary())}.
 match(<<$#>>, _Match, Matches) ->
     lager:info("# match ~p", [_Match]),
     {ok, [_Match|Matches]};
@@ -98,6 +130,13 @@ match(<<"">>, <<"">>, M) ->
 match(_, _, _) ->
     fail.
 
+
+% "Eat" all topic characters until next '/' separator or end of string
+% returns 'section' string
+%
+% eat(<<"foo/bar/baz">>,<<"">>) -> {<<"bar/baz">>, <<"foo">>}
+%
+-spec eat(Topic :: binary(), Accumulator :: binary()) -> {binary(), binary()}.
 eat(<<>>, Acc) ->
     {<<>>, Acc};
 eat(Rest= <<$/, _/binary>>, Acc) ->
@@ -105,7 +144,18 @@ eat(Rest= <<$/, _/binary>>, Acc) ->
 eat(<<H:1/binary, Rest/binary>>, Acc) ->
     eat(Rest, <<Acc/binary, H/binary>>).
 
+
+
+% merge Matches with match positions, also reversing to right order
+%
+% fieldsmap([<<"bar">>, <<"foo">>], [1,0], []) -> [{1,<<"foo">>}, {0, <<"bar">>}]
+%
+%NOTE: match positions is in wrong order. BUG OR NOT ?
+%
+-spec fieldsmap(Matches :: list(binary()), Fields :: list(integer()), Accumulator :: list()) ->
+        list(mqtt_topic_registry:match()).
 fieldsmap([H|T], [F|Fields], Acc) ->
     fieldsmap(T, Fields, [{F,H}|Acc]);
 fieldsmap([], _, Acc) ->
     Acc.
+

@@ -31,11 +31,15 @@
 % INTERNAL STATES
 -export([start/2, provisional/2, waitacks/2]).
 
+-type subscriber() :: {EffectiveQos::integer(),published, Receiver::pid(),mqtt_topic_registry:match_result()}.
+
 -record(state, {
-    publisher,
-    subscribers,
-    message
+    publisher    :: pid(),
+    subscribers  :: [subscriber()],
+    message      :: mqtt_msg()
 }).
+-type state() :: #state{}.
+
 
 -define(CONNECT_TIMEOUT  , 5000). % ms
 -define(DEFAULT_KEEPALIVE, 300).  % secs
@@ -51,14 +55,17 @@ init(_) ->
 %% API
 %%
 
+-spec publish(Worker::pid(), Emitter::pid(), Msg::mqtt_msg()) -> ok.
 publish(Pid, From, Msg) ->
     gen_fsm:send_event(Pid, {publish, From, Msg}).
 
+-spec provisional(request|response, Worker::pid(), Emitter::pid(), Msg::mqtt_msg()) -> ok.
 provisional(request, Pid, From, Msg) ->
     gen_fsm:send_event(Pid, {provreq, From, Msg});
 provisional(response, Pid, From, Msg) ->
     gen_fsm:send_event(Pid, {provresp, From, Msg}).
 
+-spec ack(Worker::pid(), Emitter::pid(), Msg::mqtt_msg()) -> ok.
 ack(Pid, From, Msg) ->
     gen_fsm:send_event(Pid, {ack, From, Msg}).
 
@@ -203,13 +210,17 @@ code_change(_OldVsn, StateName, StateData, _Extra) ->
 %%
 
 
+% Forward a message to subscriber
 %
+-spec send(publish, Receiver::{module(), atom(), pid()}, {Topic::binary(), TFilter::binary()}, 
+           Payload::binary(), Qos::integer()) -> ok.
 send(publish, {Mod,Fun,Pid}, Topic, Payload, Qos) ->
     Mod:Fun(Pid, self(), Topic, Payload, Qos).
 
 % send provisional response (PUBREC)
 % ONLY for QoS 2
 %
+-spec send(provreq|provresp|ack, Emitter::pid(), MsgID::binary(), Qos::integer()) -> ok.
 send(provreq, Publisher, MsgID, _Qos=2) ->
     mqtt_session:provisional(request, Publisher, MsgID);
 send(provreq, _, _, _) ->
@@ -222,7 +233,9 @@ send(ack, Publisher, MsgID, Qos) ->
     mqtt_session:ack(Publisher, MsgID, Qos).
 
 
-
+% Forward published message to all subscribers
+%
+-spec publish_to_subscribers(Emitter::pid(), Msg::mqtt_msg()) -> list(subscriber()).
 publish_to_subscribers(_From, #mqtt_msg{type='PUBLISH', qos=Qos, payload=P}) ->
     %MsgID   = proplists:get_value(msgid, P),
     Topic   = proplists:get_value(topic, P),
@@ -254,6 +267,11 @@ publish_to_subscribers(_From, #mqtt_msg{type='PUBLISH', qos=Qos, payload=P}) ->
     S2.
 
 
+% Send ACKNOWLEDGEMENT to emitter
+%
+%
+-spec checkack(AckType::'PUBACK'|'PUBCOMP', Subscribers::[subscriber()], Rest::[subscriber()], state()) -> 
+        pass|stop|acked.
 checkack(_, _Match=[], _, _) ->
     lager:error("~p not found in message subscribers", ["Subscriber"]),
     pass;
@@ -305,5 +323,4 @@ checkack(MsgType, [{EQos, _,_,_}], _,_) ->
 checkack(MsgType, Invalid, _, _) ->
     lager:error("smth is going wrong: ~p, mst type= ~p", [Invalid, MsgType]),
     pass.
-
 

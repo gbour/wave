@@ -22,13 +22,15 @@
 -export([
         append/2, push/2, pop/1, range/1, del/2]).
 
+-type return() :: {ok, Value::eredis:return_value()} | {error, Reason::binary()}.
+%-type return() :: {ok, Value::binary() | [binary()]} | {error, Reason::binary()}.
 
 %% @doc
 %% Function: get/1
 %% Purpose: get Value from database
 %% Returns:
 %%
--spec get({s, binary()}) -> {ok, any()}|{error, atom()|binary()}.
+-spec get({s, binary()} | {h, iolist(), iolist()}) -> return().
 get({s, Key}) ->
     sharded_eredis:q(["GET", Key]);
 %% get hash field value
@@ -39,7 +41,13 @@ get({h, Key, Field}) ->
 %% Function: set/2
 %% Purpose: insert key/value in database
 %%
--spec set({s|h, binary()}, any()) -> {ok, binary()}|{error, atom()|binary()}.
+%% Type:
+%%  - 's'   : simple key/value
+%%  - 'h'   : dictionary
+%%
+-spec set({Type :: s|h, Key :: atom()|string()|binary()} |
+          {h, atom()|string()|binary(), atom()|string()|binary()},
+          Value :: any()) -> return().
 set({s, Key}, Value) ->
     sharded_eredis:q(["SET", Key, Value]);
 set({h, Key}, Value) when is_list(Value) ->
@@ -54,7 +62,7 @@ set({h, Key, Field}, Value) ->
 %% @doc
 %%
 %%
--spec set({s|h, binary()}, any(), list()) -> {ok, binary()}|{error, atom()|binary()}.
+-spec set({s|h, binary()}, any(), list()) -> return().
 set(Key, Value, []) ->
     set(Key, Value);
 set(Key={_,K}, Value, [{expiration,Expiration}|Opts]) -> 
@@ -70,11 +78,11 @@ set(Key={_,K}, Value, [{expiration,Expiration}|Opts]) ->
         Err -> Err
     end.
 
--spec del(binary()) -> {ok, binary()}|{error, atom()|binary()}.
+-spec del(binary()) -> return().
 del(Key) ->
     sharded_eredis:q(["DEL", Key]).
 
--spec del(binary(), integer()) -> {ok, binary()}|{error, atom()|binary()}.
+-spec del(binary(), integer()) -> return().
 del(Key, Start) ->
     sharded_eredis:q(["LTRIM", Key, Start, -1]).
 
@@ -82,11 +90,11 @@ del(Key, Start) ->
 %%
 %% Counters operations
 %%
--spec incr(binary()) -> {ok, binary()}|{error, atom()|binary()}.
+-spec incr(binary()) -> return().
 incr(Key) ->
     sharded_eredis:q(["INC", Key]).
 
--spec decr(binary()) -> {ok, binary()}|{error, atom()|binary()}.
+-spec decr(binary()) -> return().
 decr(Key) ->
     sharded_eredis:q(["DECR", Key]).
 
@@ -94,22 +102,21 @@ decr(Key) ->
 %%
 %% Lists specific operations
 %%
--spec append(binary(), any()) -> {ok, binary()}|{error, atom()|binary()}.
+-spec append(binary(), any()) -> return().
 append(List, Value) ->
     sharded_eredis:q(["LPUSH", List, Value]).
 
--spec push(binary(), any()) -> {ok, binary()}|{error, atom()|binary()}.
+-spec push(atom()|binary(), any()) -> return().
 push(List, Value) when is_list(Value) ->
     sharded_eredis:q(["RPUSH", List|Value]);
-
 push(List, Value) ->
     sharded_eredis:q(["RPUSH", List, Value]).
 
--spec pop(binary()) -> {ok, binary()}|{error, atom()|binary()}.
+-spec pop(atom()|binary()) -> return().
 pop(List) ->
     sharded_eredis:q(["LPOP", List]).
 
--spec range(binary()) -> {ok, binary()}|{error, atom()|binary()}.
+-spec range(binary()) -> return().
 range(List) ->
     sharded_eredis:q(["LRANGE", List, 0, -1]).
 

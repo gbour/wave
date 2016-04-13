@@ -44,6 +44,10 @@
 %  - SUBACK      (min 3)
 %  - UNSUBSCRIBE (min 3)
 %
+-spec decode(binary()) -> {ok, mqtt_msg(), binary()} 
+                          | {error, size, integer()}
+                          | {error, overflow|{type, integer()}}
+                          | {error, disconnect|conformity|protocol_version, binary()}.
 decode(<<Type:4, Flags:4, Rest/binary>>) ->
     decode(type2atom(Type), <<Flags:4>>, decode_rlength(Rest, erlang:byte_size(Rest), minlen(Type))).
 
@@ -87,6 +91,9 @@ decode(Type, <<Dup:1, Qos:2, Retain:1>>, {RLen, _, Rest}) ->
 %% @doc «CONNECT» message
 %% support both MQTT 3.1 and 3.1.1 versions
 %%
+-spec decode_payload(mqtt_verb(), integer(), {integer(), binary()}) -> {error, 
+                                                                        disconnect|conformity|protocol_version}
+                                                                       | {ok, list({atom(), any()})}.
 decode_payload('CONNECT', _Qos, {Len, <<
         PLen:16,
         Protocol:PLen/binary,
@@ -173,6 +180,8 @@ decode_payload(Cmd, Qos, Args) ->
 
 % match wrong protocol versions
 % VALID
+-spec decode_connect(binary(), byte(), 0|1, {bitstring(), char(), binary()}) -> 
+        {error, conformity|protocol_version} | {ok, list({atom(), any()})}.
 decode_connect(<<"MQIsdp">>, Vers=3, 0, Payload) ->
     decode_connect2(Vers, Payload);
 decode_connect(<<"MQTT">>  , Vers=4, 0, Payload) ->
@@ -191,6 +200,7 @@ decode_connect(Protocol, _, _, _) ->
     lager:notice("CONNECT: invalid protocol name (~p)", [Protocol]),
     {error, conformity}.
 
+-spec decode_connect2(byte(), {bitstring(), char(), binary()}) -> {error, conformity} | {ok, [{atom(), any}]}.
 decode_connect2(Version, {<<0:1, 1:1, _:5>>, _, _}) ->
     lager:notice("CONNECT: password flag is set while username flag is not"),
     {error, conformity};
@@ -244,7 +254,8 @@ decode_connect2(Version,
     ]}.
 
 
-
+-spec get_topics(Data :: binary(), Acc :: list(any()), Subscription :: true|false) -> 
+        Topics::list(Topic::binary()|{Topic::binary(), Qos::integer()}).
 get_topics(<<>>, Topics, _) ->
 	Topics;
 % with QOS field (SUBSCRIBE)
@@ -258,6 +269,7 @@ get_topics(Payload, Topics, _) ->
 	{Name, Rest} = decode_string(Payload),
 	get_topics(Rest, [Name|Topics], false).
 
+-spec decode_string(Data :: binary()) -> {String :: binary(), Rest :: binary()}.
 decode_string(<<>>) ->
     {<<>>, <<>>};
 decode_string(Pkt) ->
@@ -268,12 +280,16 @@ decode_string(Pkt) ->
     {Str, Rest2}.
 
 
+
 %validate('CONNECT', level, 4) ->
 %    ok;
 %validate('CONNECT', level, _) ->
 %    'connack_0x01';
 %validate('CONNECT', <<
 
+-spec decode_rlength(binary(), integer(), integer()) -> {error, overflow} 
+                                                        | {error, size, integer()}
+                                                        | {Size::integer(), RestSize::integer(), Rest::binary()}.
 decode_rlength(Pkt, PktSize, MinLen) when PktSize < MinLen ->
     {error, size, MinLen-PktSize};
 decode_rlength(Pkt, _, _) ->
@@ -288,10 +304,12 @@ p_decode_rlength(<<1:1, Len:7/integer, Rest/binary>>, Mult, Acc) ->
     p_decode_rlength(Rest, Mult*128, Acc + Mult*Len).
 
 
+-spec encode_rlength(binary()) -> binary().
 encode_rlength(Payload) ->
     encode_rlength(erlang:byte_size(Payload), <<"">>).
 
 % shortcut for 1 byte only rlength (< 128)
+-spec encode_rlength(integer(), binary()) -> binary().
 encode_rlength(Size, <<"">>) when Size < 128 ->
     <<Size:8>>;
 encode_rlength(0, RLen)     ->
@@ -306,6 +324,7 @@ encode_rlength(Size, RLen) ->
     encode_rlength(RLen2, <<RLen/binary, Digit:8>>).
 
 
+-spec encode(mqtt_msg()) -> binary().
 encode(#mqtt_msg{retain=Retain, qos=Qos, dup=Dup, type=Type, payload=Payload}) ->
     P = encode_payload(Type, Qos, Payload),
 
@@ -320,6 +339,7 @@ encode(#mqtt_msg{retain=Retain, qos=Qos, dup=Dup, type=Type, payload=Payload}) -
         P/binary
     >>.
 
+-spec encode_payload(mqtt_verb(), integer(), list({atom(), any()})) -> binary().
 encode_payload('CONNECT', _Qos, Opts) ->
     ClientID = proplists:get_value(clientid, Opts),
     Username = proplists:get_value(username, Opts),
@@ -427,6 +447,7 @@ encode_payload('PINGREQ', _Qos, _) ->
 encode_payload('PINGRESP', _Qos, _) ->
 	<<>>.
 
+-spec encode_string(undefined|string()) -> binary().
 encode_string(undefined) ->
     <<>>;
 encode_string(Str) ->
@@ -435,6 +456,7 @@ encode_string(Str) ->
       Str/binary
     >>.
 
+-spec encode_qos(undefined|list(integer())) -> binary().
 encode_qos(undefined) ->
 	<<>>;
 encode_qos([]) ->
@@ -443,6 +465,7 @@ encode_qos([H|T]) ->
 	<<0:6, H:2/integer, (encode_qos(T))/binary>>.
 
 
+-spec atom2type(mqtt_verb()) -> integer().
 atom2type('CONNECT')     ->  1;
 atom2type('CONNACK')     ->  2;
 atom2type('PUBLISH')     ->  3;
@@ -452,12 +475,13 @@ atom2type('PUBREL')      ->  6;
 atom2type('PUBCOMP')     ->  7;
 atom2type('SUBSCRIBE')   ->  8;
 atom2type('SUBACK')      ->  9;
-atom2type('UNSUBSCRIBE') -> 10;
+atom2type('UNSUBSCRIBE') -> 10; % dialyzer generates a warning because this message is nowhere generated
 atom2type('UNSUBACK')    -> 11;
 atom2type('PINGREQ')     -> 12;
 atom2type('PINGRESP')    -> 13;
-atom2type('DISCONNECT')  -> 14.
+atom2type('DISCONNECT')  -> 14. % dialyzer generates a warning because this message is nowhere generated
 
+-spec type2atom(integer()) -> mqtt_verb() | {invalid, integer()}.
 type2atom(1)  -> 'CONNECT';
 type2atom(2)  -> 'CONNACK';
 type2atom(3)  -> 'PUBLISH';
@@ -494,5 +518,6 @@ minlen(_)  -> -1.
 setflag(undefined) -> 0;
 setflag(_)         -> 1.
 
+%TODO: why ???
 bin(X) when is_binary(X) ->
     X.

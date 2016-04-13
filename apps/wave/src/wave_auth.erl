@@ -19,6 +19,8 @@
 
 -export([check/4]).
 
+-spec check({ok, true|false}|undefined, DeviceID::binary(), Creds::{binary(), binary()},
+            Setts::list({binary(), binary()})) -> {error, wrong_id|bad_credentials} | {ok, noauth|match}.
 check({ok, false}, _,_,_) ->
     lager:debug("no auth required"),
     {ok, noauth};

@@ -30,6 +30,12 @@
     peers
 }).
 
+-type subscriber()   :: {Module :: module(), Fun :: atom(), Pid :: pid()}.
+-type subscription() :: {Re :: binary(), Fields :: list(integer()), Qos :: integer(), Subscriber :: subscriber()}.
+-type match()        :: {Position :: integer(), Value :: binary()}.
+-type match_result() :: {Re :: binary(), Qos :: integer(), Subscriber :: subscriber(), Matches :: list(match())}.
+
+
 %
 %-export([get/1, subscribe/2, get_subscribers/1]).
 -export([dump/0, subscribe/3, unsubscribe/1, unsubscribe/2, match/1]).
@@ -51,19 +57,28 @@ init(_) ->
 % todo: there may be wildcard in topic name => need to do a search
 %
 % Name: TopicName | {TopicName, Fields}
+-spec subscribe(Topic :: binary(), Qos :: integer(), Subscriber :: subscriber()) -> ok | duplicate.
 subscribe(Name, Qos, Subscriber) ->
     lager:debug("~p subscribing to ~p topic (qos ~p)", [Subscriber, Name, Qos]),
     gen_server:call(?MODULE, {subscribe, Name, Qos, Subscriber}).
 
-unsubscribe(Subscriber) ->
-    gen_server:call(?MODULE, {unsubscribe, Subscriber}).
 
+-spec unsubscribe(Subscription :: subscription()) -> ok.
+unsubscribe(Subscription) ->
+    gen_server:call(?MODULE, {unsubscribe, Subscription}).
+
+
+-spec unsubscribe(Topic :: binary(), Subscriber :: subscriber()) -> ok.
 unsubscribe(Name, Subscriber) ->
     gen_server:call(?MODULE, {unsubscribe, Name, Subscriber}).
 
+
+-spec match(Topic :: binary()) -> list(match_result()).
 match(Name) ->
     gen_server:call(?MODULE, {match, Name}).
 
+
+-spec dump() -> ok.
 dump() ->
     gen_server:call(?MODULE, dump).
 
@@ -131,6 +146,9 @@ code_change(_, State, _) ->
     {ok, State}.
 
 
+% dump subscribers list
+%
+-spec priv_dump(list(subscription())) -> ok.
 priv_dump([{Topic, Fields, Subscriber} |T]) ->
     lager:info("~p (~p) -> ~p", [Topic, Fields, Subscriber]),
     priv_dump(T);
@@ -138,6 +156,11 @@ priv_dump([{Topic, Fields, Subscriber} |T]) ->
 priv_dump([]) ->
     ok.
 
+
+% remove a subscriber from subscription list
+%
+-spec priv_unsubscribe(Subscriber :: subscription(), Subscribers :: list(subscription()), 
+                       Acc :: list(subscription)) -> list(subscription()).
 priv_unsubscribe(_, [], S2) ->
     S2;
 priv_unsubscribe(S, [S|T], S2) ->
@@ -145,6 +168,11 @@ priv_unsubscribe(S, [S|T], S2) ->
 priv_unsubscribe(S, [H|T], S2) ->
     priv_unsubscribe(S, T, [H|S2]).
 
+
+% find subscriptions matching topic
+%
+-spec priv_match(Topic :: binary(), Subscriptions :: list(subscription()), Acc :: list(match_result())) ->
+        list(match_result()).
 % exact match
 priv_match(Topic, [{Topic, _, Qos, S}|T], M) ->
     priv_match(Topic, T, [{Topic,Qos,S,[]}|M]);

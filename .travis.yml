@@ -22,6 +22,7 @@ install:
     - "git clone -b enhancement https://github.com/gbour/nyamuk.git tests/nyamuk"
 
 script:
+    - ./rebar3 dialyzer
     - ./.travis-run.sh
 
 notifications:

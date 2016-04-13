@@ -23,6 +23,7 @@
 %%
 %% @doc converts to atom
 %%
+-spec atom(any()) -> atom().
 atom(X) when is_list(X) ->
     erlang:list_to_atom(X);
 atom(_) ->
@@ -31,6 +32,7 @@ atom(_) ->
 %%
 %% @doc converts to string (list)
 %%
+-spec str(any()) -> string().
 str(X) when is_atom(X) ->
     erlang:atom_to_list(X);
 str(_) ->
@@ -39,6 +41,7 @@ str(_) ->
 %%
 %% @doc converts to binary
 %%
+-spec bin(any()) -> binary().
 bin(X) when is_list(X) ->
     erlang:list_to_binary(X);
 bin(_) ->
