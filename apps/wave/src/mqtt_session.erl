@@ -258,7 +258,8 @@ connected(#mqtt_msg{type='PINGREQ'}, _, StateData=#session{keepalive=Ka}) ->
 
 connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=Ref,keepalive=Ka}) ->
     lager:info("received PINGRESP"),
-    gen_fsm:cancel_timer(Ref),
+    %BUG? timer never started
+    %gen_fsm:cancel_timer(Ref),
     {reply, undefined, connected, StateData#session{pingid=undefined}, Ka};
 
 
