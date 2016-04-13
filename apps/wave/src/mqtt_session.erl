@@ -198,7 +198,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
             % if connection is successful, we need to check if we have offline messages
             Topics1 = mqtt_offline:recover(DeviceID),
             lager:info("offline topics: ~p", [Topics1]),
-            [ mqtt_topic_registry:subscribe(Topic, Qos, {?MODULE,publish,self()}) || {Topic,Qos,_} <- Topics1 ],
+            [ mqtt_topic_registry:subscribe(Topic, Qos, {?MODULE,publish,self()}) || {Topic,Qos} <- Topics1 ],
             % flush is async
             case Topics1 of
                 [] -> ok;
