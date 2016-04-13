@@ -37,7 +37,8 @@ connect(DeviceID, Values) ->
 
 -spec update(binary(), atom(), any()) -> wave_db:return().
 update(DeviceID, Key, Value) ->
-    wave_db:set({h, "wave:deviceid:" ++ DeviceID, Key}, Value).
+    %BUG
+    wave_db:set({h, "wave:deviceid:" ++ wave_utils:str(DeviceID), Key}, Value).
 
 % save registered topic
 % topics are stored in a redis list, per QOS
