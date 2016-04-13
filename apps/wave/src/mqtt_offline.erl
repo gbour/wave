@@ -104,7 +104,7 @@ handle_call({event, {Topic,TopicMatch}, Content}, _, State=#state{registrations=
 
     %TODO: optimisation: for messages shorted than len(HMAC),
     %      store directly the message in the queue
-    MsgID = erlang:list_to_binary(hmac:hexlify(hmac:hmac("", Content))),
+    MsgID = wave_utils:bin(hmac:hexlify(hmac:hmac("", Content))),
     Ret = wave_db:set({s, <<"msg:", MsgID/binary>>}, Content),
     lager:info("~p", [Ret]),
 
@@ -174,7 +174,7 @@ priv_flush([Topic, MsgID |T], Device={M,F,Pid}) ->
     %TODO: operation must be atomic (including the LRANGE ?)
     %      use MULTI/EXEC
     {ok, Cnt} = wave_db:decr(<<"msg:", MsgID/binary,":refcount">>),
-    Cnt2 = erlang:binary_to_integer(Cnt),
+    Cnt2 = wave_utils:int(Cnt),
     if 
         Cnt2 =< 0 ->
             wave_db:del(<<"msg:", MsgID/binary>>),

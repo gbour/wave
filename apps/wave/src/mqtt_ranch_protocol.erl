@@ -40,7 +40,8 @@ init(Ref, Socket, Transport, _Opts = []) ->
 
     {ok, {Ip,Port}} = peername(Transport, Socket),
     %TODO: use binary fmt instead
-    Addr = string:join([atom_to_list(Transport:name()), inet_parse:ntoa(Ip), integer_to_list(Port)], ":"),
+    % ie: tcp:127.0.0.1:55435
+    Addr = string:join([wave_utils:str(Transport:name()), inet_parse:ntoa(Ip), wave_utils:str(Port)], ":"),
 
     {ok, Session} = mqtt_session:start_link({?MODULE, Transport, Socket}, [{addr, Addr}]),
     lager:debug("fsm= ~p (~p : ~p) from ~p", [Session, Transport, Socket, Addr]),

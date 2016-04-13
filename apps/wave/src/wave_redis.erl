@@ -46,7 +46,8 @@ update(DeviceID, Key, Value) ->
 %
 -spec topic(binary(), binary(), integer()) -> wave_db:return().
 topic(DeviceID, Topic, Qos) ->
-    wave_db:append(<<"wave:deviceid:", DeviceID/binary, ":qos:", (erlang:integer_to_binary(Qos))/binary, ":topics">>, Topic).
+    wave_db:append(<<"wave:deviceid:", DeviceID/binary, ":qos:", (wave_utils:bin(Qos))/binary, ":topics">>, 
+                   Topic).
 
 
 % returns saved topics
@@ -56,7 +57,9 @@ topic(DeviceID, Topic, Qos) ->
 %
 -spec topic(binary(), integer()) -> list({binary(), 0}). 
 topic(DeviceID, Qos) ->
-    {ok, Topics} = wave_db:range(<<"wave:deviceid:", DeviceID/binary, ":qos:", (erlang:integer_to_binary(Qos))/binary, ":topics">>),
+    %TODO: handle errors
+    {ok, Topics} = wave_db:range(<<"wave:deviceid:", DeviceID/binary, ":qos:", (wave_utils:bin(Qos))/binary, 
+                                   ":topics">>),
 
     lists:map(fun(T) -> {T, 0} end, Topics).
 

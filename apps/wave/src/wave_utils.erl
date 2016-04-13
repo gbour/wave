@@ -18,7 +18,7 @@
 -module(wave_utils).
 -author("Guillaume Bour <guillaume@bour.cc>").
 
--export([atom/1, str/1, bin/1]).
+-export([atom/1, str/1, bin/1, int/1]).
 
 %%
 %% @doc converts to atom
@@ -35,6 +35,10 @@ atom(_) ->
 -spec str(any()) -> string().
 str(X) when is_atom(X) ->
     erlang:atom_to_list(X);
+str(X) when is_integer(X) ->
+    erlang:integer_to_list(X);
+str(X) when is_binary(X) ->
+    erlang:binary_to_list(X);
 str(_) ->
     erlang:error(wrongtype).
 
@@ -44,5 +48,17 @@ str(_) ->
 -spec bin(any()) -> binary().
 bin(X) when is_list(X) ->
     erlang:list_to_binary(X);
+bin(X) when is_integer(X) ->
+    erlang:integer_to_binary(X);
 bin(_) ->
     erlang:error(wrongtype).
+
+%%
+%% @doc converts to integer
+%%
+-spec int(any()) -> integer().
+int(X) when is_binary(X) ->
+    erlang:binary_to_integer(X);
+int(_) ->
+    erlang:error(wrongtype).
+
