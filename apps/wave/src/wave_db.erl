@@ -23,7 +23,6 @@
         append/2, push/2, pop/1, range/1, del/2]).
 
 -type return() :: {ok, Value::eredis:return_value()} | {error, Reason::binary()}.
-%-type return() :: {ok, Value::binary() | [binary()]} | {error, Reason::binary()}.
 
 %% @doc
 %% Function: get/1
