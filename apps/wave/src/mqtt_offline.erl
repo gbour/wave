@@ -112,7 +112,7 @@ handle_call({event, {Topic,TopicMatch}, Content}, _, State=#state{registrations=
         case T2 of
             TopicMatch ->
                 wave_db:push(<<"queue:", DeviceID/binary>>, [Topic, MsgID]),
-                wave_db:inc(<<"msg:", MsgID/binary, ":refcount">>);
+                wave_db:incr(<<"msg:", MsgID/binary, ":refcount">>);
 
             _     ->
                 pass
