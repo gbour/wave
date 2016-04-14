@@ -1,0 +1,13 @@
+hscale=1;
+
+C: CLIENT;
+S: Session;
+A: Auth;
+T: State;
+O: Offline;
+R: Registry;
+
+C=>S: SUBSCRIBE(topic, qos);
+S->R: subscribe();
+C<=S: SUBACK;
+

@@ -1,0 +1,26 @@
+hscale=auto;
+
+C: CLIENT;
+R: RANCH;
+P [label="mqtt_ranch_protocol"];
+S [label="mqtt_session"];
+D: mqtt_msg;
+
+C>>R: open socket;
+R->P: init();
+P->S: start_link();
+P->P: loop();
+
+P>>R: recv();
+---: waiting incoming packet;
+C=>R: CONNECT;
+P<<R:;
+P->D: decode();
+activate D;
+P<-D [weak]:;
+deactivate D;
+P->S: handle() :: initiate('CONNECT');
+P<-S: response('CONNACK');
+R<-P: send();
+C<-R: 'CONNACK';
+

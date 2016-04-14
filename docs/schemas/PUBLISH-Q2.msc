@@ -1,0 +1,36 @@
+hscale=1;
+
+C: PUBLISHER [strong];
+V: Wave [strong] {
+    S: Session \#1;
+    W: MessageWorker;
+    S2: Session \#2;
+};
+C2: SUBSCRIBER [strong];
+
+
+C=>S: PUBLISH(topic, message);
+S->W: publish();
+S<-W: provisional(request);
+C<=S: PUBREC;
+
+C=>S: PUBREL;
+S->W: provisional(response);
+
+
+box W..C2: Message is forwarded to all subscribers {
+    W->S2: publish();
+    S2=>C2: PUBLISH(topic, message);
+    S2<=C2: PUBREC;
+    W<-S2: provisional(request);
+    W->S2: provisional(response);
+    S2=>C2: PUBREL;
+    S2<=C2: PUBCOMP;
+    W<-S2: ack();
+};
+
+...: PUBLISHER ACK is send once all SUBSCRIBERs ACKs has been received...;
+S<-W: send(ack);
+C<=S: PUBCOMP;
+
+

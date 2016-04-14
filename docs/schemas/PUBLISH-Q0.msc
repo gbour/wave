@@ -1,0 +1,18 @@
+hscale=1;
+
+C: PUBLISHER [strong];
+V: Wave [strong] {
+    S: Session \#1;
+    W: MessageWorker;
+    S2: Session \#2;
+};
+C2: SUBSCRIBER [strong];
+
+
+C=>S: PUBLISH(topic, message);
+S->W: publish();
+box W..C2: Message is forwarded to all subscribers {
+    W->S2: publish();
+    S2=>C2: PUBLISH(topic, message);
+};
+
