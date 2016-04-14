@@ -2,10 +2,13 @@
 msc=modern_blue;
 hscale=1;
 
+defstyle note,comment [text.color=red];
+
 C: PUBLISHER [strong];
 V: Wave [strong] {
     S: Session \#1;
     W: MessageWorker;
+    R: Registry;
     S2: Session \#2;
 };
 C2: SUBSCRIBER [strong];
@@ -14,6 +17,9 @@ C2: SUBSCRIBER [strong];
 C=>S: PUBLISH(topic, message);
 
 S->W: publish();
+W->R: match();
+W<<R:;
+note: returns all clients that\nhave registered to this topic;
 
 box W..C2: Message is forwarded to all subscribers {
     W->S2: publish();
