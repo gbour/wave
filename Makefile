@@ -1,4 +1,5 @@
 
+SHELL=bash
 APP=wave_app
 TMPL_CFG=etc/wave.config
 DEV_VARS=config/vars.dev.config
@@ -24,6 +25,11 @@ test:
 
 release:
 	./rebar3 release
+
+dialyze:
+	if [[ "$$TRAVIS_OTP_RELEASE" > "18" ]]; then\
+		./rebar3 dialyzer;\
+	fi
 
 clean:
 	./rebar3 clean
