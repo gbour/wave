@@ -39,6 +39,9 @@ cert:
 		-nodes \
 		-subj '/CN=FR/O=wave/CN=wave.acme.org'
 
+msc:
+	find docs/ -iname *.msc | xargs -I '{}' /opt/mscgenx/bin/msc-gen -T png  '{}'
+
 ## testing freemobile sms module
 ## faking a ssh connection
 test_sms:
