@@ -269,6 +269,7 @@ get_topics(Payload, Topics, _) ->
 	{Name, Rest} = decode_string(Payload),
 	get_topics(Rest, [Name|Topics], false).
 
+% decode utf8 string
 -spec decode_string(Data :: binary()) -> {String :: binary(), Rest :: binary()}.
 decode_string(<<>>) ->
     {<<>>, <<>>};
@@ -279,13 +280,6 @@ decode_string(Pkt) ->
 
     {Str, Rest2}.
 
-
-
-%validate('CONNECT', level, 4) ->
-%    ok;
-%validate('CONNECT', level, _) ->
-%    'connack_0x01';
-%validate('CONNECT', <<
 
 -spec decode_rlength(binary(), integer(), integer()) -> {error, overflow} 
                                                         | {error, size, integer()}

@@ -29,7 +29,7 @@
 -type ranch_transport() :: ranch_tcp|ranch_ssl.
 -type transport()       :: {Module::module(), RanchTransport::ranch_transport(), RanchSocket::ranch_socket()}.
 
-%-spec startlink()
+
 start_link(Ref, Socket, Transport, Opts) ->
     Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts]),
     {ok, Pid}.
@@ -165,8 +165,6 @@ answer(_) ->
 %
 -spec ping(ranch_transport(), ranch_socket()) -> ok | {error, term()}.
 ping(Transport, Socket) ->
-    %Transport:send(Socket, mqtt_msg:encode(#mqtt_msg{type='PINGREQ'})).
-    %Msg = #mqtt_msg{type='PUBLISH', payload=[{topic,<<"foobar">>}, {msgid,1234}, {content, <<"chello">>}]},
     Msg = #mqtt_msg{type='PINGREQ'},
     Transport:send(Socket, mqtt_msg:encode(Msg)).
 

@@ -24,8 +24,6 @@
 
 % API
 -export([publish/3, provisional/4, ack/3]).
-% gen_server
-%-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 % INTERNAL STATES

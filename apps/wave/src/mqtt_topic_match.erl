@@ -17,23 +17,7 @@
 -module(mqtt_topic_match).
 -author("Guillaume Bour <guillaume@bour.cc>").
 
-%-export([validate/1, match/2]).
 -export([fields/1, match/2]).
-
-%validate(<<>>) ->
-%    {error, invalid};
-%validate(Topic) ->
-%    validate(x).
-%
-%validate(_, <<>>)   ->
-%    text;
-%validate(<<$/>>, <<$#>>) ->
-%    rx;
-%validate(<<>>  , <<$#>>) ->
-%    rx;
-%validate(<<$/>>, <<$+, Rest/binary>>) ->
-%    union(
-%      validate(
 
 % Count wildcard characters
 %
@@ -79,18 +63,6 @@ match(Re, {Topic, Fields}) ->
         fail ->
             fail
     end.
-
-% USED ?
-%match(Re, Topic) ->
-%    case match(Re, Topic, []) of
-%        {ok, []} ->
-%            {ok, []};
-%        {ok, Matches} ->
-%            % /!\ Matches was built in reverse order
-%            {ok, fieldsmap(Matches, lists:reverse(lists:seq(0, length(Matches)-1)), [])};
-%        fail ->
-%            fail
-%    end.
 
 
 % match or not a topic with a subscription regex 

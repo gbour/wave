@@ -22,13 +22,10 @@
 
 -export([start_link/2]).
 
-% gen_server
-%-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
--export([handle/2, publish/5, ack/3, provisional/3, is_alive/1, garbage_collect/1, disconnect/2,
-         landed/2]).
+-export([handle/2, publish/5, ack/3, provisional/3, is_alive/1, garbage_collect/1, disconnect/2, landed/2]).
 -export([initiate/3, connected/2, connected/3]).
 %
 % role
@@ -83,12 +80,12 @@
 -define(CONNECT_TIMEOUT  , 5000). % ms
 -define(DEFAULT_KEEPALIVE, 300).  % secs
 
+
 -spec start_link(mqtt_ranch_protocol:transport(), list({atom(), any()})) -> {ok, pid()} 
                                                                             | ignore | {error, any()}.
 start_link(Transport, Opts) ->
     gen_fsm:start_link(?MODULE, [Transport, Opts], []).
 
-%-spec init(maybe_improper_list(tcp|ssl, list(any()))) -> {ok, atom(), session()}.
 init([Transport, Opts]) ->
     % timeout on socket connection: close socket is no CONNECT message received after timeout
     {ok, initiate, #session{transport=Transport, opts=Opts}, ?CONNECT_TIMEOUT}.

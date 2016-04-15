@@ -42,16 +42,6 @@ credential(Credentials, Credentials) ->
 credential(_,_) ->
     {error, bad_credentials}.
 
-% Set device state (connected or not)
-% State: true|false
-%
-%connected(DeviceID, State) ->
-%
-
-%
-% return whether this device is already connected or not
-%connected(DeviceID)
-
 as_proplist({ok, Resp}) ->
     {ok, as_proplist(Resp, [])};
 as_proplist(Err) ->

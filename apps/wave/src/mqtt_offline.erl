@@ -47,9 +47,6 @@ init(_) ->
 
 %
 % todo: there may be wildcard in topic name => need to do a search
-%w
-%unsubscribe(Subscriber) ->
-%    gen_server:call(?MODULE, {unsubscribe, Subscriber}).
 -spec register(binary(), integer(), binary()) -> ok.
 register(Topic, Qos, DeviceID) ->
     gen_server:call(?MODULE, {register, Topic, Qos, DeviceID}).
