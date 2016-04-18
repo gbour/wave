@@ -278,7 +278,13 @@ decode_string(Pkt) ->
     <<Len:16/integer, Str:Len/binary, Rest2/binary>> = Pkt,
     %lager:debug("~p ~p ~p",[Len,Pkt, Rest2]),
 
-    {Str, Rest2}.
+    case wave_utf8:validate(Str) of
+        ok ->
+            {Str, Rest2};
+
+        Err ->
+            erlang:throw(Err)
+    end.
 
 
 -spec decode_rlength(binary(), integer(), integer()) -> {error, overflow} 

@@ -94,7 +94,7 @@ loop(Socket, Transport, Session, Buffer, Length) ->
 route(_,_,_, <<>>) ->
     continue;
 route(Socket, Transport, Session, Raw) ->
-    case mqtt_msg:decode(Raw) of
+    try mqtt_msg:decode(Raw) of
         {error, size, Extend} ->
             lager:notice("Packet is too short, missing ~p bytes", [Extend]),
             {extend, Extend, Raw};
@@ -139,6 +139,12 @@ route(Socket, Transport, Session, Raw) ->
 
         _CatchAll ->
             lager:error("MQTT Msg unknown decoding error: ~p", [_CatchAll]),
+            gen_fsm:stop(Session, normal, 50),
+            Transport:close(Socket)
+
+    catch
+        Exc ->
+            lager:error("failed decoding mqtt message: ~p", [Exc]),
             gen_fsm:stop(Session, normal, 50),
             Transport:close(Socket)
     end.
