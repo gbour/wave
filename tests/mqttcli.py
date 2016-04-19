@@ -8,13 +8,29 @@ import logging
 from nyamuk import nyamuk
 from nyamuk.event import *
 import nyamuk.nyamuk_const as NC
+from nyamuk.mqtt_pkt import MqttPkt
 
 class MqttClient(object):
-    def __init__(self, prefix, rand=True, **kwargs):
+    def __init__(self, prefix, rand=True, raw_connect=False, **kwargs):
         loglevel  = logging.DEBUG if os.environ.get('DEBUG', 0) == '1' else logging.WARNING
 
+        server = 'localhost'
+        port   = 1883
+
         self._c = nyamuk.Nyamuk("test:{0}:{1}".format(prefix, random.randint(0,9999) if rand else 0),
-            None, None, 'localhost', log_level=loglevel, **kwargs)
+            None, None, server=server, port=port, log_level=loglevel, **kwargs)
+
+        if raw_connect:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                sock.connect((server, port))
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                sock.setblocking(1)
+                #sock.settimeout(.5)
+            except Exception as e:
+                raise e
+
+            self._c.sock = sock
 
     def disconnect(self):
         self._c.disconnect(); self._c.packet_write()
@@ -37,6 +53,9 @@ class MqttClient(object):
     def get_last_mid(self):
         return self._c.get_last_mid()
 
+    def conn_is_alive(self):
+        return self._c.conn_is_alive()
+
     def recv(self):
         self._c.loop()
         return self._c.pop_event()
@@ -46,6 +65,33 @@ class MqttClient(object):
             return self.do(name, *args, **kwargs)
             
         return _
+
+    #
+    # forge a "raw" MQTT packet, and send it
+    #
+    # fields: list of tuples (type, value)
+    # ie: [('str', "MQTT"),('bytes', 
+    def forge(self, command, flags, fields, send=False):
+        rlen = 0
+        for (xtype, value) in fields:
+            if xtype == 'string':
+                rlen += len(value) + 2 # 2 = uint16 = storing string len
+            elif xtype == 'byte':
+                rlen += 1
+            elif xtype == 'uint16':
+                rlen += 2
+
+        pkt = MqttPkt()
+        pkt.command = command | flags
+        pkt.remaining_length = rlen
+        pkt.alloc()
+
+        for (xtype, value) in fields:
+            getattr(pkt, "write_"+xtype)(value)
+
+        if not send:
+            return
+        return self.packet_queue(pkt)
 
     # quite of "unproper" release
     # force TCP socket to close immediatly

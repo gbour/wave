@@ -473,3 +473,30 @@ class V311(TestSuite):
 
         return True
 
+    @catch
+    @desc("[MQTT-2.2.2-1,MQTT-2.2.2-2] reserved flags")
+    def test_112(self):
+        ## PINGREG
+        c = MqttClient("conformity", raw_connect=True)
+        evt = c.connect(version=4)
+
+        # flags shoud be 0
+        c.forge(NC.CMD_PINGREQ, 4, [], send=True)
+        if c.conn_is_alive():
+            return False
+
+        ## SUBSCRIBE
+        c = MqttClient("conformity2", raw_connect=True)
+        evt = c.connect(version=4)
+
+        # flags shoud be 2
+        c.forge(NC.CMD_SUBSCRIBE, 3, [
+            ('uint16', 42),         # identifier
+            ('string', '/foo/bar'), # topic filter
+            ('byte'  , 0)           # qos
+        ], send=True)
+        if c.conn_is_alive():
+            return False
+
+        return True
+

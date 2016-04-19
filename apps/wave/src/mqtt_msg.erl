@@ -65,7 +65,9 @@ decode(_Type, _, {error, size, Size}) ->
 decode(_, _, {ESize, RSize, _}) when ESize > RSize ->
     {error, size, ESize-RSize};
 
-decode(Type, <<Dup:1, Qos:2, Retain:1>>, {RLen, _, Rest}) ->
+decode(Type, Flags= <<Dup:1, Qos:2, Retain:1>>, {RLen, _, Rest}) ->
+    checkflags(Type, Flags), % throw exception on error
+
     <<BPayload:RLen/binary, Rest2/binary>> = Rest,
 
     Msg = case decode_payload(Type, Qos, {RLen, BPayload}) of
@@ -497,6 +499,26 @@ type2atom(12) -> 'PINGREQ';
 type2atom(13) -> 'PINGRESP';
 type2atom(14) -> 'DISCONNECT';
 type2atom(T)  -> {invalid, T}.
+
+% Validate flags according to MQTT verb
+% [MQTT-2.2.2-1], [MQTT-2.2.2-2].
+%
+-spec checkflags(mqtt_verb(), binary()) -> ok.
+checkflags('CONNECT'    , <<0:4>>) -> ok;
+checkflags('CONNACK'    , <<0:4>>) -> ok;
+checkflags('PUBLISH'    , <<_:4>>) -> ok;
+checkflags('PUBACK'     , <<0:4>>) -> ok;
+checkflags('PUBREC'     , <<0:4>>) -> ok;
+checkflags('PUBREL'     , <<2:4>>) -> ok;
+checkflags('PUBCOMP'    , <<0:4>>) -> ok;
+checkflags('SUBSCRIBE'  , <<2:4>>) -> ok;
+checkflags('SUBACK'     , <<0:4>>) -> ok;
+checkflags('UNSUBSCRIBE', <<2:4>>) -> ok;
+checkflags('UNSUBACK'   , <<0:4>>) -> ok;
+checkflags('PINGREQ'    , <<0:4>>) -> ok;
+checkflags('PINRESP'    , <<0:4>>) -> ok;
+checkflags('DISCONNECT' , <<0:4>>) -> ok;
+checkflags(Verb         , Flags) -> erlang:throw({Verb, reserved_flags, Flags}).
 
 minlen(1)  -> 3;
 minlen(2)  -> 3;
