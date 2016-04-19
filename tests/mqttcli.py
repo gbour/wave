@@ -15,11 +15,12 @@ class MqttClient(object):
         loglevel  = logging.DEBUG if os.environ.get('DEBUG', 0) == '1' else logging.WARNING
 
         server = 'localhost'
-        port   = 1883
 
         self._c = nyamuk.Nyamuk("test:{0}:{1}".format(prefix, random.randint(0,9999) if rand else 0),
-            None, None, server=server, port=port, log_level=loglevel, **kwargs)
+            None, None, server=server, log_level=loglevel, **kwargs)
 
+        # plain TCP connection
+        port = 1883
         if raw_connect:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:

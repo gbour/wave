@@ -436,7 +436,7 @@ class V311(TestSuite):
         return True
 
     @catch
-    @desc("[MQTT-3.1.3-5] clientid utf-8 characters")
+    @desc("[MQTT-3.1.3-5] clientid invalid characters")
     def test_110(self):
         c = MqttClient("conformity")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -494,6 +494,69 @@ class V311(TestSuite):
             ('uint16', 42),         # identifier
             ('string', '/foo/bar'), # topic filter
             ('byte'  , 0)           # qos
+        ], send=True)
+        if c.conn_is_alive():
+            return False
+
+        return True
+
+    @catch
+    @desc("[MQTT-2.3.1-1] missing packet identifier (SUBSCRIBE)")
+    def test_113(self):
+        c = MqttClient("conformity", raw_connect=True)
+        evt = c.connect(version=4)
+
+        c.forge(NC.CMD_SUBSCRIBE, 2, [
+            #('uint16', 0),         # identifier not included
+            ('string', '/foo/bar'), # topic filter
+            ('byte'  , 0)           # qos
+        ], send=True)
+        if c.conn_is_alive():
+            return False
+
+        return True
+
+    @catch
+    @desc("[MQTT-2.3.1-1] non-zero packet identifier (SUBSCRIBE)")
+    def test_114(self):
+        c = MqttClient("conformity", raw_connect=True)
+        evt = c.connect(version=4)
+
+        c.forge(NC.CMD_SUBSCRIBE, 2, [
+            ('uint16', 0),         # identifier
+            ('string', '/foo/bar'), # topic filter
+            ('byte'  , 0)           # qos
+        ], send=True)
+        if c.conn_is_alive():
+            return False
+
+        return True
+
+    @catch
+    @desc("[MQTT-2.3.1-1] non-zero packet identifier (UNSUBSCRIBE)")
+    def test_115(self):
+        c = MqttClient("conformity", raw_connect=True)
+        evt = c.connect(version=4)
+
+        c.forge(NC.CMD_UNSUBSCRIBE, 2, [
+            ('uint16', 0),         # identifier
+            ('string', '/foo/bar'), # topic filter
+        ], send=True)
+        if c.conn_is_alive():
+            return False
+
+        return True
+
+    @catch
+    @desc("[MQTT-2.3.1-1] non-zero packet identifier (PUBLISH)")
+    def test_116(self):
+        c = MqttClient("conformity", raw_connect=True)
+        evt = c.connect(version=4)
+
+        # qos 1
+        c.forge(NC.CMD_PUBLISH, 2, [
+            ('string', '/foo/bar'), # topic 
+            ('uint16', 0),         # identifier
         ], send=True)
         if c.conn_is_alive():
             return False

@@ -116,6 +116,11 @@ decode_payload('PUBLISH', Qos, {Len, Rest}) ->
             [{topic,Topic}, {data, Rest2}];
         true      ->
             <<MsgID:16, Rest3/binary>> = Rest2,
+            case MsgID of
+                0 -> erlang:throw({'PUBLISH', "2.3.1-1", "null msgid"});
+                _ -> pass
+            end,
+
             [{topic,Topic}, {msgid,MsgID}, {data, Rest3}]
     end,
     %{Topic, <<MsgID:16, Rest2/binary>>} = decode_string(Rest),
@@ -125,6 +130,10 @@ decode_payload('PUBLISH', Qos, {Len, Rest}) ->
 
 decode_payload('SUBSCRIBE', Qos, {Len, <<MsgID:16, Payload/binary>>}) ->
     lager:debug("SUBSCRIBE v3.1 ~p", [MsgID]),
+    case MsgID of
+        0 -> erlang:throw({'SUBSCRIBE', "2.3.1-1", "null msgid"});
+        _ -> pass
+    end,
 
 	Topics = get_topics(Payload, [], true),
 	lager:debug("topics= ~p", [Topics]),
@@ -132,6 +141,10 @@ decode_payload('SUBSCRIBE', Qos, {Len, <<MsgID:16, Payload/binary>>}) ->
 
 decode_payload('UNSUBSCRIBE', Qos, {Len, <<MsgID:16, Payload/binary>>}) ->
     lager:debug("UNSUBSCRIBE: ~p", [Payload]),
+    case MsgID of
+        0 -> erlang:throw({'UNSUBSCRIBE', "2.3.1-1", "null msgid"});
+        _ -> pass
+    end,
 
     Topics = get_topics(Payload, [], false),
     {ok, [{msgid, MsgID}, {topics, Topics}]};
