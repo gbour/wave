@@ -503,7 +503,7 @@ type2atom(T)  -> {invalid, T}.
 % Validate flags according to MQTT verb
 % [MQTT-2.2.2-1], [MQTT-2.2.2-2].
 %
--spec checkflags(mqtt_verb(), binary()) -> ok.
+-spec checkflags(mqtt_verb(), <<_:4>>) -> ok.
 checkflags('CONNECT'    , <<0:4>>) -> ok;
 checkflags('CONNACK'    , <<0:4>>) -> ok;
 checkflags('PUBLISH'    , <<_:4>>) -> ok;
