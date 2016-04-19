@@ -152,4 +152,24 @@ class Qos1(TestSuite):
         pub.disconnect()
         return True
 
+    @catch
+    @desc("msgid increment")
+    def test_30(self):
+        sub = MqttClient('sub')
+        sub.connect(version=4)
+        sub.subscribe("foo/bar", 1)
+
+        pub = MqttClient('pub')
+        pub.connect(version=4)
+        pub.publish("foo/bar", "1st msg", qos=1)
+
+        e1 = sub.recv()
+
+        pub.publish("foo/bar", "2d msg", qos=1)
+        e2 = sub.recv()
+        if e2.msg.mid != e1.msg.mid + 1:
+            return False
+
+        return True
+
     #TODO: delivery timeout (no acknowledgement) => message retransmitted

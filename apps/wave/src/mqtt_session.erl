@@ -87,8 +87,10 @@ start_link(Transport, Opts) ->
     gen_fsm:start_link(?MODULE, [Transport, Opts], []).
 
 init([Transport, Opts]) ->
+    random:seed(erlang:now()),
+
     % timeout on socket connection: close socket is no CONNECT message received after timeout
-    {ok, initiate, #session{transport=Transport, opts=Opts}, ?CONNECT_TIMEOUT}.
+    {ok, initiate, #session{transport=Transport, opts=Opts, next_msgid=random:uniform(65535)}, ?CONNECT_TIMEOUT}.
 
 %%
 -spec handle(pid(), mqtt_msg()) -> {ok, any()}.
@@ -407,7 +409,7 @@ connected({publish, From, {Topic,_}, Content, Qos},
         ok ->
             lager:debug("OK, continue"),
             {next_state, connected,
-             StateData#session{next_msgid=MsgID+1,inflight=[{MsgID, From}|Inflight]}, Ka
+             StateData#session{next_msgid=next_msgid(MsgID),inflight=[{MsgID, From}|Inflight]}, Ka
             }
     end;
 
@@ -558,4 +560,19 @@ terminate(_Reason, StateName, _StateData=#session{deviceid=DeviceID, topics=T, o
 
 code_change(_OldVsn, StateName, StateData, _Extra) ->
     {ok, StateName, StateData}.
+
+
+%%
+%% PRIVATE FUNS
+%%
+
+% return next message id
+% bounded to 2^16 (2 bytes long)
+%
+-spec next_msgid(integer()) -> integer().
+next_msgid(MsgID) ->
+    if
+        MsgID+1 > 65535 -> 1;
+        true         -> MsgID+1
+    end.
 
