@@ -563,3 +563,125 @@ class V311(TestSuite):
 
         return True
 
+    @catch
+    @desc("[MQTT-2.3.1-6] PUBACK pktid not matching PUBLISH pktid")
+    def test_200(self):
+        pub = MqttClient("conformity-pub", connect=4)
+        sub = MqttClient("conformity-sub", connect=4)
+
+        sub.subscribe("foo/bar", qos=1)
+        pub.publish("foo/bar", "wootwoot", qos=1)
+
+        # reading PUBLISH
+        evt = sub.recv()
+
+        # sending PUBACK with wrong pktid
+        sub.forge(NC.CMD_PUBACK, 0, [
+            ('uint16', (evt.msg.mid+10)%65535) # wrong pktid
+        ], send=True)
+
+        evt = pub.recv()
+        # PUBACK from server is never received
+        if evt is not None:
+            return False
+
+        pub.disconnect(); sub.disconnect()
+        return True
+
+    @catch
+    @desc("[MQTT-2.3.1-6] PUBREC pktid not matching PUBLISH pktid")
+    def test_201(self):
+        pub = MqttClient("conformity-pub", connect=4)
+        sub = MqttClient("conformity-sub", connect=4)
+
+        sub.subscribe("foo/bar", qos=2)
+        pub.publish("foo/bar", "wootwoot", qos=2, read_response=False)
+
+        # PUB PUBREC
+        evt = pub.recv()
+        pub.pubrel(pub.get_last_mid(), read_response=False)
+
+        # reading PUBLISH
+        evt = sub.recv()
+
+        # sending PUBREC with wrong pktid
+        sub.forge(NC.CMD_PUBREC, 0, [
+            ('uint16', (evt.msg.mid+10)%65535) # wrong pktid
+        ], send=True)
+
+        evt = pub.recv()
+        # PUBCOMP from server is never received
+        if evt is not None:
+            return False
+
+        evt = sub.recv()
+        # PUBREL not received
+        if evt is not None:
+            return False
+
+        pub.disconnect(); sub.disconnect()
+        return True
+
+    @catch
+    @desc("[MQTT-2.3.1-6] PUBREL pktid not matching PUBLISH pktid")
+    def test_202(self):
+        pub = MqttClient("conformity-pub", connect=4)
+        sub = MqttClient("conformity-sub", connect=4)
+
+        sub.subscribe("foo/bar", qos=2)
+        pub.publish("foo/bar", "wootwoot", qos=2, read_response=False)
+
+        # PUB PUBREC
+        evt = pub.recv()
+        # sending PUBREL with wrong pktid
+        pub.forge(NC.CMD_PUBREL, 2, [
+            ('uint16', (evt.mid+10)%65535) # wrong pktid
+        ], send=True)
+
+        # subscriber: PUBLISH never received
+        evt = sub.recv()
+        if evt is not None:
+            return False
+
+        evt = pub.recv()
+        # publisher: PUBCOMP never received
+        if evt is not None:
+            return False
+
+        pub.disconnect(); sub.disconnect()
+        return True
+
+    @catch
+    @desc("[MQTT-2.3.1-6] PUBCOMP pktid not matching PUBLISH pktid")
+    def test_203(self):
+        pub = MqttClient("conformity-pub", connect=4)
+        sub = MqttClient("conformity-sub", connect=4)
+
+        sub.subscribe("foo/bar", qos=2)
+        pub.publish("foo/bar", "wootwoot", qos=2, read_response=False)
+
+        # PUB PUBREC
+        evt = pub.recv()
+        pub.pubrel(pub.get_last_mid(), read_response=False)
+
+        # subscr: receiving PUBLISH
+        evt = sub.recv()
+        sub.pubrec(evt.msg.mid, read_response=False)
+
+        # subscr: receiving PUBREL
+        evt = sub.recv()
+
+        # sending PUBCOMP with wrong pktid
+        sub.forge(NC.CMD_PUBCOMP, 0, [
+            ('uint16', (evt.mid+10)%65535) # wrong pktid
+        ], send=True)
+
+
+        evt = pub.recv()
+        # publisher: PUBCOMP never received
+        if evt is not None:
+            return False
+
+        pub.disconnect(); sub.disconnect()
+        return True
+

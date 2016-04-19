@@ -71,7 +71,10 @@ class Qos1(TestSuite):
         sub.puback(e.msg.mid)
 
         puback_evt = pub.recv()
-        if not isinstance(puback_evt, EventPuback) or puback_evt.mid != e.msg.mid:
+        # PUBACK mid == PUBLISH mid
+        # validating [MQTT-2.3.1-6]
+        if not isinstance(puback_evt, EventPuback) or \
+                puback_evt.mid != pub.get_last_mid():
             return False
 
         sub.unsubscribe('a/b')

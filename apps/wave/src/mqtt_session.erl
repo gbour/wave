@@ -285,37 +285,60 @@ connected(Msg=#mqtt_msg{type='PUBACK', payload=P}, _, StateData=#session{keepali
     %TODO: find matching
     MsgID  = proplists:get_value(msgid, P),
     %Worker = gproc:where({n,l,{msgworker, MsgID}}),
-    Worker = proplists:get_value(MsgID, Inflight),
-    lager:debug("received PUBACK (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
+    case proplists:get_value(MsgID, Inflight) of
+        % invalid msgid: message ignored
+        undefined ->
+            lager:warning("PUBACK: unmatched '~p' MsgID", [MsgID]);
 
-    mqtt_message_worker:ack(Worker, self(), Msg),
+        Worker ->
+            lager:debug("received PUBACK (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
+            mqtt_message_worker:ack(Worker, self(), Msg)
+    end,
 
     {reply, undefined, connected, StateData, Ka};
 
 connected(Msg=#mqtt_msg{type='PUBREC', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->
     MsgID  = proplists:get_value(msgid, P),
-    Worker = proplists:get_value(MsgID, Inflight),
-    lager:debug("received PUBREC (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
 
-    mqtt_message_worker:provisional(request, Worker, self(), Msg),
+    case proplists:get_value(MsgID, Inflight) of
+        % invalid msgid: message ignored
+        undefined ->
+            lager:warning("PUBREC: unmatched '~p' MsgID", [MsgID]);
+
+        Worker ->
+            lager:debug("received PUBREC (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
+            mqtt_message_worker:provisional(request, Worker, self(), Msg)
+    end,
 
     {reply, undefined, connected, StateData, Ka};
 
 connected(Msg=#mqtt_msg{type='PUBREL', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->
     MsgID  = proplists:get_value(msgid, P),
-    Worker = proplists:get_value(MsgID, Inflight),
-    lager:debug("received PUBREL (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
 
-    mqtt_message_worker:provisional(response, Worker, self(), Msg),
+    case proplists:get_value(MsgID, Inflight) of
+        % invalid msgid: message ignored
+        undefined ->
+            lager:warning("PUBREL: unmatched '~p' MsgID", [MsgID]);
+
+        Worker ->
+            lager:debug("received PUBREL (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
+            mqtt_message_worker:provisional(response, Worker, self(), Msg)
+    end,
 
     {reply, undefined, connected, StateData, Ka};
 
 connected(Msg=#mqtt_msg{type='PUBCOMP', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->
     MsgID  = proplists:get_value(msgid, P),
-    Worker = proplists:get_value(MsgID, Inflight),
-    lager:debug("received PUBCOMP (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
 
-    mqtt_message_worker:ack(Worker, self(), Msg),
+    case proplists:get_value(MsgID, Inflight) of
+        % invalid msgid: message ignored
+        undefined ->
+            lager:warning("PUBCOMP: unmatched '~p' MsgID", [MsgID]);
+
+        Worker ->
+            lager:debug("received PUBCOMP (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
+            mqtt_message_worker:ack(Worker, self(), Msg)
+    end,
 
     {reply, undefined, connected, StateData, Ka};
 

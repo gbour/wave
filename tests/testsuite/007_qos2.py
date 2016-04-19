@@ -70,7 +70,8 @@ class Qos1(TestSuite):
         sub.puback(e.msg.mid)
 
         e2 = pub.recv()
-        if not isinstance(e2, EventPuback) or e2.mid != e.msg.mid:
+        if not isinstance(e2, EventPuback) or \
+                e2.mid != pub.get_last_mid():
             return False
 
         sub.unsubscribe('a/b')
@@ -92,6 +93,7 @@ class Qos1(TestSuite):
 
         # PUBREC
         e = pub.recv()
+        # validating [MQTT-2.3.1-6]
         if not isinstance(e, EventPubrec) or e.mid != msgid:
             return False
 
@@ -105,6 +107,7 @@ class Qos1(TestSuite):
         # subscriber: send PUBREC after having received PUBLISH message
         sub.pubrec(e.msg.mid, read_response=False)
         e2 = sub.recv()
+        # validating [MQTT-2.3.1-6]
         if not isinstance(e2, EventPubrel) or e2.mid != e.msg.mid:
             return False
 
@@ -112,6 +115,7 @@ class Qos1(TestSuite):
 
         #
         pubcomp_evt = pub.recv()
+        # validating [MQTT-2.3.1-6]
         if not isinstance(pubcomp_evt, EventPubcomp) or pubcomp_evt.mid != msgid:
             return False
 
