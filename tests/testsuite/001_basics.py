@@ -38,16 +38,22 @@ class Basic(TestSuite):
         return True
 
     @catch
-    @desc("SUBSCRIBE")
+    @desc("SUBSCRIBE/UNSUBSCRIBE")
     def test_10(self):
         c = MqttClient("reg")
         c.do("connect")
 
         evt = c.do("subscribe", "/foo/bar", 0)
-        c.disconnect()
-        if not isinstance(evt, EventSuback):
+        # validating [MQTT-2.3.1-7]
+        if not isinstance(evt, EventSuback) or evt.mid != c.get_last_mid():
             return False
 
+        evt = c.unsubscribe("/foo/bar")
+        # validating [MQTT-2.3.1-7]
+        if not isinstance(evt, EventUnsuback) or evt.mid != c.get_last_mid():
+            return False
+
+        c.disconnect()
         return True
 
     @catch
