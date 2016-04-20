@@ -21,7 +21,8 @@ class Basic(TestSuite):
         c = MqttClient("reg")
         evt = c.do("connect")
 
-        if not isinstance(evt, EventConnack):
+        # [MQTT-3.1.4-4]: CONNACK retcode MUST be 0
+        if not isinstance(evt, EventConnack) or evt.ret_code != 0:
             return False
 
         return True
