@@ -11,7 +11,7 @@ import nyamuk.nyamuk_const as NC
 from nyamuk.mqtt_pkt import MqttPkt
 
 class MqttClient(object):
-    def __init__(self, prefix, rand=True, raw_connect=False, **kwargs):
+    def __init__(self, prefix, rand=True, connect=False, raw_connect=False, **kwargs):
         loglevel  = logging.DEBUG if os.environ.get('DEBUG', 0) == '1' else logging.WARNING
 
         server = 'localhost'
@@ -19,7 +19,16 @@ class MqttClient(object):
         self._c = nyamuk.Nyamuk("test:{0}:{1}".format(prefix, random.randint(0,9999) if rand else 0),
             None, None, server=server, log_level=loglevel, **kwargs)
 
-        # plain TCP connection
+        # MQTT connection
+        # 
+        # connect takes protocol version (3 or 4) or is True (set version to 3)
+        if connect is not False:
+            version = connect if isinstance(connect, int) else 3
+            self.connect(version=version)
+            return
+
+        # open TCP connection
+        #
         port = 1883
         if raw_connect:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
