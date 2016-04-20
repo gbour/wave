@@ -235,7 +235,16 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
     end,
 
     Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
-    {reply, Resp, NextState, StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, topics=Topics}, Ka};
+
+    case Retcode of
+        0 ->
+            {reply, Resp, NextState, StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, topics=Topics}, Ka};
+
+        _ ->
+            % because we need to close connection after having sent non-zero CONNACK
+            {stop, normal, {disconnect, Resp}, undefined}
+    end;
+
 initiate(#mqtt_msg{type=Type}, _, _StateData=#session{transport={Callback,Transport,Sock}}) ->
     lager:info("first packet MUST be CONNECT (is ~p)", [Type]),
     Callback:close(Transport, Sock),

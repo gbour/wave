@@ -133,6 +133,12 @@ route(Socket, Transport, Session, Raw) ->
                 {ok, disconnect} ->
                     lager:info("closing socket"),
                     %Transport:close(Socket),
+                    stop;
+
+                % send message then close connection
+                {ok, {disconnect, M=#mqtt_msg{}}} ->
+                    Res = Transport:send(Socket, mqtt_msg:encode(M)),
+                    lager:debug("msg send result= ~p", [Res]),
                     stop
             end;
 

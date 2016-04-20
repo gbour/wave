@@ -19,7 +19,7 @@ class Errors(TestSuite):
         return c
 
     @catch
-    @desc("CONNACK=0x02 :: clientid already connected")
+    @desc("[MQTT-3.1.3-2,MQTT-3.1.3-9] CONNACK=0x02 :: clientid already connected")
     def test_001(self):
         c = MqttClient("twice01", rand=False)
         evt = c.do("connect")
@@ -33,14 +33,19 @@ class Errors(TestSuite):
         if not isinstance(evt, EventConnack) or evt.ret_code != 2:
             return False
 
+        # [MQTT-3.1.3-9]: connection must be close if connack.ret_code = 2
+        if c2.conn_is_alive():
+            return False
     
         # disconnecting client #1, client #2 connection now works
         c.disconnect()
 
+        c2  = MqttClient("twice01", rand=False)
         evt = c2.do("connect")
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
             return False
 
+        c2.disconnect()
         return True
 
     @catch
