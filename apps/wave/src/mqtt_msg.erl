@@ -107,6 +107,9 @@ decode_payload('CONNECT', _Qos, {Len, <<
     decode_connect(Protocol, Version, Reserved, {<<Flags:7/integer>>, Ka, Rest});
 
 
+decode_payload('PUBLISH', _Qos=3, _) ->
+    erlang:throw({'PUBLISH', "3.3.1-4", "invalid QOS value (3)"});
+
 decode_payload('PUBLISH', Qos, {Len, Rest}) ->
     %lager:debug("PUBLISH (qos=~p) ~p ~p", [Qos, Len, Rest]),
 

@@ -685,3 +685,17 @@ class V311(TestSuite):
         pub.disconnect(); sub.disconnect()
         return True
 
+    @catch
+    @desc("[MQTT-3.3.1-4] invalid PUBLISH qos value (3)")
+    def test_211(self):
+        c = MqttClient("conformity", connect=4)
+
+        c.forge(NC.CMD_PUBLISH, 6, [
+            ('string', '/foo/bar'), # topic
+            ('uint16', 0),          # identifier
+        ], send=True)
+        if c.conn_is_alive():
+            return False
+
+        return True
+
