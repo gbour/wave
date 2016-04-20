@@ -22,7 +22,10 @@ class Basic(TestSuite):
         evt = c.do("connect")
 
         # [MQTT-3.1.4-4]: CONNACK retcode MUST be 0
-        if not isinstance(evt, EventConnack) or evt.ret_code != 0:
+        # [MQTT-3.2.2-3]: CONNACK session_present IS 0
+        if not isinstance(evt, EventConnack) or \
+                evt.ret_code != 0 or \
+                evt.session_present != 0:
             return False
 
         return True
@@ -78,3 +81,4 @@ class Basic(TestSuite):
         c.disconnect()
 
         return isinstance(e, EventPingResp)
+

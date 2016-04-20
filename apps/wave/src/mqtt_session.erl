@@ -234,7 +234,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
             connected
     end,
 
-    Resp = #mqtt_msg{type='CONNACK', payload=[{retcode, Retcode}]},
+    Resp = #mqtt_msg{type='CONNACK', payload=[{session,0},{retcode, Retcode}]},
 
     case Retcode of
         0 ->

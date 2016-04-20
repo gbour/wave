@@ -409,10 +409,14 @@ encode_payload('SUBSCRIBE', _Qos, Opts) ->
         0:8 % QoS
     >>;
 
-encode_payload('CONNACK', _Qos, [{retcode, RetCode}]) ->
+encode_payload('CONNACK', _Qos, Opts) ->
+    SessionPresent = proplists:get_value(session, Opts, 0),
+    RetCode = proplists:get_value(retcode, Opts),
+
     <<
       % var headers
-      0:8,
+      0:7,
+      SessionPresent:1,
       % payload
       RetCode:8
     >>;
