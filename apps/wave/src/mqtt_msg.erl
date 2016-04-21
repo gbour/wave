@@ -114,6 +114,7 @@ decode_payload('PUBLISH', Qos, {Len, Rest}) ->
     %lager:debug("PUBLISH (qos=~p) ~p ~p", [Qos, Len, Rest]),
 
     {Topic, Rest2} = decode_string(Rest),
+    checktopic(Topic), % raise exception
     Ret = if
         Qos =:= 0 ->
             [{topic,Topic}, {data, Rest2}];
@@ -539,6 +540,17 @@ checkflags('PINGREQ'    , <<0:4>>) -> ok;
 checkflags('PINRESP'    , <<0:4>>) -> ok;
 checkflags('DISCONNECT' , <<0:4>>) -> ok;
 checkflags(Verb         , Flags) -> erlang:throw({Verb, reserved_flags, Flags}).
+
+% Check topic name does not contains wildcard characters (+ or #)
+% [MQTT-3.3.2-2]
+%
+-spec checktopic(unicode:unicode_binary()) -> ok.
+checktopic(<<>>) ->
+    ok;
+checktopic(<<H/utf8, Rest/binary>>) when H =:= $+; H =:= $# ->
+    erlang:throw({'PUBLISH', "MQTT-3.3.2-2", H});
+checktopic(<<_/utf8, Rest/binary>>) ->
+    checktopic(Rest).
 
 minlen(1)  -> 3;
 minlen(2)  -> 3;

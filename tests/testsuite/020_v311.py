@@ -715,4 +715,19 @@ class V311(TestSuite):
 
         return True
 
+    @catch
+    @desc("[MQTT-3.3.2-2] wildcard characters (+ and #) are forbidden in PUBLISH topic")
+    def test_213(self):
+        c = MqttClient("conformity", connect=4)
+        c.publish("foo/+/bar", "", qos=0)
+        if c.conn_is_alive():
+            return False
+
+        c = MqttClient("conformity", connect=4)
+        c.publish("foo/#/bar", "", qos=0)
+        if c.conn_is_alive():
+            return False
+
+        return True
+
 
