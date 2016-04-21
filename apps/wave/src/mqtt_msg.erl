@@ -280,17 +280,17 @@ get_topics(<<>>, [], true) ->
 get_topics(<<>>, [], false) ->
     erlang:throw({'UNSUBSCRIBE', "MQTT-3.8.3-1", "no topic filter/qos"});
 get_topics(<<>>, Topics, _) ->
-	Topics;
+    Topics;
 % with QOS field (SUBSCRIBE)
 get_topics(Payload, Topics, true) ->
-	{Name, Rest} = decode_string(Payload),
-	<<_:6, Qos:2/integer, Rest2/binary>> = Rest,
+    {Name, Rest} = decode_string(Payload),
+    {Qos, Rest2} = decode_subscribe_qos(Rest),
 
-	get_topics(Rest2, [{Name,Qos}|Topics], true);
+    get_topics(Rest2, [{Name,Qos}|Topics], true);
 % without QOS field (UNSUBSCRIBE)
 get_topics(Payload, Topics, _) ->
-	{Name, Rest} = decode_string(Payload),
-	get_topics(Rest, [Name|Topics], false).
+    {Name, Rest} = decode_string(Payload),
+    get_topics(Rest, [Name|Topics], false).
 
 % decode utf8 string
 -spec decode_string(Data :: binary()) -> {String :: binary(), Rest :: binary()}.
@@ -308,6 +308,11 @@ decode_string(Pkt) ->
         Err ->
             erlang:throw(Err)
     end.
+
+decode_subscribe_qos(<<_:6, Qos:2/integer, _/binary>>) when Qos =:= 3 ->
+    erlang:throw({'SUBSCRIBE', "MQTT-3.8.3-4", "invalid qos (3)"});
+decode_subscribe_qos(<<_:6, Qos:2/integer, Rest/binary>>) ->
+    {Qos, Rest}.
 
 
 -spec decode_rlength(binary(), integer(), integer()) -> {error, overflow} 

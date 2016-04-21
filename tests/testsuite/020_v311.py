@@ -744,4 +744,17 @@ class V311(TestSuite):
 
         return True
 
+    @catch
+    @desc("[MQTT-3.8.3-4] SUBSCRIBE qos is 0,1 or 2")
+    def test_215(self):
+        c = MqttClient("conformity", connect=4)
+        c.forge(NC.CMD_SUBSCRIBE, 2, [
+            ('uint16', 42),         # identifier
+            ('string', '/foo/bar'), # topic filter
+            ('byte'  , 3)           # qos
+        ], send=True)
+        if c.conn_is_alive():
+            return False
+
+        return True
 
