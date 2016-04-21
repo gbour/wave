@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: UTF8 -*-
 
-from TestSuite import TestSuite, desc, catch
+from TestSuite import *
 from mqttcli import MqttClient
 from nyamuk.event import *
 from nyamuk.mqtt_pkt import MqttPkt
@@ -698,4 +698,21 @@ class V311(TestSuite):
             return False
 
         return True
+
+
+    @skip
+    @catch
+    @desc("[MQTT-3.3.2-1] no topic name in PUBLISH message")
+    def test_212(self):
+        c = MqttClient("conformity", connect=4)
+
+        # qos 1
+        c.forge(NC.CMD_PUBLISH, 2, [], send=True)
+#            ('uint16', 0),          # identifier
+#        ], send=True)
+        if c.conn_is_alive():
+            return False
+
+        return True
+
 
