@@ -553,33 +553,42 @@ checkflags('DISCONNECT' , <<0:4>>) -> ok;
 checkflags(Verb         , Flags) -> erlang:throw({Verb, reserved_flags, Flags}).
 
 % Check topic name does not contains wildcard characters (+ or #)
-% [MQTT-3.3.2-2]
+% [MQTT-3.3.2-2], [MQTT-4.7.3-1]
 %
 -spec checktopic(unicode:unicode_binary()) -> ok.
 checktopic(<<>>) ->
-    ok;
-checktopic(<<H/utf8, Rest/binary>>) when H =:= $+; H =:= $# ->
-    erlang:throw({'PUBLISH', "MQTT-3.3.2-2", H});
-checktopic(<<_/utf8, Rest/binary>>) ->
-    checktopic(Rest).
+    erlang:throw({'PUBLISH', "MQTT-4.7.3-1", "0-length topic"});
+checktopic(Topic) ->
+    checktopic2(Topic).
 
-% Validate a topic filter:
-%   - # position
-%
+checktopic2(<<>>) ->
+    ok;
+checktopic2(<<H/utf8, Rest/binary>>) when H =:= $+; H =:= $# ->
+    erlang:throw({'PUBLISH', "MQTT-3.3.2-2", H});
+checktopic2(<<_/utf8, Rest/binary>>) ->
+    checktopic2(Rest).
+
+% Validate a topic filter
+% [MQTT-4.7.1-2], [MQTT-4.7.1-3], [MQTT-4.7.3-1]
 %
 -spec checktopicfilter(unicode:unicode_binary()) -> ok.
 checktopicfilter(<<>>) ->
+    erlang:throw({'(UN)SUBSCRIBE', "[MQTT-4.7.3-1]", "0-length topic filter"});
+checktopicfilter(TopicF) ->
+    checktopicfilter2(TopicF).
+
+checktopicfilter2(<<>>) ->
     ok;
-checktopicfilter(<<H/utf8, $#>>) when H =/= $/ ->
+checktopicfilter2(<<H/utf8, $#>>) when H =/= $/ ->
     erlang:throw({'(UN)SUBSCRIBE', "[MQTT-4.7.1-2]", "misplaced # wildcard character"});
-checktopicfilter(<<$#, _/utf8, _/binary>>) ->
+checktopicfilter2(<<$#, _/utf8, _/binary>>) ->
     erlang:throw({'(UN)SUBSCRIBE', "[MQTT-4.7.1-2]", "misplaced # wildcard character"});
-checktopicfilter(<<H/utf8, $+, _/binary>>) when H =/= $/ ->
+checktopicfilter2(<<H/utf8, $+, _/binary>>) when H =/= $/ ->
     erlang:throw({'(UN)SUBSCRIBE', "[MQTT-4.7.1-3]", "misplaced + wildcard character"});
-checktopicfilter(<<$+, H/utf8, Rest/binary>>) when H =/= $/ ->
+checktopicfilter2(<<$+, H/utf8, Rest/binary>>) when H =/= $/ ->
     erlang:throw({'(UN)SUBSCRIBE', "[MQTT-4.7.1-3]", "misplaced + wildcard character"});
-checktopicfilter(<<_/utf8, Rest/binary>>)  ->
-    checktopicfilter(Rest).
+checktopicfilter2(<<_/utf8, Rest/binary>>)  ->
+    checktopicfilter2(Rest).
 
 
 minlen(1)  -> 3;

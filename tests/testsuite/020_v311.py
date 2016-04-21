@@ -986,4 +986,26 @@ class V311(TestSuite):
 
         return True
 
+    @catch
+    @desc("[MQTT-4.7.3-1] topics and topic filters MUST be 1-character long at least")
+    def test_252(self):
+        c = MqttClient("conformity", connect=4)
+        c.subscribe("", qos=0)
+
+        if c.conn_is_alive():
+            return False
+
+        c = MqttClient("conformity", connect=4)
+        c.unsubscribe("")
+
+        if c.conn_is_alive():
+            return False
+
+        c = MqttClient("conformity", connect=4)
+        c.publish("", "", qos=0)
+
+        if c.conn_is_alive():
+            return False
+
+        return True
 
