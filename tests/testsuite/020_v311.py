@@ -829,3 +829,26 @@ class V311(TestSuite):
 
         return True
 
+    @catch
+    @desc("[MQTT-3.10.4-2] broker MUST stop forwarding messages when topic filter is unsubscribed")
+    def test_230(self):
+        pub = MqttClient("conformity-pub", connect=4)
+        sub = MqttClient("conformity-sub", connect=4)
+
+        sub.subscribe("foo/bar", qos=0)
+        pub.publish("foo/bar", "grrr", qos=0)
+
+        evt = sub.recv()
+        if not isinstance(evt, EventPublish) or evt.msg.payload != "grrr":
+            return False
+
+        sub.unsubscribe("foo/bar")
+        pub.publish("foo/bar", "grrr bis", qos=0)
+
+        evt = sub.recv()
+        if evt is not None:
+            return False
+
+        pub.disconnect(); sub.disconnect()
+        return True
+
