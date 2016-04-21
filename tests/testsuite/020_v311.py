@@ -759,18 +759,25 @@ class V311(TestSuite):
         return True
 
     @catch
-    @desc("[MQTT-3.8.4-4] SUBSCRIBE with multiple (>1) topicfilters")
+    @desc("[MQTT-3.8.4-4, MQTT-3.8.4-5] SUBSCRIBE with multiple (>1) topicfilters, granted qoses returned in PUBACK resp")
     def test_216(self):
         pub = MqttClient("conformity-pub", connect=4)
         sub = MqttClient("conformity-sub", connect=4)
 
         ack = sub.subscribe_multi([
-            ("foo/bar", 0),
-            ("bar/baz", 1),
-            ("paper/+/scissor", 0)
+            ("foo/bar", 2),
+            ("bar/baz", 0),
+            ("paper/+/scissor", 1)
         ])
 
         if not isinstance(ack, EventSuback) or ack.mid != sub.get_last_mid():
+            return False
+
+        # checking granted qos
+        if len(ack.granted_qos) != 3 or \
+                ack.granted_qos[0] != 2 or \
+                ack.granted_qos[1] != 0 or \
+                ack.granted_qos[2] != 1:
             return False
 
         return True

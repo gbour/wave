@@ -280,7 +280,7 @@ get_topics(<<>>, [], true) ->
 get_topics(<<>>, [], false) ->
     erlang:throw({'UNSUBSCRIBE', "MQTT-3.8.3-1", "no topic filter/qos"});
 get_topics(<<>>, Topics, _) ->
-    Topics;
+    lists:reverse(Topics);
 % with QOS field (SUBSCRIBE)
 get_topics(Payload, Topics, true) ->
     {Name, Rest} = decode_string(Payload),
@@ -463,13 +463,13 @@ encode_payload('PUBCOMP', _Qos, Opts) ->
     >>;
 
 encode_payload('SUBACK', _Qos, Opts) ->
-	MsgId = proplists:get_value(msgid, Opts),
-	Qos   = proplists:get_value(qos, Opts),
+    MsgId = proplists:get_value(msgid, Opts),
+    Qos   = proplists:get_value(qos, Opts),
 
-	<<
-	  MsgId:16,
-	  (encode_qos(Qos))/binary
-	>>;
+    <<
+      MsgId:16,
+      (encode_qos(Qos))/binary
+    >>;
 
 encode_payload('UNSUBACK', _Qos, [{msgid, MsgID}]) ->
 	<<MsgID:16>>;
