@@ -758,3 +758,19 @@ class V311(TestSuite):
 
         return True
 
+    @catch
+    @desc("[MQTT-3.8.4-4] SUBSCRIBE with multiple (>1) topicfilters")
+    def test_216(self):
+        pub = MqttClient("conformity-pub", connect=4)
+        sub = MqttClient("conformity-sub", connect=4)
+
+        ack = sub.subscribe_multi([
+            ("foo/bar", 0),
+            ("bar/baz", 1),
+            ("paper/+/scissor", 0)
+        ])
+
+        if not isinstance(ack, EventSuback) or ack.mid != sub.get_last_mid():
+            return False
+
+        return True
