@@ -815,5 +815,17 @@ class V311(TestSuite):
         if not isinstance(ack, EventUnsuback) or ack.mid != sub.get_last_mid():
             return False
 
+        sub.disconnect()
+        return True
+
+    @catch
+    @desc("[MQTT-3.14.4-2] Server close connection after Client DISCONNECT")
+    def test_223(self):
+        c = MqttClient("conformity-sub", connect=4)
+        c.disconnect()
+
+        if c.conn_is_alive():
+            return False
+
         return True
 
