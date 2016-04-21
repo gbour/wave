@@ -852,3 +852,58 @@ class V311(TestSuite):
         pub.disconnect(); sub.disconnect()
         return True
 
+    @catch
+    @desc("[MQTT-3.10.4-4] broker MUST complete qos 1 messages AFTER topic filter has been unsubscribed")
+    def test_231(self):
+        pub = MqttClient("conformity-pub", connect=4)
+        sub = MqttClient("conformity-sub", connect=4)
+
+        sub.subscribe("foo/bar", qos=1)
+        pub.publish("foo/bar", "grrr", qos=1)
+
+        evt = sub.recv()
+        if not isinstance(evt, EventPublish) or evt.msg.payload != "grrr":
+            return False
+
+        ack = sub.unsubscribe("foo/bar")
+        if not isinstance(ack, EventUnsuback):
+            return False
+
+        sub.puback(evt.msg.mid)
+        ack2 = pub.recv()
+        if not isinstance(ack2, EventPuback):
+            return False
+
+        pub.disconnect(); sub.disconnect()
+        return True
+
+    @catch
+    @desc("[MQTT-3.10.4-4] broker MUST complete qos 2 messages AFTER topic filter has been unsubscribed")
+    def test_232(self):
+        pub = MqttClient("conformity-pub", connect=4)
+        sub = MqttClient("conformity-sub", connect=4)
+
+        sub.subscribe("foo/bar", qos=2)
+        pub.publish("foo/bar", "grrr", qos=2)                # receive PUBREC as response
+        pub.pubrel(pub.get_last_mid(), read_response=False) # triggers message delivery
+
+        evt = sub.recv()
+        if not isinstance(evt, EventPublish) or evt.msg.payload != "grrr":
+            return False
+
+        ack = sub.unsubscribe("foo/bar")
+        if not isinstance(ack, EventUnsuback):
+            return False
+
+        rel = sub.pubrec(evt.msg.mid)
+        if not isinstance(rel, EventPubrel):
+            return False
+
+        sub.pubcomp(evt.msg.mid)
+        comp = pub.recv()
+        if not isinstance(comp, EventPubcomp):
+            return False
+
+        pub.disconnect(); sub.disconnect()
+        return True
+
