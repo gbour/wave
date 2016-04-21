@@ -907,3 +907,22 @@ class V311(TestSuite):
         pub.disconnect(); sub.disconnect()
         return True
 
+    @catch
+    @desc("[MQTT-4.6.0-3] PUBREC is send in order of received PUBLISH")
+    def test_240(self):
+        pub = MqttClient("conformity-pub", connect=4)
+
+        pub.publish("foo/bar", "", qos=2, read_response=False); mid1 = pub.get_last_mid()
+        pub.publish("bar/baz", "", qos=2, read_response=False); mid2 = pub.get_last_mid()
+
+        evt = pub.recv()
+        if not isinstance(evt, EventPubrec) or evt.mid != mid1:
+            return False
+
+        evt = pub.recv()
+        if not isinstance(evt, EventPubrec) or evt.mid != mid2:
+            return False
+
+        pub.disconnect()
+        return True
+
