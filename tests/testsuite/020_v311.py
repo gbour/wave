@@ -796,3 +796,13 @@ class V311(TestSuite):
 
         return True
 
+    @catch
+    @desc("[MQTT-3.10.4-5] UNSUBACK returned even without matching subscription")
+    def test_221(self):
+        c = MqttClient("conformity", connect=4)
+        ack = c.unsubscribe("foo/bar")
+        if not isinstance(ack, EventUnsuback):
+            return False
+
+        return True
+
