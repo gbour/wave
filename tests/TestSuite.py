@@ -9,6 +9,12 @@ import subprocess
 p = subprocess.Popen(["stty","size"], stdout=subprocess.PIPE)
 WIDTH = int(p.stdout.read()[:-1].split(' ')[-1])
 
+DISPLAY = {
+    True  : (92, "PASSED" , True),
+    False : (91, "FAILED" , False),
+    'skip': (93, "SKIPPED", True)
+}
+
 # test functions decorator
 def desc(name):
     def _decorator(func):
@@ -26,6 +32,11 @@ def catch(func):
             return False
     return _
 
+def skip(fun):
+    def _(self):
+        return 'skip'
+    return _
+
 class TestSuite(object):
     def __init__(self, suitename):
         self.suitename = suitename
@@ -40,26 +51,20 @@ class TestSuite(object):
                 continue
 
             ret = test()
-            if type(ret) == bool:
-                desc = self.__module__ + "." + name
-            else:
-                (desc, ret) = ret
+            try:
+                (desc, status) = ret
+            except:
+                status = ret
+                desc   = self.__module__ + "." + name
 
-            if ret:
-                self.passed(desc)
-            else:
-                self.failed(desc)
+            self._print(DISPLAY[status], desc)
 
-            status = status and ret
+            status = DISPLAY[status][-1] and ret
 
         return status
 
-    def passed(self, testname):
-        print "{0}{1}[\033[92mPASSED\033[0m]".format(testname, ' '*(WIDTH-10-len(testname)))
-
-    def failed(self, testname):
-        print "{0}{1}[\033[91mFAILED\033[0m]".format(testname, ' '*(WIDTH-10-len(testname)))
-
+    def _print(self, (color, text, _ign), testname):
+        print "{0}{1}[\033[{2}m{3}\033[0m]".format(testname, ' '*(WIDTH-10-len(testname)), color, text)
 #    @desc("this is the 1st test")
 #    def test_01(self):
 #        return True
