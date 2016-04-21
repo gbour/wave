@@ -806,3 +806,14 @@ class V311(TestSuite):
 
         return True
 
+    @catch
+    @desc("[MQTT-3.10.4-6] UNSUBSCRIBE with multiple (>1) topicfilters")
+    def test_222(self):
+        sub = MqttClient("conformity-sub", connect=4)
+        ack = sub.unsubscribe_multi(["foo/bar", "bar/baz", "paper/+/scissor"])
+
+        if not isinstance(ack, EventUnsuback) or ack.mid != sub.get_last_mid():
+            return False
+
+        return True
+
