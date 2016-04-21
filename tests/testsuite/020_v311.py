@@ -926,3 +926,64 @@ class V311(TestSuite):
         pub.disconnect()
         return True
 
+    @catch
+    @desc("[MQTT-4.7.1-2] '#' wildcard MUST be last topic filter character")
+    def test_250(self):
+        tfs = [
+            ("#"     , True),
+            ("/#"    , True),
+            ("/foo/#", True),
+            ("#/foo" , False),
+            ("/#/foo", False),
+            ("/foo#" , False),
+            ("/#foo" , False)
+        ]
+
+        for (tf, isvalid) in tfs:
+            sub = MqttClient("conformity", connect=4)
+            sub.subscribe(tf, qos=0, read_response=False)
+            ack = sub.recv()
+
+            if (isvalid and not isinstance(ack, EventSuback)) or \
+                    (not isvalid and (ack is not None or sub.conn_is_alive())):
+                return False
+
+            sub.disconnect()
+
+        return True
+
+    @catch
+    @desc("[MQTT-4.7.1-2] '+' wildcard MAY be at any topic filter level (MUST occupy all level then)")
+    def test_251(self):
+        tfs = [
+            ("+"         , True),
+            ("/+"        , True),
+            ("+/"        , True),
+            ("+/foo"     , True),
+            ("/foo/+"    , True),
+            ("/foo/+/"   , True),
+            ("/foo/+/bar", True),
+            ("+/foo/bar" , True),
+            ("foo+"      , False),
+            ("foo+/bar"  , False),
+            ("+foo/bar"  , False),
+            ("foo/+bar"  , False),
+            # ~
+            ("++"        , False),
+            ("foo/++/bar", False),
+        ]
+
+        for (tf, isvalid) in tfs:
+            sub = MqttClient("conformity", connect=4)
+            sub.subscribe(tf, qos=0, read_response=False)
+            ack = sub.recv()
+
+            if (isvalid and not isinstance(ack, EventSuback)) or \
+                    (not isvalid and (ack is not None or sub.conn_is_alive())):
+                return False
+
+            sub.disconnect()
+
+        return True
+
+

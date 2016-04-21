@@ -284,12 +284,14 @@ get_topics(<<>>, Topics, _) ->
 % with QOS field (SUBSCRIBE)
 get_topics(Payload, Topics, true) ->
     {Name, Rest} = decode_string(Payload),
+    checktopicfilter(Name),
     {Qos, Rest2} = decode_subscribe_qos(Rest),
 
     get_topics(Rest2, [{Name,Qos}|Topics], true);
 % without QOS field (UNSUBSCRIBE)
 get_topics(Payload, Topics, _) ->
     {Name, Rest} = decode_string(Payload),
+    checktopicfilter(Name),
     get_topics(Rest, [Name|Topics], false).
 
 % decode utf8 string
@@ -560,6 +562,25 @@ checktopic(<<H/utf8, Rest/binary>>) when H =:= $+; H =:= $# ->
     erlang:throw({'PUBLISH', "MQTT-3.3.2-2", H});
 checktopic(<<_/utf8, Rest/binary>>) ->
     checktopic(Rest).
+
+% Validate a topic filter:
+%   - # position
+%
+%
+-spec checktopicfilter(unicode:unicode_binary()) -> ok.
+checktopicfilter(<<>>) ->
+    ok;
+checktopicfilter(<<H/utf8, $#>>) when H =/= $/ ->
+    erlang:throw({'(UN)SUBSCRIBE', "[MQTT-4.7.1-2]", "misplaced # wildcard character"});
+checktopicfilter(<<$#, _/utf8, _/binary>>) ->
+    erlang:throw({'(UN)SUBSCRIBE', "[MQTT-4.7.1-2]", "misplaced # wildcard character"});
+checktopicfilter(<<H/utf8, $+, _/binary>>) when H =/= $/ ->
+    erlang:throw({'(UN)SUBSCRIBE', "[MQTT-4.7.1-3]", "misplaced + wildcard character"});
+checktopicfilter(<<$+, H/utf8, Rest/binary>>) when H =/= $/ ->
+    erlang:throw({'(UN)SUBSCRIBE', "[MQTT-4.7.1-3]", "misplaced + wildcard character"});
+checktopicfilter(<<_/utf8, Rest/binary>>)  ->
+    checktopicfilter(Rest).
+
 
 minlen(1)  -> 3;
 minlen(2)  -> 3;
