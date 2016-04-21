@@ -276,9 +276,9 @@ decode_connect2(Version,
 -spec get_topics(Data :: binary(), Acc :: list(any()), Subscription :: true|false) -> 
         Topics::list(Topic::binary()|{Topic::binary(), Qos::integer()}).
 get_topics(<<>>, [], true) ->
-    erlang:throw({'SUBSCRIBE', "MQTT-3.8.3-1", "no topic filter/qos"});
+    erlang:throw({'SUBSCRIBE'  , "MQTT-3.8.3-1" , "no topic filter/qos"});
 get_topics(<<>>, [], false) ->
-    erlang:throw({'UNSUBSCRIBE', "MQTT-3.8.3-1", "no topic filter/qos"});
+    erlang:throw({'UNSUBSCRIBE', "MQTT-3.10.3-2", "no topic filter/qos"});
 get_topics(<<>>, Topics, _) ->
     lists:reverse(Topics);
 % with QOS field (SUBSCRIBE)

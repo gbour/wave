@@ -781,3 +781,18 @@ class V311(TestSuite):
             return False
 
         return True
+
+    @catch
+    @desc("[MQTT-3.10.3-2] UNSUBSCRIBE MUST have at least one topic filter/qos")
+    def test_220(self):
+        c = MqttClient("conformity", connect=4)
+
+        c.forge(NC.CMD_UNSUBSCRIBE, 2, [
+            ('uint16', 10),         # identifier
+            # NOT TOPIC FILTER/QOS
+        ], send=True)
+        if c.conn_is_alive():
+            return False
+
+        return True
+
