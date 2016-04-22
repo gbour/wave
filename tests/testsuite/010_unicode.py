@@ -55,6 +55,10 @@ class Unicode(TestSuite):
             if not evt is None:
                 return False
 
+            # check connection is closed
+            if c.conn_is_alive():
+                return False
+
         return True
 
     @catch
