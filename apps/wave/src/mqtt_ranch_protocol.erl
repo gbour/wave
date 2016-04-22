@@ -155,22 +155,6 @@ route(Socket, Transport, Session, Raw) ->
             Transport:close(Socket)
     end.
 
--spec answer(mqtt_msg()) -> mqtt_msg() | ok | error.
-answer(#mqtt_msg{type='CONNECT'}) ->
-	#mqtt_msg{type='CONNACK', payload=[{retcode, 0}]};
-answer(#mqtt_msg{type='PUBLISH'}) ->
-	#mqtt_msg{type='CONNACK', payload=[{retcode, 0}]};
-answer(#mqtt_msg{type='PINGREQ'}) ->
-	#mqtt_msg{type='PINGRESP'};
-answer(#mqtt_msg{type='SUBSCRIBE', payload=P}) ->
-	MsgId = proplists:get_value(msgid, P),
-
-	#mqtt_msg{type='SUBACK', payload=[{msgid,MsgId},{qos,[1]}]};
-answer(#mqtt_msg{type='PINGRESP'}) ->
-    ok;
-answer(_) ->
-    error.
-
 
 % send MQTT 'PINGREQ' message
 %

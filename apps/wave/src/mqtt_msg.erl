@@ -96,7 +96,7 @@ decode(Type, Flags= <<Dup:1, Qos:2, Retain:1>>, {RLen, _, Rest}) ->
 -spec decode_payload(mqtt_verb(), integer(), {integer(), binary()}) -> {error, 
                                                                         disconnect|conformity|protocol_version}
                                                                        | {ok, list({atom(), any()})}.
-decode_payload('CONNECT', _Qos, {Len, <<
+decode_payload('CONNECT', _Qos, {_Len, <<
         PLen:16,
         Protocol:PLen/binary,
         Version:8/integer,
@@ -110,7 +110,7 @@ decode_payload('CONNECT', _Qos, {Len, <<
 decode_payload('PUBLISH', _Qos=3, _) ->
     erlang:throw({'PUBLISH', "3.3.1-4", "invalid QOS value (3)"});
 
-decode_payload('PUBLISH', Qos, {Len, Rest}) ->
+decode_payload('PUBLISH', Qos, {_Len, Rest}) ->
     %lager:debug("PUBLISH (qos=~p) ~p ~p", [Qos, Len, Rest]),
 
     {Topic, Rest2} = decode_string(Rest),
@@ -132,7 +132,7 @@ decode_payload('PUBLISH', Qos, {Len, Rest}) ->
 
     {ok, Ret};
 
-decode_payload('SUBSCRIBE', Qos, {Len, <<MsgID:16, Payload/binary>>}) ->
+decode_payload('SUBSCRIBE', _Qos, {_Len, <<MsgID:16, Payload/binary>>}) ->
     lager:debug("SUBSCRIBE v3.1 ~p", [MsgID]),
     case MsgID of
         0 -> erlang:throw({'SUBSCRIBE', "2.3.1-1", "null msgid"});
@@ -143,7 +143,7 @@ decode_payload('SUBSCRIBE', Qos, {Len, <<MsgID:16, Payload/binary>>}) ->
 	lager:debug("topics= ~p", [Topics]),
 	{ok, [{msgid, MsgID},{topics, Topics}]};
 
-decode_payload('UNSUBSCRIBE', Qos, {Len, <<MsgID:16, Payload/binary>>}) ->
+decode_payload('UNSUBSCRIBE', _Qos, {_Len, <<MsgID:16, Payload/binary>>}) ->
     lager:debug("UNSUBSCRIBE: ~p", [Payload]),
     case MsgID of
         0 -> erlang:throw({'UNSUBSCRIBE', "2.3.1-1", "null msgid"});
@@ -165,27 +165,27 @@ decode_payload('DISCONNECT', _, {0, <<>>}) ->
     %{error, disconnect};
     {ok, []};
 
-decode_payload('CONNACK', _, {Len, <<_:8, RetCode:8/integer>>}) ->
+decode_payload('CONNACK', _, {_Len, <<_:8, RetCode:8/integer>>}) ->
     lager:debug("CONNACK"),
     {ok, [{retcode, RetCode}]};
 
-decode_payload('PUBACK', _Qos, {Len=2, <<MsgID:16>>}) ->
+decode_payload('PUBACK', _Qos, {_Len=2, <<MsgID:16>>}) ->
     lager:debug("PUBACK. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
-decode_payload('PUBREC', _Qos, {Len, <<MsgID:16>>}) ->
+decode_payload('PUBREC', _Qos, {_Len, <<MsgID:16>>}) ->
     lager:debug("PUBREC. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
-decode_payload('PUBREL', _Qos=1, {Len, <<MsgID:16>>}) ->
+decode_payload('PUBREL', _Qos=1, {_Len, <<MsgID:16>>}) ->
     lager:debug("PUBREL. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
-decode_payload('PUBCOMP', _Qos, {Len, <<MsgID:16>>}) ->
+decode_payload('PUBCOMP', _Qos, {_Len, <<MsgID:16>>}) ->
     lager:debug("PUBREL. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
-decode_payload('SUBACK', _, {Len, <<MsgID:16, Qos/binary>>}) ->
+decode_payload('SUBACK', _, {_Len, <<MsgID:16, _Qos/binary>>}) ->
     lager:debug("SUBACK. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
@@ -220,7 +220,7 @@ decode_connect(Protocol, _, _, _) ->
     {error, conformity}.
 
 -spec decode_connect2(byte(), {bitstring(), char(), binary()}) -> {error, conformity} | {ok, [{atom(), any}]}.
-decode_connect2(Version, {<<0:1, 1:1, _:5>>, _, _}) ->
+decode_connect2(_Version, {<<0:1, 1:1, _:5>>, _, _}) ->
     lager:notice("CONNECT: password flag is set while username flag is not"),
     {error, conformity};
 decode_connect2(Version,
@@ -255,7 +255,7 @@ decode_connect2(Version,
     end,
 
     % decoding password
-    {Password, Rest5} = case Pwd of
+    {Password, _Rest5} = case Pwd of
         1 -> decode_string(Rest4);
         _ -> {undefined, Rest4}
     end,
@@ -320,7 +320,7 @@ decode_subscribe_qos(<<_:6, Qos:2/integer, Rest/binary>>) ->
 -spec decode_rlength(binary(), integer(), integer()) -> {error, overflow} 
                                                         | {error, size, integer()}
                                                         | {Size::integer(), RestSize::integer(), Rest::binary()}.
-decode_rlength(Pkt, PktSize, MinLen) when PktSize < MinLen ->
+decode_rlength(_Pkt, PktSize, MinLen) when PktSize < MinLen ->
     {error, size, MinLen-PktSize};
 decode_rlength(Pkt, _, _) ->
     p_decode_rlength(Pkt, 1, 0).
@@ -392,7 +392,7 @@ encode_payload('CONNECT', _Qos, Opts) ->
     >>;
 
 
-encode_payload('PUBLISH', Qos=0, Opts) ->
+encode_payload('PUBLISH', _Qos=0, Opts) ->
     Topic = proplists:get_value(topic, Opts),
     Content = proplists:get_value(content, Opts),
 
@@ -402,7 +402,7 @@ encode_payload('PUBLISH', Qos=0, Opts) ->
         (bin(Content))/binary
     >>;
 
-encode_payload('PUBLISH', Qos, Opts) ->
+encode_payload('PUBLISH', _Qos, Opts) ->
     Topic = proplists:get_value(topic, Opts),
     MsgID = proplists:get_value(msgid, Opts),
     Content = proplists:get_value(content, Opts),
@@ -563,7 +563,7 @@ checktopic(Topic) ->
 
 checktopic2(<<>>) ->
     ok;
-checktopic2(<<H/utf8, Rest/binary>>) when H =:= $+; H =:= $# ->
+checktopic2(<<H/utf8, _Rest/binary>>) when H =:= $+; H =:= $# ->
     erlang:throw({'PUBLISH', "MQTT-3.3.2-2", H});
 checktopic2(<<_/utf8, Rest/binary>>) ->
     checktopic2(Rest).
@@ -585,7 +585,7 @@ checktopicfilter2(<<$#, _/utf8, _/binary>>) ->
     erlang:throw({'(UN)SUBSCRIBE', "[MQTT-4.7.1-2]", "misplaced # wildcard character"});
 checktopicfilter2(<<H/utf8, $+, _/binary>>) when H =/= $/ ->
     erlang:throw({'(UN)SUBSCRIBE', "[MQTT-4.7.1-3]", "misplaced + wildcard character"});
-checktopicfilter2(<<$+, H/utf8, Rest/binary>>) when H =/= $/ ->
+checktopicfilter2(<<$+, H/utf8, _/binary>>) when H =/= $/ ->
     erlang:throw({'(UN)SUBSCRIBE', "[MQTT-4.7.1-3]", "misplaced + wildcard character"});
 checktopicfilter2(<<_/utf8, Rest/binary>>)  ->
     checktopicfilter2(Rest).

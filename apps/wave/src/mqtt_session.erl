@@ -264,7 +264,7 @@ connected(#mqtt_msg{type='PINGREQ'}, _, StateData=#session{keepalive=Ka}) ->
     Resp = #mqtt_msg{type='PINGRESP'},
     {reply, Resp, connected, StateData, Ka};
 
-connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=Ref,keepalive=Ka}) ->
+connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=_Ref,keepalive=Ka}) ->
     lager:info("received PINGRESP"),
     %BUG? timer never started
     %gen_fsm:cancel_timer(Ref),
@@ -548,14 +548,14 @@ handle_info(_Info, _StateName, StateData) ->
 %   - gen_fsm/erlang issue (gen_fsm is terminated)
 %
 %
-terminate(_Reason, StateName, undefined) ->
+terminate(_Reason, _StateName, undefined) ->
     lager:info("session terminate with undefined state: ~p", [_Reason]),
     terminate;
 
 terminate(_Reason, StateName, _StateData=#session{deviceid=DeviceID, topics=T, opts=Opts}) ->
     lager:info("session terminate(~p): ~p (~p ~p)", [DeviceID, _Reason, StateName, _StateData]),
 
-    lists:foreach(fun({Topic, Qos}) ->
+    lists:foreach(fun({Topic, _Qos}) ->
             mqtt_topic_registry:unsubscribe(Topic, {?MODULE, publish, self()})
         end,
         T

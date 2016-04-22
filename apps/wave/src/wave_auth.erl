@@ -42,12 +42,3 @@ credential(Credentials, Credentials) ->
 credential(_,_) ->
     {error, bad_credentials}.
 
-as_proplist({ok, Resp}) ->
-    {ok, as_proplist(Resp, [])};
-as_proplist(Err) ->
-    Err.
-
-as_proplist([K,V|T], Acc) ->
-    as_proplist(T, Acc ++ [{K,V}]);
-as_proplist([], Acc) ->
-    Acc.
