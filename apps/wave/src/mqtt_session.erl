@@ -87,7 +87,7 @@ start_link(Transport, Opts) ->
     gen_fsm:start_link(?MODULE, [Transport, Opts], []).
 
 init([Transport, Opts]) ->
-    random:seed(erlang:now()),
+    random:seed(erlang:phash2([node()]), erlang:monotonic_time(), erlang:unique_integer()),
 
     % timeout on socket connection: close socket is no CONNECT message received after timeout
     {ok, initiate, #session{transport=Transport, opts=Opts, next_msgid=random:uniform(65535)}, ?CONNECT_TIMEOUT}.
