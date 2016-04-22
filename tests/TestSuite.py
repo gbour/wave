@@ -3,6 +3,7 @@
 
 import sys
 import inspect
+import logging
 import traceback
 import subprocess
 
@@ -46,12 +47,14 @@ class TestSuite(object):
         counters = {'passed':0, 'failed': 0, 'skipped': 0}
 
         print "\n\033[1m... {0} ...\033[0m".format(self.suitename)
+        logging.info("\n\033[1m... {0} ...\033[0m".format(self.suitename))
 
         tests = [(name, meth) for (name, meth) in inspect.getmembers(self, predicate=inspect.ismethod) if name.startswith('test_')]
         for (name, test) in tests:
             if testfilter and not testfilter in name:
                 continue
 
+            logging.info(">> "+name)
             ret = test()
             try:
                 (desc, ret) = ret
@@ -65,12 +68,8 @@ class TestSuite(object):
 
         return (status, counters)
 
-    def _print(self, (color, text, _ign), testname):
+    def _print(self, (color, text, _ign), funcname, testname):
         print "{0}{1}[\033[{2}m{3}\033[0m]".format(testname, ' '*(WIDTH-10-len(testname)), color, text)
-#    @desc("this is the 1st test")
-#    def test_01(self):
-#        return True
-#
-#    @desc("this is 2d test")
-#    def test_02(self):
-#        return False
+
+        logging.info("<< {0}: {1}{2}[\033[{3}m{4}\033[0m]\n".format(
+            funcname, testname, ' '*(90-5-len(testname+funcname)), color, text))

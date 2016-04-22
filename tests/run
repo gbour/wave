@@ -1,8 +1,10 @@
 #!/usr/bin/python
 # -*- coding: utf8 -*-
 
+import os
 import sys
 import inspect
+import logging
 
 import TestSuite
 import testsuite
@@ -10,6 +12,14 @@ import testsuite
 #from testsuite import *
 #from testsuite import plop
 COUNTERS = {'passed': 0, 'failed': 0, 'skipped': 0}
+
+def setup_logger():
+    cfg = {'format': "%(message)s", 'level': logging.CRITICAL}
+
+    DEBUG = os.environ.get('DEBUG', '0')
+    if DEBUG not in ('0', '1'): cfg.update({'filename': DEBUG, 'level': logging.INFO})
+
+    logging.basicConfig(**cfg)
 
 def update_counters(update):
     for k, v in update.iteritems():
@@ -19,6 +29,8 @@ def print_summary():
     print "\n  \033[1;42;30m {passed} ᴘᴀssᴇᴅ \033[0m \033[41;37m {failed} ғᴀɪʟᴇᴅ \033[0m \033[1;43;30m {skipped} sᴋɪᴘᴘᴇᴅ \033[0m\n".format(**COUNTERS)
 
 if __name__ == '__main__':
+    setup_logger()
+
     modfilter = None
     if len(sys.argv) > 1:
         modfilter = sys.argv[1]
