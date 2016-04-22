@@ -428,7 +428,6 @@ class V311(TestSuite):
         c._c.packet_write()
         c._c.loop()
         evt = c._c.pop_event()
-        print evt
 
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
             return False

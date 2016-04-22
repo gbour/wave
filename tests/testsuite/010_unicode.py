@@ -80,8 +80,6 @@ class Unicode(TestSuite):
         evt = pub.publish(topic, content, qos=0)
 
         evt = sub.recv()
-        print evt, evt.msg.topic, evt.msg.payload, type(evt.msg.topic), type(topic)
-        print content, ",", evt.msg.payload, type(content), type(evt.msg.payload)
         if not isinstance(evt, EventPublish) or\
                 evt.msg.topic != topic or\
                 evt.msg.payload != content:
