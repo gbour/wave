@@ -2,26 +2,42 @@
 SHELL=bash
 APP=wave_app
 TMPL_CFG=etc/wave.config
-DEV_VARS=config/vars.dev.config
-DEV_CFG=.wave.dev
 
-all: init build
+# debug build environment
+# may be 'prod', 'dev' or 'travis' ('prod' by default)
+# to run with another environment, enter:
+# $> make env=myenv debug
+env=prod
+
+# blackbox tests debug mode
+# 0: no debug
+# 1: console debug
+# '/my/file': debug written in '/my/file'
+DEBUG=1
+
+##
+## -*- RULES -*-
+##
+
+all: init build setup
 
 init:
 	./rebar3 update
 
 build:
-	./rebar3 as prod compile
+	./rebar3 as $(env) compile
 
-debug:
-	./rebar3 as dev compile
-	# generate config file for local dev environment
-	./bin/build_dev_env $(TMPL_CFG) $(DEV_VARS) $(DEV_CFG).config
-	# run application in local dev env
-	erl -pa `find -L _build/dev -name ebin` -s $(APP) -s sync -config $(DEV_CFG) -s observer -init debug +v
+setup:
+	# generate config file for choosed environment
+	./bin/build_dev_env $(TMPL_CFG) config/vars.$(env).config .wave.$(env).config
+
+run: build setup
+	# run application in choosed environment
+	@echo "running in *$(env)* environment"
+	erl -pa `find -L _build/dev -name ebin` -s $(APP) -s sync -config .wave.$(env).config -s observer -init debug +v
 
 test:
-	cd tests && DEBUG=1 PYTHONPATH=./nyamuk ./run
+	cd tests && DEBUG=$(DEBUG) PYTHONPATH=./nyamuk ./run
 
 release:
 	./rebar3 release
@@ -46,6 +62,5 @@ msc:
 ## faking a ssh connection
 test_sms:
 	mosquitto_pub -t '/secu/ssh' -m '{"action": "login", "user":"luke", "server": "darkstar", "from":"tatooine", "at": "year 0"}'
-
 
 .PHONY: test
