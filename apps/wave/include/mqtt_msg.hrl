@@ -28,3 +28,11 @@
 -type mqtt_verb() :: 'CONNECT'|'CONNACK'|'PUBLISH'|'PUBACK'|'PUBREC'|'PUBREL'|'PUBCOMP'|'SUBSCRIBE'|'UNSUBSCRIBE'
                     |'SUBACK'|'UNSUBACK'|'PINGREQ'|'PINGRESP'|'DISCONNECT'.
 
+
+% erlang:monotinic_time() & erlang:unique_integer() are not available on OTP < 18
+%
+-ifdef(OLD_SEED_WAY).
+    -define(SEED, erlang:now()).
+-else.
+    -define(SEED, erlang:phash2([node()]), erlang:monotonic_time(), erlang:unique_integer()).
+-endif.

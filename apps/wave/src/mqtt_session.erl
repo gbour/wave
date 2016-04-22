@@ -80,14 +80,13 @@
 -define(CONNECT_TIMEOUT  , 5000). % ms
 -define(DEFAULT_KEEPALIVE, 300).  % secs
 
-
 -spec start_link(mqtt_ranch_protocol:transport(), list({atom(), any()})) -> {ok, pid()} 
                                                                             | ignore | {error, any()}.
 start_link(Transport, Opts) ->
     gen_fsm:start_link(?MODULE, [Transport, Opts], []).
 
 init([Transport, Opts]) ->
-    random:seed(erlang:phash2([node()]), erlang:monotonic_time(), erlang:unique_integer()),
+    random:seed(?SEED),
 
     % timeout on socket connection: close socket is no CONNECT message received after timeout
     {ok, initiate, #session{transport=Transport, opts=Opts, next_msgid=random:uniform(65535)}, ?CONNECT_TIMEOUT}.
