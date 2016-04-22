@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# -*- coding: utf8 -*-
 
 import sys
 import inspect
@@ -8,6 +9,14 @@ import testsuite
 
 #from testsuite import *
 #from testsuite import plop
+COUNTERS = {'passed': 0, 'failed': 0, 'skipped': 0}
+
+def update_counters(update):
+    for k, v in update.iteritems():
+        COUNTERS[k] = COUNTERS.get(k, 0) + v
+
+def print_summary():
+    print "\n  \033[1;42;30m {passed} ᴘᴀssᴇᴅ \033[0m \033[41;37m {failed} ғᴀɪʟᴇᴅ \033[0m \033[1;43;30m {skipped} sᴋɪᴘᴘᴇᴅ \033[0m\n".format(**COUNTERS)
 
 if __name__ == '__main__':
     modfilter = None
@@ -31,7 +40,9 @@ if __name__ == '__main__':
                 continue
 
             #print modname,clsname, inspect.getmro(cls)
-            ret = cls().run(testfilter)
+            (ret, counters) = cls().run(testfilter)
             status = ret and status
+            update_counters(counters)
 
+    print_summary()
     sys.exit(0 if status else 11)

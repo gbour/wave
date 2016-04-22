@@ -43,6 +43,8 @@ class TestSuite(object):
 
     def run(self, testfilter):
         status = True
+        counters = {'passed':0, 'failed': 0, 'skipped': 0}
+
         print "\n\033[1m... {0} ...\033[0m".format(self.suitename)
 
         tests = [(name, meth) for (name, meth) in inspect.getmembers(self, predicate=inspect.ismethod) if name.startswith('test_')]
@@ -52,16 +54,16 @@ class TestSuite(object):
 
             ret = test()
             try:
-                (desc, status) = ret
+                (desc, ret) = ret
             except:
-                status = ret
                 desc   = self.__module__ + "." + name
 
-            self._print(DISPLAY[status], desc)
+            self._print(DISPLAY[ret], name, desc)
 
-            status = DISPLAY[status][-1] and ret
+            counters[DISPLAY[ret][1].lower()] += 1
+            status &= DISPLAY[ret][-1]
 
-        return status
+        return (status, counters)
 
     def _print(self, (color, text, _ign), testname):
         print "{0}{1}[\033[{2}m{3}\033[0m]".format(testname, ' '*(WIDTH-10-len(testname)), color, text)
