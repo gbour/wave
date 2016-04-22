@@ -11,9 +11,9 @@ p = subprocess.Popen(["stty","size"], stdout=subprocess.PIPE)
 WIDTH = int(p.stdout.read()[:-1].split(' ')[-1])
 
 DISPLAY = {
-    True  : (92, "PASSED" , True),
-    False : (91, "FAILED" , False),
-    'skip': (93, "SKIPPED", True)
+    True  : ("1;32", "PASSED" , True),
+    False : ("3;31", "FAILED" , False),
+    'skip': ("1;33", "SKIPPED", True)
 }
 
 # test functions decorator
