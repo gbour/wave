@@ -25,7 +25,7 @@ class Unicode(TestSuite):
     #
 
     @catch
-    @desc("register with utf8 topic filter")
+    @desc("(un)subscribe with utf8 topic filter")
     def test_100(self):
         c = self.newclient('unicode')
         topic = u"utf8/Какво е Unicode ?"
@@ -35,6 +35,7 @@ class Unicode(TestSuite):
                 evt.mid != c.get_last_mid():
             return False
 
+        c.unsubscribe(topic)
         c.disconnect()
         return True
 
