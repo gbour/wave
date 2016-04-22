@@ -685,6 +685,24 @@ class V311(TestSuite):
         pub.disconnect(); sub.disconnect()
         return True
 
+    # this test is disabled currently, as the feature is not implemented yet in wave
+    @skip
+    @catch
+    @desc("[MQTT-3.1.2-18] if CONNECT password flag is not set, no username must be present")
+    def test_210(self):
+        c = MqttClient("conformity", raw_connect=True)
+
+        c.forge(NC.CMD_CONNECT, 0, [
+            ('string', 'MQTT'),
+            ('byte'  , 4),         # protocol level
+            #('byte'  , 128),       # connect flags:  username flag set
+            ('byte'  , 0),       # no flags, no ClientId
+            ('uint16', 60),        # keepalive
+        ], send=True)
+
+        return False
+
+
     @catch
     @desc("[MQTT-3.3.1-4] invalid PUBLISH qos value (3)")
     def test_211(self):
