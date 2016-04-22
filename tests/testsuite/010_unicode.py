@@ -28,8 +28,9 @@ class Unicode(TestSuite):
     @desc("register with utf8 topic filter")
     def test_100(self):
         c = self.newclient('unicode')
+        topic = u"utf8/Какво е Unicode ?"
 
-        evt = c.subscribe(u"utf8/Какво е Unicode ?".encode('utf8'), 0)
+        evt = c.subscribe(topic, 0)
         if not isinstance(evt, EventSuback) or \
                 evt.mid != c.get_last_mid():
             return False
