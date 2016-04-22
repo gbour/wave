@@ -1,7 +1,7 @@
 #!/usr/bin/env escript
 
 %% vim: filetype=erlang
-%%! -pa `find -L _build/dev -name ebin` -Wall debug verbose
+%%! -pa `find -L _build/tmpl -name ebin` -Wall debug verbose
 
 %%
 %%    Wave - MQTT Broker
@@ -29,7 +29,7 @@
 %%
 
 main([_Tmpl, _Vars, Out]) ->
-    code:add_paths(filelib:wildcard("_build/dev/lib/*/ebin")),
+    code:add_paths(filelib:wildcard("_build/tmpl/lib/*/ebin")),
     %io:format("~p~n", [code:get_path()]),
 
     Tmpl = bbmustache:parse_file(erlang:list_to_binary(_Tmpl)),

@@ -28,13 +28,15 @@ build:
 	./rebar3 as $(env) compile
 
 setup:
+	# download/compile bbmustache
+	./rebar3 as tmpl compile
 	# generate config file for choosed environment
 	./bin/build_dev_env $(TMPL_CFG) config/vars.$(env).config .wave.$(env).config
 
 run: build setup
 	# run application in choosed environment
 	@echo "running in *$(env)* environment"
-	erl -pa `find -L _build/dev -name ebin` -s $(APP) -s sync -config .wave.$(env).config -s observer -init debug +v
+	erl -pa `find -L _build/$(env) -name ebin` -s $(APP) -s sync -config .wave.$(env).config -s observer -init debug +v
 
 test:
 	cd tests && DEBUG=$(DEBUG) PYTHONPATH=./nyamuk ./run
