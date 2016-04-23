@@ -240,12 +240,16 @@ decode_connect2(Version,
 
 
     % decoding will topic & message
-    {WillTopic, WillMsg, Rest3} = case WillFlag of
+    {Will, Rest3} = case WillFlag of
         1 ->
             {_WillTopic, _R}  = decode_string(Rest2),
-            {_WillMsg  , _R2} = decode_string(_R),
-            {_WillTopic, _WillMsg, _R2};
-        _ -> {undefined, undefined, Rest2}
+            checktopic(_WillTopic), % ensure topic is valid, raise exception either (w/ WRONG msg)
+
+            % Will message is any binary content. 2 first bytes are will message length
+            <<MsgLen:16/integer, _WillMsg:MsgLen/binary, _R2/binary>> = _R,
+            {#{topic => _WillTopic, message => _WillMsg}, _R2};
+
+        _ -> {undefined, Rest2}
     end,
 
     % decoding username
@@ -260,11 +264,10 @@ decode_connect2(Version,
         _ -> {undefined, Rest4}
     end,
 
-    lager:debug("~p / ~p / ~p / ~p / ~p, keepalive=~p", [ClientID, WillTopic, WillMsg, Username, Password, Ka]),
+    lager:debug("~p / ~p / ~p / ~p, keepalive=~p", [ClientID, Will, Username, Password, Ka]),
     {ok, [
         {clientid , ClientID},
-        {topic    , WillTopic},
-        {message  , WillMsg},
+        {will     , Will},
         {username , Username},
         {password , Password},
         {keepalive, Ka},

@@ -73,7 +73,9 @@
     %       another one generate by mqtt_session (integer)
     inflight   = []        :: list({MsgID::binary(), MsgWorker::pid()}),
     %TODO: initialize with random value
-    next_msgid = 1         :: integer()
+    next_msgid = 1         :: integer(),
+    % stores client will settings (topic + message)
+    will       = undefined :: map()
 }).
 -type session() :: #session{}.
 
@@ -237,7 +239,10 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
 
     case Retcode of
         0 ->
-            {reply, Resp, NextState, StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, topics=Topics}, Ka};
+            Will = proplists:get_value(will, P),
+            {reply, Resp, NextState,
+                StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, topics=Topics, will=Will}, Ka
+            };
 
         _ ->
             % because we need to close connection after having sent non-zero CONNACK
@@ -257,7 +262,7 @@ initiate(timeout, StateData) ->
     {stop, disconnect, StateData}.
 
 connected(#mqtt_msg{type='DISCONNECT'}, _, StateData) ->
-    {stop, normal, disconnect, StateData};
+    {stop, normal, disconnect, StateData#session{will=undefined}};
 
 connected(#mqtt_msg{type='PINGREQ'}, _, StateData=#session{keepalive=Ka}) ->
     Resp = #mqtt_msg{type='PINGRESP'},
@@ -506,8 +511,9 @@ connected({'msg-landed', MsgID}, StateData=#session{keepalive=Ka, inflight=Infli
     lager:debug("#~p message-id is no more in-flight", [MsgID]),
     {next_state, connected, StateData#session{inflight=proplists:delete(MsgID, Inflight)}, Ka};
 
+% KeepAlive was set and no PINREG (or any other ctrl packet) received in the interval
 connected(timeout, StateData=#session{transport={Callback,Transport,Socket}}) ->
-    %lager:info("5s timeout"),
+    lager:info("KEEPALIVE timeout expired"),
     % sending ping
     %Callback:ping(Transport, Socket),
     %Ref = gen_fsm:send_event_after(1000, ping_timeout),
@@ -551,8 +557,8 @@ terminate(_Reason, _StateName, undefined) ->
     lager:info("session terminate with undefined state: ~p", [_Reason]),
     terminate;
 
-terminate(_Reason, StateName, _StateData=#session{deviceid=DeviceID, topics=T, opts=Opts}) ->
-    lager:info("session terminate(~p): ~p (~p ~p)", [DeviceID, _Reason, StateName, _StateData]),
+terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, opts=Opts}) ->
+    lager:info("session terminate(~p): ~p (~p ~p)", [DeviceID, _Reason, StateName, StateData]),
 
     lists:foreach(fun({Topic, _Qos}) ->
             mqtt_topic_registry:unsubscribe(Topic, {?MODULE, publish, self()})
@@ -587,6 +593,7 @@ terminate(_Reason, StateName, _StateData=#session{deviceid=DeviceID, topics=T, o
         _         -> pass
     end,
 
+    send_last_will(StateData),
     terminate.
 
 code_change(_OldVsn, StateName, StateData, _Extra) ->
@@ -606,4 +613,20 @@ next_msgid(MsgID) ->
         MsgID+1 > 65535 -> 1;
         true         -> MsgID+1
     end.
+
+
+% send Client last will testament if exists
+%
+-spec send_last_will(session) -> ok.
+send_last_will(#session{will=undefined}) ->
+    % do nothing
+    ok;
+send_last_will(#session{will=#{topic := Topic, message := Data}}) ->
+    lager:debug("sending last will"),
+
+    Msg = #mqtt_msg{type='PUBLISH', payload=[{topic, Topic}, {data, Data}]},
+    {ok, MsgWorker} = mqtt_message_worker:start_link(),
+    mqtt_message_worker:publish(MsgWorker, self(), Msg), % async
+
+    ok.
 
