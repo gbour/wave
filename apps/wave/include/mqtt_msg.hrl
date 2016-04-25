@@ -29,10 +29,21 @@
                     |'SUBACK'|'UNSUBACK'|'PINGREQ'|'PINGRESP'|'DISCONNECT'.
 
 
-% erlang:monotinic_time() & erlang:unique_integer() are not available on OTP < 18
-%
--ifdef(OLD_SEED_WAY).
+%%
+%% OTP compatibility macros
+%%
+
+-define(SEED, erlang:phash2([node()]), erlang:monotonic_time(), erlang:unique_integer()).
+-define(GENFSM_STOP(Ref, Reason, Timeout), gen_fsm:stop(Ref, Reason, Timeout)).
+
+-ifdef(OTP_RELEASE_17).
+    % erlang:monotinic_time() & erlang:unique_integer() are not available on OTP < 18
+    %
+    -undef(SEED).
     -define(SEED, erlang:now()).
--else.
-    -define(SEED, erlang:phash2([node()]), erlang:monotonic_time(), erlang:unique_integer()).
+
+    % gen_fsm:stop() implemented since 18.0
+    %
+    -undef(GENFSM_STOP).
+    -define(GENFSM_STOP(Ref, Reason, Timeout), gen_fsm:send_all_state_event(Ref, {disconnect, Reason})).
 -endif.
