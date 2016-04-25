@@ -105,13 +105,13 @@ route(Socket, Transport, Session, Raw) ->
             % we bypass mqtt_session in this case
             Transport:send(Socket, mqtt_msg:encode(
                 #mqtt_msg{type='CONNACK', payload=[{retcode, 1}]})),
-            gen_fsm:stop(Session, normal, 50),
+            ?GENFSM_STOP(Session, normal, 50),
             Transport:close(Socket),
             stop;
 
         {error, Reason, _} ->
             lager:error("closing connection. Reason: ~p", [Reason]),
-            gen_fsm:stop(Session, normal, 50),
+            ?GENFSM_STOP(Session, normal, 50),
             Transport:close(Socket),
             stop;
 
@@ -145,13 +145,13 @@ route(Socket, Transport, Session, Raw) ->
 
         _CatchAll ->
             lager:error("MQTT Msg unknown decoding error: ~p", [_CatchAll]),
-            gen_fsm:stop(Session, normal, 50),
+            ?GENFSM_STOP(Session, normal, 50),
             Transport:close(Socket)
 
     catch
         Exc ->
             lager:error("failed decoding mqtt message: ~p", [Exc]),
-            gen_fsm:stop(Session, normal, 50),
+            ?GENFSM_STOP(Session, normal, 50),
             Transport:close(Socket)
     end.
 
