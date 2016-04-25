@@ -25,7 +25,7 @@
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
--export([handle/2, publish/5, ack/3, provisional/3, is_alive/1, garbage_collect/1, disconnect/2, landed/2]).
+-export([handle/2, publish/5, ack/4, provisional/4, is_alive/1, garbage_collect/1, disconnect/2, landed/2]).
 -export([initiate/3, connected/2, connected/3]).
 %
 % role
@@ -140,15 +140,15 @@ garbage_collect(_Pid) ->
 publish(Pid, From, Topic, Content, Qos) ->
     gen_fsm:send_event(Pid, {publish, From, Topic, Content, Qos}).
 
--spec provisional(request|response, pid(), binary()) -> ok.
-provisional(request, Pid, MsgID) ->
-    gen_fsm:send_event(Pid, {provreq, MsgID});
-provisional(response, Pid, MsgID) ->
-    gen_fsm:send_event(Pid, {provresp, MsgID}).
+-spec provisional(request|response, pid(), binary(), pid()) -> ok.
+provisional(request, Pid, MsgID, From) ->
+    gen_fsm:send_event(Pid, {provreq, MsgID, From});
+provisional(response, Pid, MsgID, From) ->
+    gen_fsm:send_event(Pid, {provresp, MsgID, From}).
 
--spec ack(pid(), binary(), integer()) -> ok.
-ack(Pid, MsgID, Qos) ->
-    gen_fsm:send_event(Pid, {ack, MsgID, Qos}).
+-spec ack(pid(), binary(), integer(), pid()) -> ok.
+ack(Pid, MsgID, Qos, From) ->
+    gen_fsm:send_event(Pid, {ack, MsgID, Qos, From}).
 
 %% STATES
 
@@ -453,7 +453,7 @@ connected({publish, From, {Topic,_}, Content, Qos},
 % send provisional request PUBREC (QoS 2)
 % (to publisher)
 %
-connected({provreq, MsgID}, StateData=#session{transport={Clb,Transport,Sock},keepalive=Ka}) ->
+connected({provreq, MsgID, _From}, StateData=#session{transport={Clb,Transport,Sock},keepalive=Ka}) ->
     lager:debug("sending PUBREC"),
     Msg = #mqtt_msg{type='PUBREC', qos=0, payload=[{msgid, MsgID}]},
     case Clb:send(Transport, Sock, Msg) of
@@ -468,7 +468,7 @@ connected({provreq, MsgID}, StateData=#session{transport={Clb,Transport,Sock},ke
 % send provisional response - PUBREL (QoS 2)
 % (to subscriber)
 %
-connected({provresp, MsgID}, StateData=#session{transport={Clb,Transport,Sock},keepalive=Ka}) ->
+connected({provresp, MsgID, _From}, StateData=#session{transport={Clb,Transport,Sock},keepalive=Ka}) ->
     lager:debug("sending PUBREL"),
     Msg = #mqtt_msg{type='PUBREL', qos=1, payload=[{msgid, MsgID}]},
     case Clb:send(Transport, Sock, Msg) of
@@ -482,7 +482,7 @@ connected({provresp, MsgID}, StateData=#session{transport={Clb,Transport,Sock},k
 %
 % sending PUBACK acknowledgement (QOS=1)
 %
-connected({ack, MsgID, _Qos=1}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
+connected({ack, MsgID, _Qos=1, _}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
     lager:debug("sending PUBACK"),
     Msg = #mqtt_msg{type='PUBACK', qos=0, payload=[{msgid, MsgID}]},
     case Callback:send(Transport, Socket, Msg) of
@@ -493,7 +493,7 @@ connected({ack, MsgID, _Qos=1}, StateData=#session{transport={Callback,Transport
             {next_state, connected, StateData, Ka}
     end;
 % PUBCOMP (QOS=2)
-connected({ack, MsgID, _Qos=2}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
+connected({ack, MsgID, _Qos=2, _}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
     lager:debug("sending PUBCOMP"),
     Msg = #mqtt_msg{type='PUBCOMP', qos=0, payload=[{msgid, MsgID}]},
     case Callback:send(Transport, Socket, Msg) of
@@ -621,12 +621,12 @@ next_msgid(MsgID) ->
 send_last_will(#session{will=undefined}) ->
     % do nothing
     ok;
-send_last_will(#session{will=#{topic := Topic, message := Data}}) ->
+send_last_will(#session{will=#{topic := Topic, message := Data, qos := Qos}}) ->
     lager:debug("sending last will"),
 
-    Msg = #mqtt_msg{type='PUBLISH', payload=[{topic, Topic}, {data, Data}]},
+    Msg = #mqtt_msg{type='PUBLISH', qos=Qos, payload=[{topic, Topic}, {data, Data}]},
     {ok, MsgWorker} = mqtt_message_worker:start_link(),
-    mqtt_message_worker:publish(MsgWorker, self(), Msg), % async
+    mqtt_message_worker:publish(MsgWorker, lastwill_session, Msg), % async
 
     ok.
 

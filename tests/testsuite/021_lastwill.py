@@ -105,3 +105,49 @@ class Will(TestSuite):
 
         monitor.disconnect()
         return True
+
+    @catch
+    @desc("will: qos 1")
+    def test_05(self):
+        monitor = MqttClient("monitor", connect=4)
+        # NOTE: '/' prefix skips $ messages
+        # TODO: remove it when '$' filter will be impl.
+        monitor.subscribe("/#", 2)
+
+        client  = MqttClient("rabbit") # no keepalive
+        will    = {'topic': '/node/disconnect', 'message': client.clientid(), 'qos': 1}
+        client.connect(version=4, will=will)
+        client.socket_close()
+
+        evt = monitor.recv()
+        if not isinstance(evt, EventPublish) or evt.msg.topic != will['topic'] or \
+                evt.msg.payload != will['message'] or \
+                evt.msg.qos != 1:
+            return False
+
+        monitor.disconnect()
+        return True
+
+    @catch
+    @desc("will: qos 2")
+    def test_06(self):
+        monitor = MqttClient("monitor", connect=4)
+        # NOTE: '/' prefix skips $ messages
+        # TODO: remove it when '$' filter will be impl.
+        monitor.subscribe("/#", 2)
+
+        client  = MqttClient("rabbit") # no keepalive
+        will    = {'topic': '/node/disconnect', 'message': client.clientid(), 'qos': 2}
+        client.connect(version=4, will=will)
+        client.socket_close()
+
+        evt = monitor.recv()
+        if not isinstance(evt, EventPublish) or evt.msg.topic != will['topic'] or \
+                evt.msg.payload != will['message'] or \
+                evt.msg.qos != 2:
+            return False
+
+        monitor.disconnect()
+        return True
+
+

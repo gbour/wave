@@ -220,15 +220,15 @@ send(publish, {Mod,Fun,Pid}, Topic, Payload, Qos) ->
 %
 -spec send(provreq|provresp|ack, Emitter::pid(), MsgID::binary(), Qos::integer()) -> ok.
 send(provreq, Publisher, MsgID, _Qos=2) ->
-    mqtt_session:provisional(request, Publisher, MsgID);
+    mqtt_session:provisional(request, Publisher, MsgID, self());
 send(provreq, _, _, _) ->
     pass;
 
 send(provresp, Peer, MsgID, _Qos=2) ->
-    mqtt_session:provisional(response, Peer, MsgID);
+    mqtt_session:provisional(response, Peer, MsgID, self());
 
 send(ack, Publisher, MsgID, Qos) ->
-    mqtt_session:ack(Publisher, MsgID, Qos).
+    mqtt_session:ack(Publisher, MsgID, Qos, self()).
 
 
 % Forward published message to all subscribers
