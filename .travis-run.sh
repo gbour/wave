@@ -7,7 +7,7 @@ PID=$!
 echo " pid= $PID"
 sleep 10
 
-make DEBUG=/tmp/wave.tests.log test
+make DEBUG=/tmp/wave.tests.log WAVELOGS=/tmp/wave.travis.log test
 STATUS=$?
 
 kill -HUP $PID

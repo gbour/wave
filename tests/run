@@ -14,12 +14,32 @@ import testsuite
 COUNTERS = {'passed': 0, 'failed': 0, 'skipped': 0}
 
 def setup_logger():
-    cfg = {'format': "%(message)s", 'level': logging.CRITICAL}
+    DEBUG    = os.environ.get('DEBUG', '0')
+    WAVELOGS = os.environ.get('WAVELOGS', '0')
 
-    DEBUG = os.environ.get('DEBUG', '0')
-    if DEBUG not in ('0', '1'): cfg.update({'filename': DEBUG, 'level': logging.INFO})
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
 
-    logging.basicConfig(**cfg)
+    #fmt = logging.Formatter("%(func)s%(message)s")
+    # console
+    h = logging.StreamHandler(stream=sys.stdout)
+    h.setLevel(logging.DEBUG if DEBUG == '1' else logging.INFO)
+    #h.setFormatter(fmt)
+    logger.addHandler(h)
+
+    # file
+    if DEBUG not in ('0','1'):
+        h = logging.FileHandler(DEBUG)
+        h.setLevel(logging.DEBUG)
+        #h.setFormatter(fmt)
+        logger.addHandler(h)
+
+    # wave logs
+    if WAVELOGS:
+        h = logging.FileHandler(WAVELOGS)
+        h.setLevel(logging.DEBUG)
+        #h.setFormatter(fmt)
+        logger.addHandler(h)
 
 def update_counters(update):
     for k, v in update.iteritems():
