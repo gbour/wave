@@ -53,7 +53,12 @@ init(_) ->
 %% API
 %%
 
--spec publish(Worker::pid(), Emitter::pid(), Msg::mqtt_msg()) -> ok.
+%
+% Generally speaking, Emitter is a mqtt_session pid,
+% But in case of last will message with qos = 2, Emitter acknowledgment as too be faked,
+% this is the role of mqtt_lastwill_session server (locally named 'lastwill_session'
+%
+-spec publish(Worker::pid(), Emitter::pid()|'lastwill_session', Msg::mqtt_msg()) -> ok.
 publish(Pid, From, Msg) ->
     gen_fsm:send_event(Pid, {publish, From, Msg}).
 

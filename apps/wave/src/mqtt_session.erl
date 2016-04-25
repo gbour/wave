@@ -75,7 +75,7 @@
     %TODO: initialize with random value
     next_msgid = 1         :: integer(),
     % stores client will settings (topic + message)
-    will       = undefined :: map()
+    will       = undefined :: undefined|map()
 }).
 -type session() :: #session{}.
 
@@ -91,7 +91,8 @@ init([Transport, Opts]) ->
     random:seed(?SEED),
 
     % timeout on socket connection: close socket is no CONNECT message received after timeout
-    {ok, initiate, #session{transport=Transport, opts=Opts, next_msgid=random:uniform(65535)}, ?CONNECT_TIMEOUT}.
+    {ok, initiate, #session{transport=Transport, opts=Opts, next_msgid=random:uniform(65535)}, 
+         ?CONNECT_TIMEOUT}.
 
 %%
 -spec handle(pid(), mqtt_msg()) -> {ok, any()}.
@@ -617,7 +618,7 @@ next_msgid(MsgID) ->
 
 % send Client last will testament if exists
 %
--spec send_last_will(session) -> ok.
+-spec send_last_will(session()) -> ok.
 send_last_will(#session{will=undefined}) ->
     % do nothing
     ok;
