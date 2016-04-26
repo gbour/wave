@@ -73,7 +73,7 @@ class MqttClient(object):
         return self._c.conn_is_alive()
 
     def recv(self):
-        self._c.loop()
+        self._c.loop(timeout=5)
         return self._c.pop_event()
 
     def __getattr__(self, name):
