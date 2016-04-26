@@ -70,7 +70,7 @@ decode(Type, Flags= <<Dup:1, Qos:2, Retain:1>>, {RLen, _, Rest}) ->
 
     <<BPayload:RLen/binary, Rest2/binary>> = Rest,
 
-    Msg = case decode_payload(Type, Qos, {RLen, BPayload}) of
+    Msg = case decode_payload(Type, {Dup, Qos, Retain}, {RLen, BPayload}) of
         {ok, Payload} ->
             {ok, #mqtt_msg{
                 type=Type,
@@ -93,10 +93,10 @@ decode(Type, Flags= <<Dup:1, Qos:2, Retain:1>>, {RLen, _, Rest}) ->
 %% @doc «CONNECT» message
 %% support both MQTT 3.1 and 3.1.1 versions
 %%
--spec decode_payload(mqtt_verb(), integer(), {integer(), binary()}) -> {error, 
-                                                                        disconnect|conformity|protocol_version}
-                                                                       | {ok, list({atom(), any()})}.
-decode_payload('CONNECT', _Qos, {_Len, <<
+-spec decode_payload(mqtt_verb(), {integer(), integer(), integer()}, {integer(), binary()}) ->
+    {error, disconnect|conformity|protocol_version}
+    | {ok, list({atom(), any()})}.
+decode_payload('CONNECT', _, {_Len, <<
         PLen:16,
         Protocol:PLen/binary,
         Version:8/integer,
@@ -107,10 +107,10 @@ decode_payload('CONNECT', _Qos, {_Len, <<
     decode_connect(Protocol, Version, Reserved, {<<Flags:7/integer>>, Ka, Rest});
 
 
-decode_payload('PUBLISH', _Qos=3, _) ->
+decode_payload('PUBLISH', {_, Qos=3, _}, _) ->
     erlang:throw({'PUBLISH', "3.3.1-4", "invalid QOS value (3)"});
 
-decode_payload('PUBLISH', Qos, {_Len, Rest}) ->
+decode_payload('PUBLISH', {_, Qos, _}, {_Len, Rest}) ->
     %lager:debug("PUBLISH (qos=~p) ~p ~p", [Qos, Len, Rest]),
 
     {Topic, Rest2} = decode_string(Rest),
@@ -132,7 +132,7 @@ decode_payload('PUBLISH', Qos, {_Len, Rest}) ->
 
     {ok, Ret};
 
-decode_payload('SUBSCRIBE', _Qos, {_Len, <<MsgID:16, Payload/binary>>}) ->
+decode_payload('SUBSCRIBE', _, {_Len, <<MsgID:16, Payload/binary>>}) ->
     lager:debug("SUBSCRIBE v3.1 ~p", [MsgID]),
     case MsgID of
         0 -> erlang:throw({'SUBSCRIBE', "2.3.1-1", "null msgid"});
@@ -143,7 +143,7 @@ decode_payload('SUBSCRIBE', _Qos, {_Len, <<MsgID:16, Payload/binary>>}) ->
 	lager:debug("topics= ~p", [Topics]),
 	{ok, [{msgid, MsgID},{topics, Topics}]};
 
-decode_payload('UNSUBSCRIBE', _Qos, {_Len, <<MsgID:16, Payload/binary>>}) ->
+decode_payload('UNSUBSCRIBE', _, {_Len, <<MsgID:16, Payload/binary>>}) ->
     lager:debug("UNSUBSCRIBE: ~p", [Payload]),
     case MsgID of
         0 -> erlang:throw({'UNSUBSCRIBE', "2.3.1-1", "null msgid"});
@@ -169,19 +169,20 @@ decode_payload('CONNACK', _, {_Len, <<_:8, RetCode:8/integer>>}) ->
     lager:debug("CONNACK"),
     {ok, [{retcode, RetCode}]};
 
-decode_payload('PUBACK', _Qos, {_Len=2, <<MsgID:16>>}) ->
+decode_payload('PUBACK', _, {_Len=2, <<MsgID:16>>}) ->
     lager:debug("PUBACK. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
-decode_payload('PUBREC', _Qos, {_Len, <<MsgID:16>>}) ->
+decode_payload('PUBREC', _, {_Len, <<MsgID:16>>}) ->
     lager:debug("PUBREC. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
-decode_payload('PUBREL', _Qos=1, {_Len, <<MsgID:16>>}) ->
+% TODO: throw exception with custom message when 'PUBREL' and qos != 1
+decode_payload('PUBREL', {_, _Qos=1, _}, {_Len, <<MsgID:16>>}) ->
     lager:debug("PUBREL. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
-decode_payload('PUBCOMP', _Qos, {_Len, <<MsgID:16>>}) ->
+decode_payload('PUBCOMP', _, {_Len, <<MsgID:16>>}) ->
     lager:debug("PUBREL. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
@@ -189,8 +190,8 @@ decode_payload('SUBACK', _, {_Len, <<MsgID:16, _Qos/binary>>}) ->
     lager:debug("SUBACK. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
-decode_payload(Cmd, Qos, Args) ->
-    lager:info("invalid command ~p (qos=~p, payload=~p)", [Cmd, Qos, Args]),
+decode_payload(Cmd, Flags, Args) ->
+    lager:info("invalid command ~p (flags=~p, payload=~p)", [Cmd, Flags, Args]),
 
     {error, disconnect}.
 
