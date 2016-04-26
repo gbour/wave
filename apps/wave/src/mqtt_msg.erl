@@ -107,7 +107,9 @@ decode_payload('CONNECT', _, {_Len, <<
     decode_connect(Protocol, Version, Reserved, {<<Flags:7/integer>>, Ka, Rest});
 
 
-decode_payload('PUBLISH', {_, Qos=3, _}, _) ->
+decode_payload('PUBLISH', {_Dup=1, _Qos=0, _}, _) ->
+    erlang:throw({'PUBLISH', "3.3.1-2", "DUP flag MUST be 0 when QOS = 0"});
+decode_payload('PUBLISH', {_     , _Qos=3, _}, _) ->
     erlang:throw({'PUBLISH', "3.3.1-4", "invalid QOS value (3)"});
 
 decode_payload('PUBLISH', {_, Qos, _}, {_Len, Rest}) ->

@@ -1026,3 +1026,17 @@ class V311(TestSuite):
 
         return True
 
+    @catch
+    @desc("[MQTT-3.3.1-2] PUBLISH: DUP flag MUST be 0 if QOS = 0")
+    def test_260(self):
+        c = MqttClient("conformity", connect=4)
+
+        c.forge(NC.CMD_PUBLISH, 8, [
+            ('string', '/foo/bar'), # topic
+            ('uint16', 0),          # identifier
+        ], send=True)
+        if c.conn_is_alive():
+            return False
+
+        return True
+
