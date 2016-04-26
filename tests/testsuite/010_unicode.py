@@ -25,6 +25,30 @@ class Unicode(TestSuite):
     #
 
     @catch
+    @desc("CONNECT w/ utf8 clientid")
+    def test_010(self):
+        c = MqttClient(u"⠊⠀⠉⠁⠝⠀⠑⠁⠞⠀⠛⠇⠁⠎⠎⠀⠁⠝⠙⠀⠊⠞⠀⠙⠕⠑⠎⠝⠞⠀⠓⠥⠗⠞⠀⠍⠑", connect=4)
+        if not c.conn_is_alive():
+            return False
+
+        c.disconnect()
+        return True
+
+
+    @catch
+    @desc("CONNECT w/ utf8 username/password")
+    def test_015(self):
+        c = MqttClient(u"⠊⠀⠉⠁⠝⠀⠑⠁⠞⠀⠛⠇⠁⠎⠎⠀⠁⠝⠙⠀⠊⠞⠀⠙⠕⠑⠎⠝⠞⠀⠓⠥⠗⠞⠀⠍⠑", connect=4,
+            username=u'ᴮᴵᴳᴮᴵᴿᴰ',
+            password=u'рẵśşŵόґď'
+        )
+        if not c.conn_is_alive():
+            return False
+
+        c.disconnect()
+        return True
+
+    @catch
     @desc("(un)subscribe with utf8 topic filter")
     def test_100(self):
         c = self.newclient('unicode')
