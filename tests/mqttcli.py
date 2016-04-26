@@ -22,8 +22,8 @@ class MqttClient(object):
 
         server = 'localhost'
 
-        self._c = nyamuk.Nyamuk("test:{0}:{1}".format(prefix, random.randint(0,9999) if rand else 0),
-            None, None, server=server, log_level=loglevel, log_file=logfile, **kwargs)
+        self._c = nyamuk.Nyamuk(u"test:{0}:{1}".format(prefix, random.randint(0,9999) if rand else 0),
+            server=server, log_level=loglevel, log_file=logfile, **kwargs)
 
         # MQTT connection
         # 
