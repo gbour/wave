@@ -81,8 +81,11 @@ class Unicode(TestSuite):
 
         evt = sub.recv()
         if not isinstance(evt, EventPublish) or\
-                evt.msg.topic != topic or\
-                evt.msg.payload != content:
+                evt.msg.topic != topic:
+            return false
+        
+        content2 = evt.msg.payload.decode('utf8')
+        if content2 != content:
             return False
     
         sub.disconnect()
