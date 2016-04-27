@@ -10,6 +10,11 @@ otp_release:
 services:
     - redis-server
 
+addons:
+    apt:
+        packages:
+            - python-redis
+
 install:
     # get deps, compile code, generates config according to choosed environment
     - make env=travis all
