@@ -277,6 +277,9 @@ connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=_Ref,keepaliv
 
 
 connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _, StateData=#session{deviceid=_DeviceID,keepalive=Ka}) ->
+    % only if retain=1
+    mqtt_retain:store(Msg),
+
     %TODO: save message in DB
     %      pass MsgID to message_worker
     {ok, MsgWorker} = mqtt_message_worker:start_link(),
@@ -287,6 +290,8 @@ connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _, StateData=#session{deviceid=_
 % qos > 0
 connected(Msg=#mqtt_msg{type='PUBLISH', payload=P}, _,
           StateData=#session{deviceid=_DeviceID,keepalive=Ka,inflight=Inflight}) ->
+    % only if retain=1
+    mqtt_retain:store(Msg),
     %TODO: save message in DB
     MsgID = proplists:get_value(msgid, P),
     %      pass MsgID to message_worker

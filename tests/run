@@ -3,11 +3,13 @@
 
 import os
 import sys
+import redis
 import inspect
 import logging
 
 import TestSuite
 import testsuite
+from lib import env
 
 #from testsuite import *
 #from testsuite import plop
@@ -48,8 +50,18 @@ def update_counters(update):
 def print_summary():
     print "\n  \033[1;42;30m {passed} ᴘᴀssᴇᴅ \033[0m \033[41;37m {failed} ғᴀɪʟᴇᴅ \033[0m \033[1;43;30m {skipped} sᴋɪᴘᴘᴇᴅ \033[0m\n".format(**COUNTERS)
 
+
+def setup_db():
+    env.db = redis.Redis(host='localhost', port=6379, db=0)
+
+    # cleanup redis db before running tests
+    logging.debug("Redis: {0}".format(env.db.info('keyspace')))
+    env.db.flushdb()
+
+
 if __name__ == '__main__':
     setup_logger()
+    setup_db()
 
     modfilter = None
     if len(sys.argv) > 1:
