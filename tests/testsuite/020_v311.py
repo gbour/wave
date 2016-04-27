@@ -1033,9 +1033,79 @@ class V311(TestSuite):
 
         c.forge(NC.CMD_PUBLISH, 8, [
             ('string', '/foo/bar'), # topic
-            ('uint16', 0),          # identifier
+            ('uint16', 10),         # identifier
         ], send=True)
         if c.conn_is_alive():
+            return False
+
+        return True
+
+    @catch
+    @desc("[MQTT_4.3.2-2] QOS 1, DUP flag: after PUBACK, PUBLISH with same packet id is a new publication")
+    def test_261(self):
+        pub = MqttClient("conformity", connect=4)
+        sub = MqttClient("test", connect=4)
+        sub.subscribe("/foo/bar", qos=0)
+
+        ack = pub.forge(NC.CMD_PUBLISH, 2, [
+            ('string', '/foo/bar'), # topic
+            ('uint16', 42),         # identifier
+        ], send=True)
+
+        if not isinstance(ack, EventPuback):
+            return False
+
+        # ensure message has been delivered
+        evt = sub.recv()
+        if not isinstance(evt, EventPublish) or evt.msg.topic != '/foo/bar':
+            return False
+
+        # sending again same packet (same id) with dup=1
+        ack = pub.forge(NC.CMD_PUBLISH, 10, [
+            ('string', '/foo/bar'), # topic
+            ('uint16', 42),         # identifier
+        ], send=True)
+
+        if not isinstance(ack, EventPuback):
+            return False
+
+        # ensure message has been delivered
+        evt = sub.recv()
+        if not isinstance(evt, EventPublish) or evt.msg.topic != '/foo/bar':
+            return False
+
+        return True
+
+    @catch
+    @desc("[MQTT-4.3.2-2] QOS 1, DUP flag: while PUBACK not delivered, a PUBLISH with same packed it is ignored")
+    def test_262(self):
+        pub = MqttClient("conformity", connect=4)
+        sub = MqttClient("test", connect=4)
+        sub.subscribe("/foo/bar", qos=1)
+
+        ack = pub.forge(NC.CMD_PUBLISH, 2, [
+            ('string', '/foo/bar'), # topic
+            ('uint16', 42),         # identifier
+        ], send=True)
+        if ack is not None:
+            return False
+
+        evt = sub.recv()
+        if not isinstance(evt, EventPublish) or evt.msg.topic != '/foo/bar':
+            return False
+        
+        ## reemit message with dup=1 (same msgid)
+        ## message must be discarded as previous on is still inflight
+        ack = pub.forge(NC.CMD_PUBLISH, 2, [
+            ('string', '/foo/bar'), # topic
+            ('uint16', 42),         # identifier
+        ], send=True)
+        if ack is not None:
+            return False
+
+        evt = sub.recv()
+        print evt
+        if evt is not None:
             return False
 
         return True

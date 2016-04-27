@@ -288,17 +288,28 @@ connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _, StateData=#session{deviceid=_
     {reply, undefined, connected, StateData, Ka};
 
 % qos > 0
-connected(Msg=#mqtt_msg{type='PUBLISH', payload=P}, _,
+connected(Msg=#mqtt_msg{type='PUBLISH', payload=P, dup=Dup}, _,
           StateData=#session{deviceid=_DeviceID,keepalive=Ka,inflight=Inflight}) ->
-    % only if retain=1
-    mqtt_retain:store(Msg),
-    %TODO: save message in DB
-    MsgID = proplists:get_value(msgid, P),
-    %      pass MsgID to message_worker
-    {ok, MsgWorker} = mqtt_message_worker:start_link(),
-    mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
 
-    {reply, undefined, connected, StateData#session{inflight=[{MsgID,MsgWorker}|Inflight]}, Ka};
+    %TODO: save message in DB
+    MsgID     = proplists:get_value(msgid, P),
+    Inflight2 = case proplists:get_value(MsgID, Inflight) of
+        undefined ->
+            % only if retain=1
+            mqtt_retain:store(Msg),
+            %      pass MsgID to message_worker
+            {ok, MsgWorker} = mqtt_message_worker:start_link(),
+            mqtt_message_worker:publish(MsgWorker, self(), Msg), % async
+            
+            [{MsgID, MsgWorker} | Inflight];
+
+        % message is already inflight
+        _ ->
+            lager:info("message %~p already inflight (dup=~p). Ignored", [MsgID, Dup]),
+            Inflight
+    end,
+
+    {reply, undefined, connected, StateData#session{inflight=Inflight2}, Ka};
 
 connected(Msg=#mqtt_msg{type='PUBACK', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->
     %TODO: find matching
@@ -440,7 +451,7 @@ connected({publish, _, {Topic,_}, Content, Qos=0, Retain},
 % QoS 1 or 2
 connected({publish, From, {Topic,_}, Content, Qos, Retain},
           StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka,inflight=Inflight,next_msgid=MsgID}) ->
-    lager:debug("~p: publish message to subscriber with QoS=~p (msgid= ~p)", [self(), Qos, MsgID]),
+    lager:debug("send PUBLISH to subscriber (msgid=~p, qos=~p)", [MsgID, Qos]),
 
     Msg   = #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain,
                       payload=[{topic,Topic}, {msgid, MsgID}, {content, Content}]},
