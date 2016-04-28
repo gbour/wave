@@ -53,7 +53,12 @@ init(_) ->
 %% API
 %%
 
--spec publish(Worker::pid(), Emitter::pid(), Msg::mqtt_msg()) -> ok.
+%
+% Generally speaking, Emitter is a mqtt_session pid,
+% But in case of last will message with qos = 2, Emitter acknowledgment as too be faked,
+% this is the role of mqtt_lastwill_session server (locally named 'lastwill_session'
+%
+-spec publish(Worker::pid(), Emitter::pid()|'lastwill_session', Msg::mqtt_msg()) -> ok.
 publish(Pid, From, Msg) ->
     gen_fsm:send_event(Pid, {publish, From, Msg}).
 
@@ -220,15 +225,15 @@ send(publish, {Mod,Fun,Pid}, Topic, Payload, Qos) ->
 %
 -spec send(provreq|provresp|ack, Emitter::pid(), MsgID::binary(), Qos::integer()) -> ok.
 send(provreq, Publisher, MsgID, _Qos=2) ->
-    mqtt_session:provisional(request, Publisher, MsgID);
+    mqtt_session:provisional(request, Publisher, MsgID, self());
 send(provreq, _, _, _) ->
     pass;
 
 send(provresp, Peer, MsgID, _Qos=2) ->
-    mqtt_session:provisional(response, Peer, MsgID);
+    mqtt_session:provisional(response, Peer, MsgID, self());
 
 send(ack, Publisher, MsgID, Qos) ->
-    mqtt_session:ack(Publisher, MsgID, Qos).
+    mqtt_session:ack(Publisher, MsgID, Qos, self()).
 
 
 % Forward published message to all subscribers

@@ -46,7 +46,6 @@ class TestSuite(object):
         status = True
         counters = {'passed':0, 'failed': 0, 'skipped': 0}
 
-        print "\n\033[1m... {0} ...\033[0m".format(self.suitename)
         logging.info("\n\033[1m... {0} ...\033[0m".format(self.suitename))
 
         tests = [(name, meth) for (name, meth) in inspect.getmembers(self, predicate=inspect.ismethod) if name.startswith('test_')]
@@ -54,7 +53,7 @@ class TestSuite(object):
             if testfilter and not testfilter in name:
                 continue
 
-            logging.info(">> "+name)
+            logging.debug(">> "+name)
             ret = test()
             try:
                 (desc, ret) = ret
@@ -69,7 +68,13 @@ class TestSuite(object):
         return (status, counters)
 
     def _print(self, (color, text, _ign), funcname, testname):
-        print "{0}{1}[\033[{2}m{3}\033[0m]".format(testname, ' '*(WIDTH-10-len(testname)), color, text)
+        #print "{0}{1}[\033[{2}m{3}\033[0m]".format(testname, ' '*(WIDTH-10-len(testname)), color, text)
 
-        logging.info("<< {0}: {1}{2}[\033[{3}m{4}\033[0m]\n".format(
-            funcname, testname, ' '*(90-5-len(testname+funcname)), color, text))
+        logging.info("{fun}: {name}{halign}[\033[{color}m{status}\033[0m]".format(
+            fun    = funcname,
+            name   = testname,
+            halign = ' '*(WIDTH-11-len(testname+funcname)),
+            color  = color,
+            status = text
+        ))
+

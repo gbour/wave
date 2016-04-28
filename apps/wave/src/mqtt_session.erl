@@ -25,7 +25,7 @@
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
--export([handle/2, publish/5, ack/3, provisional/3, is_alive/1, garbage_collect/1, disconnect/2, landed/2]).
+-export([handle/2, publish/5, ack/4, provisional/4, is_alive/1, garbage_collect/1, disconnect/2, landed/2]).
 -export([initiate/3, connected/2, connected/3]).
 %
 % role
@@ -73,7 +73,9 @@
     %       another one generate by mqtt_session (integer)
     inflight   = []        :: list({MsgID::binary(), MsgWorker::pid()}),
     %TODO: initialize with random value
-    next_msgid = 1         :: integer()
+    next_msgid = 1         :: integer(),
+    % stores client will settings (topic + message)
+    will       = undefined :: undefined|map()
 }).
 -type session() :: #session{}.
 
@@ -89,7 +91,8 @@ init([Transport, Opts]) ->
     random:seed(?SEED),
 
     % timeout on socket connection: close socket is no CONNECT message received after timeout
-    {ok, initiate, #session{transport=Transport, opts=Opts, next_msgid=random:uniform(65535)}, ?CONNECT_TIMEOUT}.
+    {ok, initiate, #session{transport=Transport, opts=Opts, next_msgid=random:uniform(65535)}, 
+         ?CONNECT_TIMEOUT}.
 
 %%
 -spec handle(pid(), mqtt_msg()) -> {ok, any()}.
@@ -138,15 +141,15 @@ garbage_collect(_Pid) ->
 publish(Pid, From, Topic, Content, Qos) ->
     gen_fsm:send_event(Pid, {publish, From, Topic, Content, Qos}).
 
--spec provisional(request|response, pid(), binary()) -> ok.
-provisional(request, Pid, MsgID) ->
-    gen_fsm:send_event(Pid, {provreq, MsgID});
-provisional(response, Pid, MsgID) ->
-    gen_fsm:send_event(Pid, {provresp, MsgID}).
+-spec provisional(request|response, pid(), binary(), pid()) -> ok.
+provisional(request, Pid, MsgID, From) ->
+    gen_fsm:send_event(Pid, {provreq, MsgID, From});
+provisional(response, Pid, MsgID, From) ->
+    gen_fsm:send_event(Pid, {provresp, MsgID, From}).
 
--spec ack(pid(), binary(), integer()) -> ok.
-ack(Pid, MsgID, Qos) ->
-    gen_fsm:send_event(Pid, {ack, MsgID, Qos}).
+-spec ack(pid(), binary(), integer(), pid()) -> ok.
+ack(Pid, MsgID, Qos, From) ->
+    gen_fsm:send_event(Pid, {ack, MsgID, Qos, From}).
 
 %% STATES
 
@@ -237,7 +240,10 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
 
     case Retcode of
         0 ->
-            {reply, Resp, NextState, StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, topics=Topics}, Ka};
+            Will = proplists:get_value(will, P),
+            {reply, Resp, NextState,
+                StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, topics=Topics, will=Will}, Ka
+            };
 
         _ ->
             % because we need to close connection after having sent non-zero CONNACK
@@ -257,7 +263,7 @@ initiate(timeout, StateData) ->
     {stop, disconnect, StateData}.
 
 connected(#mqtt_msg{type='DISCONNECT'}, _, StateData) ->
-    {stop, normal, disconnect, StateData};
+    {stop, normal, disconnect, StateData#session{will=undefined}};
 
 connected(#mqtt_msg{type='PINGREQ'}, _, StateData=#session{keepalive=Ka}) ->
     Resp = #mqtt_msg{type='PINGRESP'},
@@ -448,7 +454,7 @@ connected({publish, From, {Topic,_}, Content, Qos},
 % send provisional request PUBREC (QoS 2)
 % (to publisher)
 %
-connected({provreq, MsgID}, StateData=#session{transport={Clb,Transport,Sock},keepalive=Ka}) ->
+connected({provreq, MsgID, _From}, StateData=#session{transport={Clb,Transport,Sock},keepalive=Ka}) ->
     lager:debug("sending PUBREC"),
     Msg = #mqtt_msg{type='PUBREC', qos=0, payload=[{msgid, MsgID}]},
     case Clb:send(Transport, Sock, Msg) of
@@ -463,7 +469,7 @@ connected({provreq, MsgID}, StateData=#session{transport={Clb,Transport,Sock},ke
 % send provisional response - PUBREL (QoS 2)
 % (to subscriber)
 %
-connected({provresp, MsgID}, StateData=#session{transport={Clb,Transport,Sock},keepalive=Ka}) ->
+connected({provresp, MsgID, _From}, StateData=#session{transport={Clb,Transport,Sock},keepalive=Ka}) ->
     lager:debug("sending PUBREL"),
     Msg = #mqtt_msg{type='PUBREL', qos=1, payload=[{msgid, MsgID}]},
     case Clb:send(Transport, Sock, Msg) of
@@ -477,7 +483,7 @@ connected({provresp, MsgID}, StateData=#session{transport={Clb,Transport,Sock},k
 %
 % sending PUBACK acknowledgement (QOS=1)
 %
-connected({ack, MsgID, _Qos=1}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
+connected({ack, MsgID, _Qos=1, _}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
     lager:debug("sending PUBACK"),
     Msg = #mqtt_msg{type='PUBACK', qos=0, payload=[{msgid, MsgID}]},
     case Callback:send(Transport, Socket, Msg) of
@@ -488,7 +494,7 @@ connected({ack, MsgID, _Qos=1}, StateData=#session{transport={Callback,Transport
             {next_state, connected, StateData, Ka}
     end;
 % PUBCOMP (QOS=2)
-connected({ack, MsgID, _Qos=2}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
+connected({ack, MsgID, _Qos=2, _}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
     lager:debug("sending PUBCOMP"),
     Msg = #mqtt_msg{type='PUBCOMP', qos=0, payload=[{msgid, MsgID}]},
     case Callback:send(Transport, Socket, Msg) of
@@ -506,8 +512,9 @@ connected({'msg-landed', MsgID}, StateData=#session{keepalive=Ka, inflight=Infli
     lager:debug("#~p message-id is no more in-flight", [MsgID]),
     {next_state, connected, StateData#session{inflight=proplists:delete(MsgID, Inflight)}, Ka};
 
+% KeepAlive was set and no PINREG (or any other ctrl packet) received in the interval
 connected(timeout, StateData=#session{transport={Callback,Transport,Socket}}) ->
-    %lager:info("5s timeout"),
+    lager:info("KEEPALIVE timeout expired"),
     % sending ping
     %Callback:ping(Transport, Socket),
     %Ref = gen_fsm:send_event_after(1000, ping_timeout),
@@ -551,8 +558,8 @@ terminate(_Reason, _StateName, undefined) ->
     lager:info("session terminate with undefined state: ~p", [_Reason]),
     terminate;
 
-terminate(_Reason, StateName, _StateData=#session{deviceid=DeviceID, topics=T, opts=Opts}) ->
-    lager:info("session terminate(~p): ~p (~p ~p)", [DeviceID, _Reason, StateName, _StateData]),
+terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, opts=Opts}) ->
+    lager:info("session terminate(~p): ~p (~p ~p)", [DeviceID, _Reason, StateName, StateData]),
 
     lists:foreach(fun({Topic, _Qos}) ->
             mqtt_topic_registry:unsubscribe(Topic, {?MODULE, publish, self()})
@@ -587,6 +594,7 @@ terminate(_Reason, StateName, _StateData=#session{deviceid=DeviceID, topics=T, o
         _         -> pass
     end,
 
+    send_last_will(StateData),
     terminate.
 
 code_change(_OldVsn, StateName, StateData, _Extra) ->
@@ -606,4 +614,20 @@ next_msgid(MsgID) ->
         MsgID+1 > 65535 -> 1;
         true         -> MsgID+1
     end.
+
+
+% send Client last will testament if exists
+%
+-spec send_last_will(session()) -> ok.
+send_last_will(#session{will=undefined}) ->
+    % do nothing
+    ok;
+send_last_will(#session{will=#{topic := Topic, message := Data, qos := Qos}}) ->
+    lager:debug("sending last will"),
+
+    Msg = #mqtt_msg{type='PUBLISH', qos=Qos, payload=[{topic, Topic}, {data, Data}]},
+    {ok, MsgWorker} = mqtt_message_worker:start_link(),
+    mqtt_message_worker:publish(MsgWorker, lastwill_session, Msg), % async
+
+    ok.
 

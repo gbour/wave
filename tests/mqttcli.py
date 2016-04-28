@@ -66,6 +66,9 @@ class MqttClient(object):
 
         return self._c.pop_event()
 
+    def clientid(self):
+        return self._c.client_id
+
     def get_last_mid(self):
         return self._c.get_last_mid()
 

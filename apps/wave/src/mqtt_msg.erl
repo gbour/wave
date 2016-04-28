@@ -223,6 +223,10 @@ decode_connect(Protocol, _, _, _) ->
 decode_connect2(_Version, {<<0:1, 1:1, _:5>>, _, _}) ->
     lager:notice("CONNECT: password flag is set while username flag is not"),
     {error, conformity};
+decode_connect2(_, {<<_:3, WillQos:2, _:2>>, _, _}) when WillQos =:= 3 ->
+    erlang:throw({'CONNECT', "MQTT-3.1.2-14", "invalid will qos (3)"});
+decode_connect2(_, {<<_:3, WillQos:2, WillFlag:1, _:1>>, _, _}) when WillFlag =:= 0, WillQos =/= 0 ->
+    erlang:throw({'CONNECT', "MQTT-3.1.2-13", "if will flag is 0, will qos MUST be 0 too"});
 decode_connect2(Version,
         {<<User:1, Pwd:1, WillRetain:1, WillQos:2, WillFlag:1, Clean:1>>, Ka, Rest}) ->
     lager:debug("CONNECT ~p (~p/~p/~p/~p/~p/~p)",
@@ -240,12 +244,16 @@ decode_connect2(Version,
 
 
     % decoding will topic & message
-    {WillTopic, WillMsg, Rest3} = case WillFlag of
+    {Will, Rest3} = case WillFlag of
         1 ->
             {_WillTopic, _R}  = decode_string(Rest2),
-            {_WillMsg  , _R2} = decode_string(_R),
-            {_WillTopic, _WillMsg, _R2};
-        _ -> {undefined, undefined, Rest2}
+            checktopic(_WillTopic), % ensure topic is valid, raise exception either (w/ WRONG msg)
+
+            % Will message is any binary content. 2 first bytes are will message length
+            <<MsgLen:16/integer, _WillMsg:MsgLen/binary, _R2/binary>> = _R,
+            {#{topic => _WillTopic, message => _WillMsg, qos => WillQos}, _R2};
+
+        _ -> {undefined, Rest2}
     end,
 
     % decoding username
@@ -260,11 +268,10 @@ decode_connect2(Version,
         _ -> {undefined, Rest4}
     end,
 
-    lager:debug("~p / ~p / ~p / ~p / ~p, keepalive=~p", [ClientID, WillTopic, WillMsg, Username, Password, Ka]),
+    lager:debug("~p / ~p / ~p / ~p, keepalive=~p", [ClientID, Will, Username, Password, Ka]),
     {ok, [
         {clientid , ClientID},
-        {topic    , WillTopic},
-        {message  , WillMsg},
+        {will     , Will},
         {username , Username},
         {password , Password},
         {keepalive, Ka},
