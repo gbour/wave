@@ -25,6 +25,9 @@ install:
     # nyamuk is a python MQTT client used for blackbox tests
     - "git clone -b enhancement https://github.com/gbour/nyamuk.git tests/nyamuk"
 
+before_script:
+    - kerl list installations
+
 script:
     - make dialyze
     - ./.travis-run.sh
