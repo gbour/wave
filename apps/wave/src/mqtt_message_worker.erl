@@ -223,9 +223,9 @@ code_change(_OldVsn, StateName, StateData, _Extra) ->
 % Forward a message to subscriber
 %
 -spec send(publish, Receiver::{module(), atom(), pid()}, {Topic::binary(), TFilter::binary()}, 
-           Payload::binary(), Qos::integer()) -> ok.
-send(publish, {Mod,Fun,Pid}, Topic, Payload, Qos) ->
-    Mod:Fun(Pid, self(), Topic, Payload, Qos).
+           Payload::binary(), Qos::integer(), Retain::mqtt_retain()) -> ok.
+send(publish, {Mod,Fun,Pid}, Topic, Payload, Qos, Retain) ->
+    Mod:Fun(Pid, self(), Topic, Payload, Qos, Retain).
 
 % send provisional response (PUBREC)
 % ONLY for QoS 2
@@ -267,7 +267,7 @@ publish_to_subscribers(_From, #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain, 
 
             case is_process_alive(Pid) of
                 true ->
-                    send(publish, Subscriber, {Topic, TopicMatch}, Content, EQos);
+                    send(publish, Subscriber, {Topic, TopicMatch}, Content, EQos, Retain);
 
                 _    ->
                     %NOTE: SHOULD NEVER HAPPEND

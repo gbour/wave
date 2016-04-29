@@ -19,8 +19,7 @@
 
 -export([get/1, set/2, set/3, del/1]).
 -export([incr/1, decr/1]).
--export([
-        append/2, push/2, pop/1, range/1, del/2]).
+-export([append/2, push/2, pop/1, range/1, del/2, search/1]).
 
 -type return() :: {ok, Value::eredis:return_value()} | {error, Reason::binary()}.
 
@@ -29,9 +28,15 @@
 %% Purpose: get Value from database
 %% Returns:
 %%
--spec get({s, binary()} | {h, iolist(), iolist()}) -> return().
+-spec get({s, binary()} | {h, iodata()} | {h, iodata(), iodata()}) -> return().
 get({s, Key}) ->
     sharded_eredis:q(["GET", Key]);
+%TODO: add options to choose returned format: raw|proplist|map
+get({h, Key}) ->
+    case sharded_eredis:q(["HGETALL", Key]) of
+        {ok, Res} -> {ok, to_proplist(Res, [])};
+        Err       -> Err
+    end;
 %% get hash field value
 get({h, Key, Field}) ->
     sharded_eredis:q(["HGET", Key, Field]).
@@ -85,6 +90,13 @@ del(Key) ->
 del(Key, Start) ->
     sharded_eredis:q(["LTRIM", Key, Start, -1]).
 
+%% @doc
+%% Function: search/2
+%% Purpose: search keys in database
+-spec search(iodata()) -> return().
+search(Pattern) ->
+    sharded_eredis:q(["KEYS", Pattern]).
+
 
 %%
 %% Counters operations
@@ -118,4 +130,13 @@ pop(List) ->
 -spec range(binary()) -> return().
 range(List) ->
     sharded_eredis:q(["LRANGE", List, 0, -1]).
+
+
+%%
+%%
+%%
+to_proplist([], Acc) ->
+    Acc;
+to_proplist([K, V | Rest], Acc) ->
+    to_proplist(Rest, [{K,V} | Acc]).
 

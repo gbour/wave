@@ -59,6 +59,8 @@ bin(_) ->
 -spec int(any()) -> integer().
 int(X) when is_binary(X) ->
     erlang:binary_to_integer(X);
+int(X) when is_list(X) ->
+    erlang:list_to_integer(X);
 int(_) ->
     erlang:error(wrongtype).
 

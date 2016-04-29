@@ -25,7 +25,7 @@
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
--export([handle/2, publish/5, ack/4, provisional/4, is_alive/1, garbage_collect/1, disconnect/2, landed/2]).
+-export([handle/2, publish/6, ack/4, provisional/4, is_alive/1, garbage_collect/1, disconnect/2, landed/2]).
 -export([initiate/3, connected/2, connected/3]).
 %
 % role
@@ -137,9 +137,9 @@ garbage_collect(_Pid) ->
 %
 % a message is published for me
 %
--spec publish(pid(), pid(), binary(), binary(), integer()) -> ok.
-publish(Pid, From, Topic, Content, Qos) ->
-    gen_fsm:send_event(Pid, {publish, From, Topic, Content, Qos}).
+-spec publish(pid(), pid(), binary(), binary(), mqtt_qos(), mqtt_retain()) -> ok.
+publish(Pid, From, Topic, Content, Qos, Retain) ->
+    gen_fsm:send_event(Pid, {publish, From, Topic, Content, Qos, Retain}).
 
 -spec provisional(request|response, pid(), binary(), pid()) -> ok.
 provisional(request, Pid, MsgID, From) ->
@@ -369,6 +369,8 @@ connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T
     % subscribe to all listed topics (creating it if it don't exists)
     EQoses = lists:map(fun({Topic, TQos}) ->
             mqtt_topic_registry:subscribe(Topic, TQos, {?MODULE, publish, self()}),
+            S = {?MODULE, publish, self()},
+            mqtt_retain:publish(S, Topic, TQos),
 
             TQos
         end, Topics
@@ -418,11 +420,11 @@ connected({timeout, _, timeout1}, _StateData) ->
 % ASYNC
 
 % publish message with QoS 0 (fire n forget)
-connected({publish, _, {Topic,_}, Content, Qos=0},
+connected({publish, _, {Topic,_}, Content, Qos=0, Retain},
           StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
-    lager:debug("~p: publish message to subscriber with QoS=~p", [self(), Qos]),
+    lager:debug(">PUBLISH ~p (qos ~p) to subscr", [Topic, Qos]),
 
-    Msg   = #mqtt_msg{type='PUBLISH', qos=Qos, payload=[{topic,Topic}, {content, Content}]},
+    Msg   = #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain, payload=[{topic,Topic}, {content, Content}]},
     State = Callback:send(Transport, Socket, Msg),
     lager:info("publish msg status= ~p", [State]),
 
@@ -436,11 +438,12 @@ connected({publish, _, {Topic,_}, Content, Qos=0},
     end;
 
 % QoS 1 or 2
-connected({publish, From, {Topic,_}, Content, Qos},
+connected({publish, From, {Topic,_}, Content, Qos, Retain},
           StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka,inflight=Inflight,next_msgid=MsgID}) ->
     lager:debug("~p: publish message to subscriber with QoS=~p (msgid= ~p)", [self(), Qos, MsgID]),
 
-    Msg   = #mqtt_msg{type='PUBLISH', qos=Qos, payload=[{topic,Topic}, {msgid, MsgID}, {content, Content}]},
+    Msg   = #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain,
+                      payload=[{topic,Topic}, {msgid, MsgID}, {content, Content}]},
     State = Callback:send(Transport, Socket, Msg),
     lager:info("publish msg status= ~p", [State]),
 
@@ -564,7 +567,7 @@ terminate(_Reason, _StateName, undefined) ->
     terminate;
 
 terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, opts=Opts}) ->
-    lager:info("session terminate(~p): ~p (~p ~p)", [DeviceID, _Reason, StateName, StateData]),
+    lager:info("~n * deviceid : ~p~n * reason   : ~p~n * stateName: ~p~n * stateData: ~p", [DeviceID, _Reason, StateName, StateData]),
 
     lists:foreach(fun({Topic, _Qos}) ->
             mqtt_topic_registry:unsubscribe(Topic, {?MODULE, publish, self()})

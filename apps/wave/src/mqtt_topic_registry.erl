@@ -114,6 +114,7 @@ handle_call({unsubscribe, Subscriber}, _, State=#state{subscriptions=S}) ->
     {reply, ok, State#state{subscriptions=S2}};
 
 handle_call({unsubscribe, TopicName, Subscriber}, _, State=#state{subscriptions=S}) ->
+    lager:debug("unsubscribe ~p from ~p", [Subscriber, TopicName]),
     S2 = lists:filter(fun({T,_,_,Sub}) ->
             {T,Sub} =/= {TopicName, Subscriber}
         end, S
