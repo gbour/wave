@@ -99,6 +99,8 @@ class MqttClient(object):
                 rlen += 1
             elif xtype == 'uint16':
                 rlen += 2
+            elif xtype == 'bytes':
+                rlen += len(value)
 
         pkt = MqttPkt()
         pkt.command = command | flags
@@ -106,7 +108,10 @@ class MqttClient(object):
         pkt.alloc()
 
         for (xtype, value) in fields:
-            getattr(pkt, "write_"+xtype)(value)
+            if xtype == 'bytes':
+                pkt.write_bytes(value, len(value))
+            else:
+                getattr(pkt, "write_"+xtype)(value)
 
         if not send:
             return
