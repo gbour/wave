@@ -23,7 +23,7 @@
 -export([start_link/0]).
 
 % API
--export([publish/3, provisional/4, ack/3]).
+-export([publish/3, publish/4, provisional/4, ack/3]).
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 % INTERNAL STATES
@@ -33,8 +33,9 @@
 
 -record(state, {
     publisher    :: pid(),
-    subscribers  :: [subscriber()],
-    message      :: mqtt_msg()
+    message      :: mqtt_msg(),
+    subscribers  :: list(mqtt_topic_registry:match_result()),
+    inflight     :: [subscriber()]
 }).
 -type state() :: #state{}.
 
@@ -60,7 +61,12 @@ init(_) ->
 %
 -spec publish(Worker::pid(), Emitter::pid()|'lastwill_session', Msg::mqtt_msg()) -> ok.
 publish(Pid, From, Msg) ->
-    gen_fsm:send_event(Pid, {publish, From, Msg}).
+    gen_fsm:send_event(Pid, {publish, From, Msg, undefined}).
+
+-spec publish(Worker::pid(), Emitter::pid()|'retain_session', Msg::mqtt_msg(), 
+              list(mqtt_topic_registry:match_result())) -> ok.
+publish(Pid, From, Msg, Subscribers) ->
+    gen_fsm:send_event(Pid, {publish, From, Msg, Subscribers}).
 
 -spec provisional(request|response, Worker::pid(), Emitter::pid(), Msg::mqtt_msg()) -> ok.
 provisional(request, Pid, From, Msg) ->
@@ -76,18 +82,18 @@ ack(Pid, From, Msg) ->
 %% INTERNAL STATES
 %%
 
-start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}}, _State) when Qos =:= 2 ->
+start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscribers}, _State) when Qos =:= 2 ->
     lager:debug("publish: ~p from ~p (qos=2)", [Msg, From]),
 
     %TODO: store message
     MsgID   = proplists:get_value(msgid, P),
     send(provreq, From, MsgID, 2),
 
-    {next_state, provisional, #state{publisher=From, message=Msg}};
+    {next_state, provisional, #state{publisher=From, message=Msg, subscribers=Subscribers}};
 
-start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}}, State) ->
-    lager:debug("publish: ~p from ~p (qos=~p)", [Msg, From, Qos]),
-    S2 = publish_to_subscribers(From, Msg),
+start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscribers}, State) ->
+    lager:debug("publish: ~p from ~p (qos=~p) ~p", [Msg, From, Qos, Subscribers]),
+    S2 = publish_to_subscribers(From, Msg, Subscribers),
 
     case {Qos, length(S2)} of
         {0, 0} ->
@@ -104,14 +110,15 @@ start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}}, State)
 
         {_, _} ->
             % wait subscribers acknowledgement
-            {next_state, waitacks, #state{publisher=From, subscribers=S2, message=Msg}}
+            {next_state, waitacks, #state{publisher=From, message=Msg, inflight=S2}}
     end.
 
 % qos=2
-provisional({provresp, From, Msg=#mqtt_msg{type='PUBREL', payload=P}}, State=#state{publisher=Pub, message=PubMsg}) ->
+provisional({provresp, From, Msg=#mqtt_msg{type='PUBREL', payload=P}}, 
+            State=#state{publisher=Pub, message=PubMsg, subscribers=Subscribers}) ->
     lager:debug("provisional state: received provisional response ~p", [Msg]),
-    Subscribers = publish_to_subscribers(Pub, PubMsg),
-    case length(Subscribers) of
+    Inflight = publish_to_subscribers(Pub, PubMsg, Subscribers),
+    case length(Inflight) of
         0 ->
             % send PUBCOMP immediately
             MsgID   = proplists:get_value(msgid, P),
@@ -122,7 +129,7 @@ provisional({provresp, From, Msg=#mqtt_msg{type='PUBREL', payload=P}}, State=#st
 
         _ ->
             % wait subscribers acknowledgement
-            {next_state, waitacks, State#state{subscribers=Subscribers}}
+            {next_state, waitacks, State#state{inflight=Inflight}}
     end;
 
 provisional({Event, From, Msg}, State) ->
@@ -137,9 +144,9 @@ provisional({Event, From, Msg}, State) ->
 % for QOS 2, they must send back a PUBREC, then latter on a PUBCOMP
 %
 
-waitacks({provreq, From, Msg=#mqtt_msg{payload=P}}, State=#state{subscribers=S}) ->
+waitacks({provreq, From, Msg=#mqtt_msg{payload=P}}, State=#state{inflight=Inflight}) ->
     lager:debug("received provisional response from ~p: ~p", [From, Msg]),
-    case lists:partition(fun({_,_,Pid,_}) -> Pid =:= From end, S) of
+    case lists:partition(fun({_,_,Pid,_}) -> Pid =:= From end, Inflight) of
         {[], _} ->
             lager:error("~p not found in message subscribers", [From]),
             {next_state, waitacks, State};
@@ -149,22 +156,22 @@ waitacks({provreq, From, Msg=#mqtt_msg{payload=P}}, State=#state{subscribers=S})
             {next_state, waitacks, State};
 
         % PUBREC
-        {[{2,published,From,Args}], S2} ->
+        {[{2,published,From,Args}], Inflight2} ->
             lager:debug("~p: matched provisional response. waiting acknowledgment", [From]),
             MsgID = proplists:get_value(msgid, P),
             send(provresp, From, MsgID, 2),
 
-            {next_state, waitacks, State#state{subscribers=[{2,provisional,From,Args}|S2]}};
+            {next_state, waitacks, State#state{inflight=[{2,provisional,From,Args}|Inflight2]}};
 
         {[{Qos,_,_,_}], _}              ->
             lager:info("~p: no provisional response needed for ~p QoS", [From, Qos]),
             {next_state, waitacks, State}
     end;
 
-waitacks({ack, From, Msg=#mqtt_msg{type=MsgType, payload=P}}, State=#state{subscribers=S}) ->
+waitacks({ack, From, Msg=#mqtt_msg{type=MsgType, payload=P}}, State=#state{inflight=Inflight}) ->
     lager:debug("received ack from ~p: ~p", [From, Msg]),
 
-    {Match, Rest} = lists:partition(fun({_,_,Pid,_}) -> Pid =:= From end, S),
+    {Match, Rest} = lists:partition(fun({_,_,Pid,_}) -> Pid =:= From end, Inflight),
     case checkack(MsgType, Match, Rest, State) of
         pass  ->
             {next_state, waitacks, State};
@@ -238,13 +245,21 @@ send(ack, Publisher, MsgID, Qos) ->
 
 % Forward published message to all subscribers
 %
--spec publish_to_subscribers(Emitter::pid(), Msg::mqtt_msg()) -> list(subscriber()).
-publish_to_subscribers(_From, #mqtt_msg{type='PUBLISH', qos=Qos, payload=P}) ->
+-spec publish_to_subscribers(Emitter::pid(), Msg::mqtt_msg(), 
+                             Subscribers::list(mqtt_topic_registry:match_result()))  -> list(subscriber()).
+publish_to_subscribers(From, Msg=#mqtt_msg{payload=P}, undefined) ->
+    Topic = proplists:get_value(topic, P),
+    publish_to_subscribers(From, Msg, mqtt_topic_registry:match(Topic));
+
+publish_to_subscribers(    _,                                                            _, []) ->
+    lager:info("no subscribers to publish message to"),
+    [];
+
+publish_to_subscribers(_From, #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain, payload=P}, Subscribers) ->
     %MsgID   = proplists:get_value(msgid, P),
     Topic   = proplists:get_value(topic, P),
     Content = proplists:get_value(data, P),
 
-    Subscribers = mqtt_topic_registry:match(Topic),
     lager:info("subscribers= ~p", [Subscribers]),
     S2 = lists:filtermap(fun(S={TopicMatch, SQos, Subscriber={_,_,Pid}, _}) ->
             EQos = min(Qos, SQos),
