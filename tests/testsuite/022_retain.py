@@ -16,7 +16,7 @@ class Retain(TestSuite):
         TestSuite.__init__(self, "Retained messages")
 
     @catch
-    @desc("[MQTT-3.3.1-7] retain published message (qos 0)")
+    @desc("[MQTT-3.3.1-5,MQTT-3.3.1-7] retain published message (qos 0)")
     def test_001(self):
         c = MqttClient("conformity", connect=4)
 
@@ -31,7 +31,7 @@ class Retain(TestSuite):
         return True
 
     @catch
-    @desc("retain published message (qos 1)")
+    @desc("[MQTT-3.3.1-5] retain published message (qos 1)")
     def test_002(self):
         c = MqttClient("conformity", connect=4)
         c.publish("/foo/bar/1", "plop", qos=1, retain=True)
@@ -45,7 +45,7 @@ class Retain(TestSuite):
         return True
 
     @catch
-    @desc("retain published message (qos 2)")
+    @desc("[MQTT-3.3.1-5] retain published message (qos 2)")
     def test_003(self):
         c = MqttClient("conformity", connect=4)
         c.publish("/foo/bar/2", "plop", qos=2, retain=True)
@@ -103,7 +103,7 @@ class Retain(TestSuite):
         return True
 
     @catch
-    @desc("[MQTT-3.3.1-10] message w/ retain flag must be processed as normal message & delivered 2 subscribers")
+    @desc("[MQTT-3.3.1-9,MQTT-3.3.1-10] PUBLISH w/ retain is deliverd as normal msg (qos 0)")
     def test_012(self):
         pub = MqttClient("conformity", connect=4)
         sub = MqttClient("sub", connect=4)
@@ -113,7 +113,8 @@ class Retain(TestSuite):
         msg = sub.recv()
         if not isinstance(msg, EventPublish) or \
                 msg.msg.topic != '/retain/delivered' or \
-                msg.msg.payload != 'waze':
+                msg.msg.payload != 'waze' or\
+                msg.msg.retain:
             return False
 
         # same with empty payload
@@ -121,13 +122,45 @@ class Retain(TestSuite):
         msg = sub.recv()
         if not isinstance(msg, EventPublish) or \
                 msg.msg.topic != '/retain/empty' or \
-                msg.msg.payload != None:
+                msg.msg.payload != None or\
+                msg.msg.retain:
+            return False
+
+        pub.disconnect(); sub.disconnect()
+        return True
+
+    @catch
+    @desc("[MQTT-3.3.1-9,MQTT-3.3.1-10] PUBLISH w/ retain is delivered as normal msg (qos 1,2)")
+    def test_013(self):
+        pub = MqttClient("conformity", connect=4)
+        sub = MqttClient("sub", connect=4)
+        sub.subscribe("/test/022/013/+", qos=2)
+
+        pub.publish("/test/022/013/t1", 'hurry', retain=True, qos=1)
+        msg = sub.recv()
+        if not isinstance(msg, EventPublish) or \
+                msg.msg.topic != '/test/022/013/t1' or \
+                msg.msg.payload != 'hurry' or\
+                msg.msg.qos != 1 or\
+                msg.msg.retain:
+            return False
+
+        # same with empty payload
+        pub.publish("/test/022/013/t2", 'up', retain=True, qos=2)
+        pub.pubrel(pub.get_last_mid())
+        
+        msg = sub.recv()
+        if not isinstance(msg, EventPublish) or \
+                msg.msg.topic != '/test/022/013/t2' or \
+                msg.msg.payload != "up" or\
+                msg.msg.qos != 2 or\
+                msg.msg.retain:
             return False
 
         return True
 
     @catch
-    @desc("publication of retained message - topic exact match")
+    @desc("[MQTT-3.3.1-6,MQTT-3.3.1-8] publication of retained message - topic exact match")
     def test_020(self):
         retain = MqttClient("retain", connect=4)
         sub    = MqttClient("subscriber", connect=4)
@@ -151,7 +184,7 @@ class Retain(TestSuite):
         return True
 
     @catch
-    @desc("publication of retained message - topic match w/ '+' wildcard")
+    @desc("[MQTT-3.3.1-6,MQTT-3.3.1-8] publication of retained message - topic match w/ '+' wildcard")
     def test_021(self):
         retain = MqttClient("retain", connect=4)
         sub    = MqttClient("subscriber", connect=4)
@@ -159,17 +192,27 @@ class Retain(TestSuite):
         topic = "/woot/wo/ot"; msg = "expression of simplistic ecstasy"
         retain.publish(topic, msg, retain=True)
 
-        # exact match topic
-        ack = sub.subscribe("/woot/+/ot", qos=0)
-        if not isinstance(ack, EventSuback):
-            return False
+        # wildcard match topic
+        sub.subscribe("/woot/+/ot", qos=0, read_response=False)
 
-        # receiving retained message
-        evt = sub.recv()
-        if not isinstance(evt, EventPublish) or\
-                evt.msg.topic   != topic or\
-                evt.msg.payload != msg   or\
-                not evt.msg.retain:
+        acked = False; pubevt = None
+        while True:
+            evt = sub.recv()
+            if isinstance(evt, EventSuback):
+                acked = True; continue
+
+            # receiving retained message
+            if isinstance(evt, EventPublish) and\
+                    evt.msg.topic   == topic and\
+                    evt.msg.payload == msg   and\
+                    evt.msg.retain:
+                pubevt = evt; continue
+
+            break
+
+        if not acked:
+            return False
+        if pubevt is None:
             return False
 
         # MUST NOT match
@@ -177,13 +220,14 @@ class Retain(TestSuite):
         retain.publish(topic, msg, retain=True)
         sub.subscribe("/scri/*/le", qos=0)
         evt = sub.recv()
+        print evt
         if evt is not None:
             return False
 
         return True
 
     @catch
-    @desc("publication of retained message - topic match w/ '#' wildcard")
+    @desc("[MTT-3.3.1-6,MQTT-3.3.1-8] publication of retained message - topic match w/ '#' wildcard")
     def test_022(self):
         retain = MqttClient("retain", connect=4)
         sub    = MqttClient("subscriber", connect=4)
@@ -191,24 +235,33 @@ class Retain(TestSuite):
         topic = "/woot/wo/ot"; msg = "expression of simplistic ecstasy"
         retain.publish(topic, msg, retain=True)
 
-        # exact match topic
-        ack = sub.subscribe("/woot/#", qos=0)
-        if not isinstance(ack, EventSuback):
-            return False
+        # wildcard match topic
+        sub.subscribe("/woot/#", qos=0, read_response=False)
+        acked = False; pubevt = None
+        while True:
+            evt = sub.recv()
+            if isinstance(evt, EventSuback):
+                acked = True; continue
 
-        # receiving retained message
-        evt = sub.recv()
-        if not isinstance(evt, EventPublish) or\
-                evt.msg.topic   != topic or\
-                evt.msg.payload != msg   or\
-                not evt.msg.retain:
+            # receiving retained message
+            if isinstance(evt, EventPublish) and\
+                    evt.msg.topic   == topic and\
+                    evt.msg.payload == msg   and\
+                    evt.msg.retain:
+                pubevt = evt; continue
+
+            break
+
+        if not acked:
+            return False
+        if pubevt is None:
             return False
 
         retain.disconnect(); sub.disconnect()
         return True
 
     @catch
-    @desc("retain: multiple messages delivered")
+    @desc("[MQTT-3.3.1-6] retain: multiple messages delivered")
     def test_023(self):
         retain = MqttClient("retain", connect=4)
         sub    = MqttClient("subscr", connect=4)
@@ -259,7 +312,7 @@ class Retain(TestSuite):
         return True
 
     @catch
-    @desc("retain: qos 1 delivery")
+    @desc("[MQTT-3.3.1-6] retain: qos 1 delivery")
     def test_030(self):
         retain = MqttClient("retain", connect=4)
         sub    = MqttClient("subscr", connect=4)

@@ -283,7 +283,7 @@ connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _, StateData=#session{deviceid=_
     %TODO: save message in DB
     %      pass MsgID to message_worker
     {ok, MsgWorker} = mqtt_message_worker:start_link(),
-    mqtt_message_worker:publish(MsgWorker, self(), Msg), % async
+    mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
 
     {reply, undefined, connected, StateData, Ka};
 
@@ -296,7 +296,7 @@ connected(Msg=#mqtt_msg{type='PUBLISH', payload=P}, _,
     MsgID = proplists:get_value(msgid, P),
     %      pass MsgID to message_worker
     {ok, MsgWorker} = mqtt_message_worker:start_link(),
-    mqtt_message_worker:publish(MsgWorker, self(), Msg), % async
+    mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
 
     {reply, undefined, connected, StateData#session{inflight=[{MsgID,MsgWorker}|Inflight]}, Ka};
 
