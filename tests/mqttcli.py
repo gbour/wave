@@ -115,7 +115,11 @@ class MqttClient(object):
 
         if not send:
             return
-        return self.packet_queue(pkt)
+
+        #return self.packet_queue(pkt)
+        self._c.packet_queue(pkt)
+        self._c.loop()
+        return self._c.loop() # return status (success, ...)
 
     # quite of "unproper" release
     # force TCP socket to close immediatly
