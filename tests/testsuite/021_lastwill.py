@@ -152,7 +152,7 @@ class Will(TestSuite):
         return True
 
     @catch
-    @desc("[MQTT-3.1.2-13] if will flag set to 0, will-qos MUST be 0")
+    @desc("[MQTT-3.1.2-13,MQTT-3.1.2-11] if will flag set to 0, will-qos MUST be 0")
     def test_07(self):
         client  = MqttClient("rabbit", raw_connect=True)
         client.forge(NC.CMD_CONNECT, 0, [
@@ -199,7 +199,7 @@ class Will(TestSuite):
         return True
 
     @catch
-    @desc("[MQTT-3.1.2-15] if will flag set to 1, will-retain MUST be 0")
+    @desc("[MQTT-3.1.2-15,MQTT-3.1.2-11] if will flag set to 1, will-retain MUST be 0")
     def test_10(self):
         client  = MqttClient("rabbit", raw_connect=True)
         client.forge(NC.CMD_CONNECT, 0, [
@@ -262,5 +262,52 @@ class Will(TestSuite):
             return False
 
         monitor.disconnect()
+        return True
+
+    @catch
+    @desc("[MQTT-3.1.2-9] if will flag set to 1, will topic MUST be present")
+    def test_20(self):
+        client  = MqttClient("rabbit", raw_connect=True)
+        client.forge(NC.CMD_CONNECT, 0, [
+            ('string', 'MQTT'),
+            ('byte'  , 4),         # protocol level
+            ('byte'  , 4),         # will=1
+            ('uint16', 60),        # keepalive
+            ('string', client._c.client_id),
+        ], send=True)
+        if client.conn_is_alive():
+            return False
+
+        return True
+
+    @catch
+    @desc("[MQTT-3.1.2-9] if will flag set to 1, will msg MUST be present")
+    def test_21(self):
+        client  = MqttClient("rabbit", raw_connect=True)
+        client.forge(NC.CMD_CONNECT, 0, [
+            ('string', 'MQTT'),
+            ('byte'  , 4),         # protocol level
+            ('byte'  , 4),         # will=1
+            ('uint16', 60),        # keepalive
+            ('string', client._c.client_id),
+            ('string', '/will/topic'), # will-topic
+        ], send=True)
+        if client.conn_is_alive():
+            return False
+
+        client  = MqttClient("rabbit", raw_connect=True)
+        client.forge(NC.CMD_CONNECT, 0, [
+            ('string', 'MQTT'),
+            ('byte'  , 4),         # protocol level
+            ('byte'  , 4),         # will=1
+            ('uint16', 60),        # keepalive
+            ('string', client._c.client_id),
+            ('string', '/will/topic'), # will-topic
+            ('uint16', 4),         # 4 bytes msg, BUT not message following
+        ], send=True)
+        if client.conn_is_alive():
+            return False
+
+
         return True
 
