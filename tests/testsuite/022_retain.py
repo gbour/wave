@@ -169,16 +169,24 @@ class Retain(TestSuite):
         retain.publish(topic, msg, retain=True)
 
         # exact match topic
-        ack = sub.subscribe("/woot/wo/ot", qos=0)
-        if not isinstance(ack, EventSuback):
-            return False
+        sub.subscribe("/woot/wo/ot", qos=0, read_response=False)
+        while True:
+            evt = sub.recv()
+            if isinstance(evt, EventSuback):
+                acked = True; continue
 
-        # receiving retained message
-        evt = sub.recv()
-        if not isinstance(evt, EventPublish) or\
-                evt.msg.topic   != topic or\
-                evt.msg.payload != msg   or\
-                not evt.msg.retain:
+            # receiving retained message
+            if isinstance(evt, EventPublish) and\
+                    evt.msg.topic   == topic and\
+                    evt.msg.payload == msg   and\
+                    evt.msg.retain:
+                pubevt = evt; continue
+
+            break
+
+        if not acked:
+            return False
+        if pubevt is None:
             return False
 
         return True
