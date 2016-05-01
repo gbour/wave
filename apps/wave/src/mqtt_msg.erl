@@ -227,6 +227,8 @@ decode_connect2(_, {<<_:3, WillQos:2, _:2>>, _, _}) when WillQos =:= 3 ->
     erlang:throw({'CONNECT', "MQTT-3.1.2-14", "invalid will qos (3)"});
 decode_connect2(_, {<<_:3, WillQos:2, WillFlag:1, _:1>>, _, _}) when WillFlag =:= 0, WillQos =/= 0 ->
     erlang:throw({'CONNECT', "MQTT-3.1.2-13", "if will flag is 0, will qos MUST be 0 too"});
+decode_connect2(_, {<<_:2, WillRetain:1, _:2, WillFlag:1, _:1>>, _, _}) when WillFlag =:= 0, WillRetain =:= 1 ->
+    erlang:throw({'CONNECT', "MQTT-3.1.2-15", "if will flag is 0, will retain MUST be 0 too"});
 decode_connect2(Version,
         {<<User:1, Pwd:1, WillRetain:1, WillQos:2, WillFlag:1, Clean:1>>, Ka, Rest}) ->
     lager:debug("CONNECT ~p (~p/~p/~p/~p/~p/~p)",
@@ -250,8 +252,10 @@ decode_connect2(Version,
             checktopic(_WillTopic), % ensure topic is valid, raise exception either (w/ WRONG msg)
 
             % Will message is any binary content. 2 first bytes are will message length
+            %TODO: this throws an "anonymous" exception if MsgLen is missing
+            %      we should catch it (subfun) to throw a named exception
             <<MsgLen:16/integer, _WillMsg:MsgLen/binary, _R2/binary>> = _R,
-            {#{topic => _WillTopic, message => _WillMsg, qos => WillQos}, _R2};
+            {#{topic => _WillTopic, message => _WillMsg, qos => WillQos, retain => WillRetain}, _R2};
 
         _ -> {undefined, Rest2}
     end,

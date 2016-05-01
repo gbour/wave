@@ -630,10 +630,10 @@ next_msgid(MsgID) ->
 send_last_will(#session{will=undefined}) ->
     % do nothing
     ok;
-send_last_will(#session{will=#{topic := Topic, message := Data, qos := Qos}}) ->
+send_last_will(#session{will=#{topic := Topic, message := Data, qos := Qos, retain := Retain}}) ->
     lager:debug("sending last will"),
 
-    Msg = #mqtt_msg{type='PUBLISH', qos=Qos, payload=[{topic, Topic}, {data, Data}]},
+    Msg = #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain, payload=[{msgid, -1},{topic, Topic}, {data, Data}]},
     {ok, MsgWorker} = mqtt_message_worker:start_link(),
     mqtt_message_worker:publish(MsgWorker, lastwill_session, Msg), % async
 

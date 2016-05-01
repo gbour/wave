@@ -134,6 +134,10 @@ run({provreq, MsgID, Worker}, State) ->
 run({ack, _MsgID, _Qos, _Worker}, State) ->
     % do nothing
     lager:debug("recv PUBCOMP/PUBACK (qos= ~p)", [_Qos]),
+    {next_state, run, State};
+
+run({'msg-landed', MsgID}, State) ->
+    lager:error("msg ~p landed", [MsgID]),
     {next_state, run, State}.
 
 handle_event(_Event, _StateName, StateData) ->
