@@ -74,7 +74,7 @@ publish(Subscriber, TopicF, Qos) ->
     {ok, Keys} = wave_db:search(RTopic),
     Keys2      = lists:filter(fun(<<"retain:", T/binary>>) -> topicmatch(TopicF, T) end, Keys),
 
-    lager:debug("found retained topics: ~p", Keys2),
+    lager:debug("found retained topics: ~p", [Keys2]),
     publish2(Keys2, {TopicF, Qos, Subscriber, []}).
 
 publish2(                                        [], _) ->
