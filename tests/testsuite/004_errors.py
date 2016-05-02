@@ -33,6 +33,7 @@ class Errors(TestSuite):
         if not isinstance(evt, EventConnack) or evt.ret_code != 2:
             return False
 
+        print c2.recv()
         # [MQTT-3.1.3-9]: connection must be close if connack.ret_code = 2
         if c2.conn_is_alive():
             return False
