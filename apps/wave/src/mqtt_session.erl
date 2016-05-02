@@ -180,38 +180,43 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
     {MSecs, Secs, _} = os:timestamp(),
     Vals             = [{state,connecting},{username,User},{ts, MSecs*1000000+Secs},{clean, Clean} | Opts],
 
-    {Res1, DeviceID2} = case {Clean, DeviceID} of
+    Res1 = case {Clean, DeviceID} of
         {0, <<>>} ->
             % 0-length DeviceID is forbidden when clean-session unset
             lager:debug("invalid empty client-id with Clean Session 0"),
-            {{error, wrong_id}, DeviceID};
+            {error, wrong_id};
 
         {1, <<>>} ->
+            %NOTE: if DeviceID is empty, we do not register process
+            %      (we could have an infinite number of processes with empty deviceid)
             %TODO: should we generate (optionally) a random clientid ?
-            {ok, DeviceID};
+            ok;
 
+        % non-empty deviceid
         {_, DeviceID} ->
-            {ok, DeviceID}
-    end,
+            % register process with deviceid as key
+            % returns 'ok' if deviceid not used, {error, taken} if deviceid already used
 
-    Res2 = case Res1 of
-            %TODO: reject connections
-            %TODO: make it configurable (globally/per device) -> optionaly replace old device
+            %NOTE: registration is AUTOMATICALLY removed when process ends
+
+            %TODO: optionaly, if deviceid already defined, replace instead of reject ?
+            %      make it configurable (globally/per device) -> optionaly replace old device
             %      (and disconnect old device)
             %      /!\ there may be a flickering risk of both devices retries to reconnect
             %      alternativelly
-        ok  -> wave_redis:connect(DeviceID, Vals);
-        Err2 -> Err2
+            %TODO: should be moved AFTER auth check, so we don't block another client w/ same id
+            %      to connect
+            syn:register(DeviceID, self())
     end,
 
-    Res3 = case Res2 of
-        {ok, _} ->
+    Res2 = case Res1 of
+        ok ->
             wave_auth:check(application:get_env(wave, auth_required), DeviceID, {User, Pwd}, Settings);
 
-        Err3 -> Err3
+        Err1 -> Err1
     end,
 
-    {Retcode, Topics} = case Res3 of
+    {Retcode, Topics} = case Res2 of
         {ok, _} ->
             % if connection is successful, we need to check if we have offline messages
             Topics1 = mqtt_offline:recover(DeviceID),
@@ -230,7 +235,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
 
             {0, Topics1++Topics2};
 
-        {error, exists}   ->
+        {error, taken}   ->
             {2, []};
         {error, wrong_id} ->
             {2, []};
@@ -241,26 +246,14 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
     wave_event_router:route(<<"$/mqtt/CONNECT">>, [{deviceid, DeviceID}, {retcode, Retcode}]),
 
     % update device status in redis
-    lager:debug("RES= ~p", [Res3]),
-    NextState = case Res3 of
-        {error, exists} -> initiate;
-        {error, _}      ->
-            wave_redis:update(DeviceID, state, disconnected),
-            initiate;
-
-        _               ->
-            wave_redis:update(DeviceID, state, connected),
-            connected
-    end,
-
+    lager:debug("RES= ~p", [Res2]),
     Resp = #mqtt_msg{type='CONNACK', payload=[{session,0},{retcode, Retcode}]},
 
     case Retcode of
         0 ->
             Will = proplists:get_value(will, P),
-            {reply, Resp, NextState,
-                StateData#session{deviceid=DeviceID2, keepalive=Ka, opts=Vals, topics=Topics, will=Will}, Ka
-            };
+            {reply, Resp, connected, StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, 
+                                                       topics=Topics, will=Will, clean=Clean}, Ka};
 
         _ ->
             % because we need to close connection after having sent non-zero CONNACK
@@ -594,6 +587,7 @@ terminate(_Reason, _StateName, undefined) ->
     lager:info("session terminate with undefined state: ~p", [_Reason]),
     terminate;
 
+%NOTE: process/deviceid automatically unregistered from syn when process terminate
 terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, opts=Opts}) ->
     lager:info("~n * deviceid : ~p~n * reason   : ~p~n * stateName: ~p~n * stateData: ~p", [DeviceID, _Reason, StateName, StateData]),
 
@@ -622,12 +616,6 @@ terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, op
 
         _ ->
             lager:debug("clean=1: cleaning client subscriptions")
-    end,
-
-    % change redis device state only if connected
-    case StateName of
-        connected -> wave_redis:update(DeviceID, state, disconnected);
-        _         -> pass
     end,
 
     send_last_will(StateData),

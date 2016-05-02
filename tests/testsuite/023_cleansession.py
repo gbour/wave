@@ -52,3 +52,37 @@ class CleanSession(TestSuite):
             return False
 
         return True
+
+    @catch
+    @desc("[MQTT-3.1.3-7] 2 clients (cleansession 1, 0-length clientid) allowed to connect")
+    def test_003(self):
+        c = MqttClient("cs", raw_connect=True)
+        c.forge(NC.CMD_CONNECT, 0, [
+            ('string', 'MQTT'),
+            ('byte'  , 4),         # protocol level
+            ('byte'  , 2),         # cleansession 1
+            ('uint16', 60),        # keepalive
+            ('string', ''),        # 0-length client-if
+        ], send=True)
+
+        ack = c.recv()
+        if not isinstance(ack, EventConnack) or\
+                ack.ret_code != 0:
+            return False
+
+        c2 = MqttClient("cs", raw_connect=True)
+        c2.forge(NC.CMD_CONNECT, 0, [
+            ('string', 'MQTT'),
+            ('byte'  , 4),         # protocol level
+            ('byte'  , 2),         # cleansession 1
+            ('uint16', 60),        # keepalive
+            ('string', ''),        # 0-length client-if
+        ], send=True)
+
+        ack = c2.recv()
+        print ack
+        if not isinstance(ack, EventConnack) or\
+                ack.ret_code != 0:
+            return False
+
+        return True

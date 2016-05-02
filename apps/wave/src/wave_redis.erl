@@ -17,28 +17,7 @@
 -module(wave_redis).
 -author("Guillaume Bour <guillaume@bour.cc>").
 
--export([connect/2, update/3, device/1, topic/2, topic/3]).
-
-%
-% new device connects
--spec connect(DeviceID :: binary(), list({Key :: atom, Value :: any()})) -> {error, exists}
-                                                                            | wave_db:return().
-connect(DeviceID, Values) ->
-    Key   = "wave:deviceid:" ++ DeviceID,
-    case wave_db:get({h, Key, "state"}) of
-        {ok, <<"connected">>} ->
-            {error, exists};
-
-        _             ->
-            Pairs = lists:foldr(fun ({X,Y},Acc) -> [X,Y|Acc] end, [], Values),
-            wave_db:set({h, Key}, Pairs)
-    end.
-
-
--spec update(binary(), atom(), any()) -> wave_db:return().
-update(DeviceID, Key, Value) ->
-    %BUG
-    wave_db:set({h, "wave:deviceid:" ++ wave_utils:str(DeviceID), Key}, Value).
+-export([device/1, topic/2, topic/3]).
 
 % save registered topic
 % topics are stored in a redis list, per QOS

@@ -37,6 +37,9 @@ start() ->
 start(_StartType, _StartArgs) ->
 	lager:debug("starting wave app"),
 
+    % initialize syn (global process registry)
+    syn:init(),
+
     % start topics registry
     % TODO: use supervisor
     mqtt_topic_registry:start_link(),
