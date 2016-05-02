@@ -180,21 +180,38 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
     {MSecs, Secs, _} = os:timestamp(),
     Vals             = [{state,connecting},{username,User},{ts, MSecs*1000000+Secs},{clean, Clean} | Opts],
 
-    Res = case wave_redis:connect(DeviceID, Vals) of
-        % device already connected
-        {error, exists} ->
+    {Res1, DeviceID2} = case {Clean, DeviceID} of
+        {0, <<>>} ->
+            % 0-length DeviceID is forbidden when clean-session unset
+            lager:debug("invalid empty client-id with Clean Session 0"),
+            {{error, wrong_id}, DeviceID};
+
+        {1, <<>>} ->
+            %TODO: should we generate (optionally) a random clientid ?
+            {ok, DeviceID};
+
+        {_, DeviceID} ->
+            {ok, DeviceID}
+    end,
+
+    Res2 = case Res1 of
             %TODO: reject connections
             %TODO: make it configurable (globally/per device) -> optionaly replace old device
             %      (and disconnect old device)
             %      /!\ there may be a flickering risk of both devices retries to reconnect
             %      alternativelly
-            {error, exists};
-
-        _ ->
-            wave_auth:check(application:get_env(wave, auth_required), DeviceID, {User, Pwd}, Settings)
+        ok  -> wave_redis:connect(DeviceID, Vals);
+        Err2 -> Err2
     end,
 
-    {Retcode, Topics} = case Res of
+    Res3 = case Res2 of
+        {ok, _} ->
+            wave_auth:check(application:get_env(wave, auth_required), DeviceID, {User, Pwd}, Settings);
+
+        Err3 -> Err3
+    end,
+
+    {Retcode, Topics} = case Res3 of
         {ok, _} ->
             % if connection is successful, we need to check if we have offline messages
             Topics1 = mqtt_offline:recover(DeviceID),
@@ -224,8 +241,8 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
     wave_event_router:route(<<"$/mqtt/CONNECT">>, [{deviceid, DeviceID}, {retcode, Retcode}]),
 
     % update device status in redis
-    lager:debug("RES= ~p", [Res]),
-    NextState = case Res of
+    lager:debug("RES= ~p", [Res3]),
+    NextState = case Res3 of
         {error, exists} -> initiate;
         {error, _}      ->
             wave_redis:update(DeviceID, state, disconnected),
@@ -242,7 +259,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
         0 ->
             Will = proplists:get_value(will, P),
             {reply, Resp, NextState,
-                StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, topics=Topics, will=Will}, Ka
+                StateData#session{deviceid=DeviceID2, keepalive=Ka, opts=Vals, topics=Topics, will=Will}, Ka
             };
 
         _ ->

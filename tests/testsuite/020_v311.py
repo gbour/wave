@@ -365,7 +365,7 @@ class V311(TestSuite):
         return True
 
     @catch
-    @desc("[MQTT-3.1.3-5] 0-length clientid")
+    @desc("[MQTT-3.1.3-5] 0-length clientid (cleansession = 1)")
     def test_108(self):
         c = MqttClient("conformity")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -394,7 +394,7 @@ class V311(TestSuite):
         c._c.loop()
         evt = c._c.pop_event()
 
-        if not isinstance(evt, EventConnack) or evt.ret_code != 0:
+        if not isinstance(evt, EventConnack) or evt.ret_code != 2:
             return False
 
         return True
