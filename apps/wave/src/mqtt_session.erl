@@ -299,7 +299,7 @@ connected(Msg=#mqtt_msg{type='PUBLISH', payload=P, dup=Dup}, _,
             mqtt_retain:store(Msg),
             %      pass MsgID to message_worker
             {ok, MsgWorker} = mqtt_message_worker:start_link(),
-            mqtt_message_worker:publish(MsgWorker, self(), Msg), % async
+            mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
             
             [{MsgID, MsgWorker} | Inflight];
 
