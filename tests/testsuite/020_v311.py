@@ -1047,11 +1047,12 @@ class V311(TestSuite):
         sub = MqttClient("test", connect=4)
         sub.subscribe("/foo/bar", qos=0)
 
-        ack = pub.forge(NC.CMD_PUBLISH, 2, [
+        pub.forge(NC.CMD_PUBLISH, 2, [
             ('string', '/foo/bar'), # topic
             ('uint16', 42),         # identifier
         ], send=True)
 
+        ack = pub.recv()
         if not isinstance(ack, EventPuback):
             return False
 
@@ -1061,11 +1062,12 @@ class V311(TestSuite):
             return False
 
         # sending again same packet (same id) with dup=1
-        ack = pub.forge(NC.CMD_PUBLISH, 10, [
+        pub.forge(NC.CMD_PUBLISH, 10, [
             ('string', '/foo/bar'), # topic
             ('uint16', 42),         # identifier
         ], send=True)
 
+        ack = pub.recv()
         if not isinstance(ack, EventPuback):
             return False
 
@@ -1083,10 +1085,12 @@ class V311(TestSuite):
         sub = MqttClient("test", connect=4)
         sub.subscribe("/foo/bar", qos=1)
 
-        ack = pub.forge(NC.CMD_PUBLISH, 2, [
+        pub.forge(NC.CMD_PUBLISH, 2, [
             ('string', '/foo/bar'), # topic
             ('uint16', 42),         # identifier
         ], send=True)
+
+        ack = pub.recv()
         if ack is not None:
             return False
 
@@ -1096,10 +1100,12 @@ class V311(TestSuite):
         
         ## reemit message with dup=1 (same msgid)
         ## message must be discarded as previous on is still inflight
-        ack = pub.forge(NC.CMD_PUBLISH, 2, [
+        pub.forge(NC.CMD_PUBLISH, 2, [
             ('string', '/foo/bar'), # topic
             ('uint16', 42),         # identifier
         ], send=True)
+
+        ack = pub.recv()
         if ack is not None:
             return False
 
