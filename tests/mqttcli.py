@@ -11,7 +11,7 @@ import nyamuk.nyamuk_const as NC
 from nyamuk.mqtt_pkt import MqttPkt
 
 class MqttClient(object):
-    def __init__(self, prefix, rand=True, connect=False, raw_connect=False, **kwargs):
+    def __init__(self, prefix="", rand=True, client_id=None, connect=False, raw_connect=False, **kwargs):
         loglevel = logging.DEBUG; logfile = None
 
         DEBUG   = os.environ.get('DEBUG', '0')
@@ -22,8 +22,11 @@ class MqttClient(object):
 
         server = 'localhost'
 
-        self._c = nyamuk.Nyamuk("test:{0}:{1}".format(prefix, random.randint(0,9999) if rand else 0),
-            None, None, server=server, log_level=loglevel, log_file=logfile, **kwargs)
+        self.client_id = client_id if client_id is not None else \
+            "test:{0}:{1}".format(prefix, random.randint(0,9999) if rand else 0)
+
+        self._c = nyamuk.Nyamuk(self.client_id, None, None, server=server, log_level=loglevel, log_file=logfile, 
+                                **kwargs)
 
         # MQTT connection
         # 
