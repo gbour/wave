@@ -239,6 +239,10 @@ decode_connect2(Version,
 
     % decoding Client-ID
     {ClientID, Rest2} = decode_string(Rest),
+    %NOTE: disabled for now as it would require to refactor all tests
+    %TODO: spec says ClientID MAY be > 23 chars and other characters
+    %      add config option to change behaviour
+    %check_clientid(ClientID, 0),
 
     % decoding will topic & message
     {Will, Rest3} = case WillFlag of
@@ -595,6 +599,23 @@ checktopicfilter2(<<$+, H/utf8, _/binary>>) when H =/= $/ ->
     erlang:throw({'(UN)SUBSCRIBE', "[MQTT-4.7.1-3]", "misplaced + wildcard character"});
 checktopicfilter2(<<_/utf8, Rest/binary>>)  ->
     checktopicfilter2(Rest).
+
+% Validate clientid
+% [MQTT-3.1.3-5]
+%
+-spec check_clientid(unicode:unicode_binary(), integer()) -> ok.
+check_clientid(_, Len) when Len > 23 ->
+    erlang:throw({'CONNECT', "[MQTT-3.1.3-5]", "clientid > 23 characters"});
+check_clientid(<<>>, _) ->
+    ok;
+check_clientid(<<H/utf8, Rest/binary>>, Len) when H >= $0, H =< $9 ->
+    check_clientid(Rest, Len+1);
+check_clientid(<<H/utf8, Rest/binary>>, Len) when H >= $a, H =< $z ->
+    check_clientid(Rest, Len+1);
+check_clientid(<<H/utf8, Rest/binary>>, Len) when H >= $A, H =< $Z ->
+    check_clientid(Rest, Len+1);
+check_clientid(_, _) ->
+    erlang:throw({'CONNECT', "[MQTT-3.1.3-5]", "clientid contains non-valid characters"}).
 
 
 minlen(1)  -> 3;

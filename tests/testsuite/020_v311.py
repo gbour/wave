@@ -365,7 +365,7 @@ class V311(TestSuite):
         return True
 
     @catch
-    @desc("[MQTT-3.1.3-5] 0-length clientid (cleansession = 1)")
+    @desc("[MQTT-3.1.3-7] 0-length clientid (w/ cleansession = 0)")
     def test_108(self):
         c = MqttClient("conformity")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -399,6 +399,7 @@ class V311(TestSuite):
 
         return True
 
+    @skip
     @catch
     @desc("[MQTT-3.1.3-5] > 23 characters clientid")
     def test_109(self):
@@ -427,13 +428,13 @@ class V311(TestSuite):
         c._c.packet_queue(pkt)
         c._c.packet_write()
         c._c.loop()
-        evt = c._c.pop_event()
 
-        if not isinstance(evt, EventConnack) or evt.ret_code != 0:
+        if c.conn_is_alive():
             return False
 
         return True
 
+    @skip
     @catch
     @desc("[MQTT-3.1.3-5] clientid invalid characters")
     def test_110(self):
@@ -466,8 +467,7 @@ class V311(TestSuite):
         c._c.packet_write()
         c._c.loop()
 
-        evt = c._c.pop_event()
-        if not isinstance(evt, EventConnack) or evt.ret_code != 0:
+        if c.conn_is_alive():
             return False
 
         return True
