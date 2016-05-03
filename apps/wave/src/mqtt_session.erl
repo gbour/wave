@@ -218,22 +218,20 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
 
     {Retcode, Topics} = case Res2 of
         {ok, _} ->
+            Topics2 = offline_unstore(DeviceID, Clean),
+            lager:debug("restored topics: ~p", [Topics2]),
+            {0, Topics2};
+
             % if connection is successful, we need to check if we have offline messages
-            Topics1 = mqtt_offline:recover(DeviceID),
-            lager:info("offline topics: ~p", [Topics1]),
-            [ mqtt_topic_registry:subscribe(Topic, Qos, {?MODULE,publish,self()}) || {Topic,Qos} <- Topics1 ],
-            % flush is async
-            case Topics1 of
-                [] -> ok;
-                _  ->
-                    mqtt_offline:flush(DeviceID, {?MODULE,publish,self()})
-            end,
-
-            Topics2 = wave_redis:topic(DeviceID, 0),
-            lager:debug("qos 0 saved topics= ~p", [Topics2]),
-            lists:foreach(fun({T,_}) -> mqtt_topic_registry:subscribe(T, 0, {?MODULE,publish,self()}) end, Topics2),
-
-            {0, Topics1++Topics2};
+%            Topics1 = mqtt_offline:recover(DeviceID),
+%            lager:info("offline topics: ~p", [Topics1]),
+%            [ mqtt_topic_registry:subscribe(Topic, Qos, {?MODULE,publish,self()}) || {Topic,Qos} <- Topics1 ],
+%            % flush is async
+%            case Topics1 of
+%                [] -> ok;
+%                _  ->
+%                    mqtt_offline:flush(DeviceID, {?MODULE,publish,self()})
+%            end,
 
         {error, taken}   ->
             {2, []};
@@ -253,7 +251,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
         0 ->
             Will = proplists:get_value(will, P),
             {reply, Resp, connected, StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, 
-                                                       topics=Topics, will=Will, clean=Clean}, Ka};
+                                                       topics=Topics, will=Will}, Ka};
 
         _ ->
             % because we need to close connection after having sent non-zero CONNACK
@@ -591,32 +589,37 @@ terminate(_Reason, _StateName, undefined) ->
 terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, opts=Opts}) ->
     lager:info("~n * deviceid : ~p~n * reason   : ~p~n * stateName: ~p~n * stateData: ~p", [DeviceID, _Reason, StateName, StateData]),
 
+    %TODO: if unsubscribe THEN subscribe in offline, there is a small interval of time
+    %      where topic is not registered
+    %      instead, update target process in topic registry
     lists:foreach(fun({Topic, _Qos}) ->
             mqtt_topic_registry:unsubscribe(Topic, {?MODULE, publish, self()})
         end,
         T
     ),
 
-    case proplists:get_value(clean, Opts, 1) of
-        0 ->
-            lager:debug("clean=0: saving client's subscriptions qos 1 & 2 messages will be stored until client reconnects"),
-
-            lists:foreach(fun({Topic, Qos}) ->
-                    case Qos of
-                        0 ->
-                            lager:debug("qps 0 topics: ~p/~p/~p", [DeviceID, Topic, Qos]),
-                            wave_redis:topic(DeviceID, Topic, Qos);
-
-                        _ ->
-                            mqtt_offline:register(Topic, Qos, DeviceID)
-                    end
-                end,
-                T
-            );
-
-        _ ->
-            lager:debug("clean=1: cleaning client subscriptions")
-    end,
+    % saving topics if clean unset
+    offline_store(DeviceID, proplists:get_value(clean, Opts, 1), T),
+%    case proplists:get_value(clean, Opts, 1) of
+%        0 ->
+%            lager:debug("clean=0: saving client's subscriptions qos 1 & 2 messages will be stored until client reconnects"),
+%
+%            lists:foreach(fun({Topic, Qos}) ->
+%                    case Qos of
+%                        0 ->
+%                            lager:debug("qps 0 topics: ~p/~p/~p", [DeviceID, Topic, Qos]),
+%                            wave_redis:topic(DeviceID, Topic, Qos);
+%
+%                        _ ->
+%                            mqtt_offline:register(Topic, Qos, DeviceID)
+%                    end
+%                end,
+%                T
+%            );
+%
+%        _ ->
+%            lager:debug("clean=1: cleaning client subscriptions")
+%    end,
 
     send_last_will(StateData),
     terminate.
@@ -654,4 +657,43 @@ send_last_will(#session{will=#{topic := Topic, message := Data, qos := Qos, reta
     mqtt_message_worker:publish(MsgWorker, lastwill_session, Msg), % async
 
     ok.
+
+
+-spec offline_store(DeviceID::binary(), CleanSession::0|1, Topics::list({binary(), 0|1|2})) -> ok.
+offline_store(_, 1, _) ->
+    ok;
+offline_store(_, 0, []) ->
+    ok;
+offline_store(DeviceID, 0, Subscriptions) ->
+    lager:debug("storing offline subscriptions: ~p", [Subscriptions]),
+    Flatten = offline_store2(Subscriptions, []),
+    wave_db:push(["topics:", DeviceID], Flatten).
+
+% serialize topics
+offline_store2([], Acc) ->
+    Acc;
+offline_store2([{Topic, Qos}| T], Acc) ->
+    offline_store2(T, [Topic, Qos| Acc]).
+
+
+-spec offline_unstore(DeviceID::binary(), CleanSession::0|1) -> list({binary(), 0|1|2}).
+offline_unstore(DeviceID, 1) ->
+    lager:debug("cleansession unset, deleting saved topics"),
+    wave_db:del(<<"topics:", DeviceID/binary>>),
+    [];
+offline_unstore(DeviceID, 0) ->
+    {ok, FlatTopics} = wave_db:range(<<"topics:", DeviceID/binary>>),
+    wave_db:del(<<"topics:", DeviceID/binary>>),
+
+    offline_unstore2(FlatTopics, []).
+
+% unserialize topics
+offline_unstore2([]             , Acc) ->
+    Acc;
+offline_unstore2([Topic, Qos| T], Acc) ->
+    Qos2 = wave_utils:int(Qos),
+    % register topic for this session
+    mqtt_topic_registry:subscribe(Topic, Qos2, {?MODULE,publish,self()}),
+
+    offline_unstore2(T, [{Topic, Qos2} | Acc]).
 

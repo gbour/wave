@@ -17,32 +17,7 @@
 -module(wave_redis).
 -author("Guillaume Bour <guillaume@bour.cc>").
 
--export([device/1, topic/2, topic/3]).
-
-% save registered topic
-% topics are stored in a redis list, per QOS
-%
-% i.e: wave:deviceid:foobar:qos:0:topics -> [topic1, topic2, ...]
-%
--spec topic(binary(), binary(), integer()) -> wave_db:return().
-topic(DeviceID, Topic, Qos) ->
-    wave_db:append(<<"wave:deviceid:", DeviceID/binary, ":qos:", (wave_utils:bin(Qos))/binary, ":topics">>, 
-                   Topic).
-
-
-% returns saved topics
-% for give DeviceID and Qos
-%
-% returns: [{Topic1, Qos}, {Topic2, Qos}, ...]
-%
--spec topic(binary(), integer()) -> list({binary(), 0}). 
-topic(DeviceID, Qos) ->
-    %TODO: handle errors
-    {ok, Topics} = wave_db:range(<<"wave:deviceid:", DeviceID/binary, ":qos:", (wave_utils:bin(Qos))/binary, 
-                                   ":topics">>),
-
-    lists:map(fun(T) -> {T, 0} end, Topics).
-
+-export([device/1]).
 
 -spec device({deviceid, binary()}) -> {error, notfound} 
                                         | {error, binary()|[binary()]} 
