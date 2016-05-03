@@ -20,6 +20,7 @@ class MqttClient(object):
         elif DEBUG != '1':
             logfile   = DEBUG
 
+        clean_session = kwargs.pop('clean_session', 1)
         server = 'localhost'
 
         self.client_id = client_id if client_id is not None else \
@@ -33,7 +34,7 @@ class MqttClient(object):
         # connect takes protocol version (3 or 4) or is True (set version to 3)
         if connect is not False:
             version = connect if isinstance(connect, int) else 3
-            self.connect(version=version)
+            self.connect(version=version, clean_session = clean_session)
             return
 
         # open TCP connection
