@@ -16,7 +16,7 @@ class CleanSession(TestSuite):
         TestSuite.__init__(self, "Clean Session")
 
     @catch
-    @desc("[MQTT-3.1.3.7,MQTT-3.1.3-8] 0-length clientid forbidden when clean-session flag is 0")
+    @desc("[MQTT-3.1.3.7,MQTT-3.1.3-8,MQTT-3.2.2-4] 0-length clientid forbidden when clean-session flag is 0")
     def test_001(self):
         c = MqttClient("cs", raw_connect=True)
 
@@ -30,7 +30,8 @@ class CleanSession(TestSuite):
 
         ack = c.recv()
         if not isinstance(ack, EventConnack) or\
-                ack.ret_code != 2:
+                ack.ret_code != 2 or\
+                ack.session_present != 0:
             return False
 
         return True
@@ -50,7 +51,8 @@ class CleanSession(TestSuite):
 
         ack = c.recv()
         if not isinstance(ack, EventConnack) or\
-                ack.ret_code != 0:
+                ack.ret_code != 0 or\
+                ack.session_present != 0:
             return False
 
         return True
@@ -69,7 +71,8 @@ class CleanSession(TestSuite):
 
         ack = c.recv()
         if not isinstance(ack, EventConnack) or\
-                ack.ret_code != 0:
+                ack.ret_code != 0 or\
+                ack.session_present != 0:
             return False
 
         c2 = MqttClient("cs", raw_connect=True)
@@ -82,9 +85,9 @@ class CleanSession(TestSuite):
         ], send=True)
 
         ack = c2.recv()
-        print ack
         if not isinstance(ack, EventConnack) or\
-                ack.ret_code != 0:
+                ack.ret_code != 0 or\
+                ack.session_present != 0:
             return False
 
         return True
@@ -133,6 +136,10 @@ class CleanSession(TestSuite):
         if len(topics) != 0:
             return False
 
+        # checking CONNACK session-present
+        if c2.connack().session_present != 1:
+            return False
+
         #TODO: list c2 subscriptions (needs specific API ?)
         return True
 
@@ -142,12 +149,16 @@ class CleanSession(TestSuite):
         pub = MqttClient("publisher", connect=4)
 
         c = MqttClient("cs", connect=4, clean_session=0)
+        if c.connack().session_present != 0:
+            return False
         c.subscribe("/cs/qos-0", qos=0)
         c.disconnect()
 
         # reconnect w/ same clientid
         time.sleep(.5)
         c2 = MqttClient(client_id=c.client_id, connect=4, clean_session=0)
+        if c2.connack().session_present != 1:
+            return False
 
         pub.publish("/cs/qos-0", "", qos=1)
         evt = c2.recv()
@@ -159,23 +170,44 @@ class CleanSession(TestSuite):
         return True
 
     @catch
-    @desc("[MQTT-3.1.2-6,MQTT-3.1.4-3] if clean-session set, previous subscriptions MUST be discarded")
+    @desc("[MQTT-3.1.2-6,MQTT-3.1.4-3,MQTT-3.2.2-1] if clean-session set, previous subscriptions MUST be discarded")
     def test_013(self):
         pub = MqttClient("publisher", connect=4)
 
         c = MqttClient("cs", connect=4, clean_session=0)
+        if c.connack().session_present != 0:
+            return False
         c.subscribe("/cs/qos-0", qos=0)
         c.disconnect()
 
         # reconnect w/ same clientid, cleansession = 1
         time.sleep(.5)
         c2 = MqttClient(client_id=c.client_id, connect=4, clean_session=1)
+        if c2.connack().session_present != 0:
+            return False
 
         pub.publish("/cs/qos-0", "", qos=1)
         evt = c2.recv()
         if evt is not None:
             return False
 
+        return True
+
+    @catch
+    @desc("[MQTT-3.2.2-2,MQTT-3.2.2-3] CONNACK session_present set EVEN if client had no subscriptions")
+    def test_014(self):
+        c = MqttClient("cs", connect=4, clean_session=0)
+        if c.connack().session_present != 0:
+            return False
+        c.disconnect()
+
+        # reconnect w/ same clientid, cleansession = 0
+        time.sleep(.5)
+        c2 = MqttClient(client_id=c.client_id, connect=4, clean_session=0)
+        if c2.connack().session_present != 1:
+            return False
+
+        c2.disconnect()
         return True
 
     

@@ -34,7 +34,7 @@ class MqttClient(object):
         # connect takes protocol version (3 or 4) or is True (set version to 3)
         if connect is not False:
             version = connect if isinstance(connect, int) else 3
-            self.connect(version=version, clean_session = clean_session)
+            self._connack = self.connect(version=version, clean_session = clean_session)
             return
 
         # open TCP connection
@@ -51,6 +51,9 @@ class MqttClient(object):
                 raise e
 
             self._c.sock = sock
+    
+    def connack(self):
+        return self._connack
 
     def disconnect(self):
         self._c.disconnect(); self._c.packet_write()

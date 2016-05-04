@@ -19,7 +19,7 @@
 
 -export([get/1, set/2, set/3, del/1]).
 -export([incr/1, decr/1]).
--export([append/2, push/2, pop/1, range/1, del/2, search/1]).
+-export([append/2, push/2, pop/1, range/1, del/2, search/1, exists/1]).
 
 -type return() :: {ok, Value::eredis:return_value()} | {error, Reason::binary()}.
 
@@ -97,6 +97,9 @@ del(Key, Start) ->
 search(Pattern) ->
     sharded_eredis:q(["KEYS", Pattern]).
 
+-spec exists(iodata()) -> return().
+exists(Key) ->
+    sharded_eredis:q(["EXISTS", Key]).
 
 %%
 %% Counters operations
@@ -117,7 +120,7 @@ decr(Key) ->
 append(List, Value) ->
     sharded_eredis:q(["LPUSH", List, Value]).
 
--spec push(atom()|binary(), any()) -> return().
+-spec push(iodata(), any()) -> return().
 push(List, Value) when is_list(Value) ->
     sharded_eredis:q(["RPUSH", List|Value]);
 push(List, Value) ->

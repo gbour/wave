@@ -57,6 +57,10 @@ bin(_) ->
 %% @doc converts to integer
 %%
 -spec int(any()) -> integer().
+int('true')  ->
+    1;
+int('false') ->
+    0;
 int(X) when is_binary(X) ->
     erlang:binary_to_integer(X);
 int(X) when is_list(X) ->

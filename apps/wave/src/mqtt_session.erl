@@ -216,11 +216,11 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
         Err1 -> Err1
     end,
 
-    {Retcode, Topics} = case Res2 of
+    {Retcode, SessionPresent, Topics} = case Res2 of
         {ok, _} ->
-            Topics2 = offline_unstore(DeviceID, Clean),
+            {Exists, Topics2} = offline_unstore(DeviceID, Clean),
             lager:debug("restored topics: ~p", [Topics2]),
-            {0, Topics2};
+            {0, Exists, Topics2};
 
             % if connection is successful, we need to check if we have offline messages
 %            Topics1 = mqtt_offline:recover(DeviceID),
@@ -234,18 +234,18 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
 %            end,
 
         {error, taken}   ->
-            {2, []};
+            {2, false, []};
         {error, wrong_id} ->
-            {2, []};
+            {2, false, []};
         {error, bad_credentials} ->
-            {4, []} % not authorized
+            {4, false, []} % not authorized
     end,
 
     wave_event_router:route(<<"$/mqtt/CONNECT">>, [{deviceid, DeviceID}, {retcode, Retcode}]),
 
     % update device status in redis
     lager:debug("RES= ~p", [Res2]),
-    Resp = #mqtt_msg{type='CONNACK', payload=[{session,0},{retcode, Retcode}]},
+    Resp = #mqtt_msg{type='CONNACK', payload=[{session, wave_utils:int(SessionPresent)},{retcode, Retcode}]},
 
     case Retcode of
         0 ->
@@ -662,10 +662,12 @@ send_last_will(#session{will=#{topic := Topic, message := Data, qos := Qos, reta
 -spec offline_store(DeviceID::binary(), CleanSession::0|1, Topics::list({binary(), 0|1|2})) -> ok.
 offline_store(_, 1, _) ->
     ok;
-offline_store(_, 0, []) ->
-    ok;
+%offline_store(_, 0, []) ->
+%    ok;
 offline_store(DeviceID, 0, Subscriptions) ->
     lager:debug("storing offline subscriptions: ~p", [Subscriptions]),
+    wave_db:set({s, <<"session:", DeviceID/binary>>}, 1),
+
     Flatten = offline_store2(Subscriptions, []),
     wave_db:push(["topics:", DeviceID], Flatten).
 
@@ -676,24 +678,37 @@ offline_store2([{Topic, Qos}| T], Acc) ->
     offline_store2(T, [Topic, Qos| Acc]).
 
 
--spec offline_unstore(DeviceID::binary(), CleanSession::0|1) -> list({binary(), 0|1|2}).
+-spec offline_unstore(DeviceID::binary(), CleanSession::0|1) -> {boolean(), list({binary(), 0|1|2})}.
 offline_unstore(DeviceID, 1) ->
     lager:debug("cleansession unset, deleting saved topics"),
+    wave_db:del(<<"session:", DeviceID/binary>>),
     wave_db:del(<<"topics:", DeviceID/binary>>),
-    [];
+    {false, []};
 offline_unstore(DeviceID, 0) ->
+    Exists = case wave_db:exists(<<"session:", DeviceID/binary>>) of
+        {ok, <<"0">>} -> false;
+        {ok, <<"1">>} -> 
+            wave_db:del(<<"session:", DeviceID/binary>>),
+            true
+    end,
+
+    {Exists, offline_unstore2(Exists, DeviceID)}.
+
+offline_unstore2(false, _) ->
+    [];
+offline_unstore2(true , DeviceID) -> 
     {ok, FlatTopics} = wave_db:range(<<"topics:", DeviceID/binary>>),
     wave_db:del(<<"topics:", DeviceID/binary>>),
 
-    offline_unstore2(FlatTopics, []).
+    offline_unstore3(FlatTopics, []).
 
 % unserialize topics
-offline_unstore2([]             , Acc) ->
+offline_unstore3([]             , Acc) ->
     Acc;
-offline_unstore2([Topic, Qos| T], Acc) ->
+offline_unstore3([Topic, Qos| T], Acc) ->
     Qos2 = wave_utils:int(Qos),
     % register topic for this session
     mqtt_topic_registry:subscribe(Topic, Qos2, {?MODULE,publish,self()}),
 
-    offline_unstore2(T, [{Topic, Qos2} | Acc]).
+    offline_unstore3(T, [{Topic, Qos2} | Acc]).
 
