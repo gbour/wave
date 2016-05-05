@@ -25,7 +25,7 @@
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
--export([handle/2, publish/6, ack/4, provisional/4, is_alive/1, garbage_collect/1, disconnect/2, landed/2]).
+-export([handle/2, publish/7, ack/4, provisional/4, is_alive/1, garbage_collect/1, disconnect/2, landed/2]).
 -export([initiate/3, connected/2, connected/3]).
 %
 % role
@@ -137,8 +137,8 @@ garbage_collect(_Pid) ->
 %
 % a message is published for me
 %
--spec publish(pid(), pid(), binary(), binary(), mqtt_qos(), mqtt_retain()) -> ok.
-publish(Pid, From, Topic, Content, Qos, Retain) ->
+-spec publish(pid(), pid(), mqtt_clientid(), binary(), binary(), mqtt_qos(), mqtt_retain()) -> ok.
+publish(Pid, From, _DeviceID, Topic, Content, Qos, Retain) ->
     gen_fsm:send_event(Pid, {publish, From, Topic, Content, Qos, Retain}).
 
 -spec provisional(request|response, pid(), binary(), pid()) -> ok.
@@ -381,14 +381,15 @@ connected(Msg=#mqtt_msg{type='PUBCOMP', payload=P}, _, StateData=#session{keepal
     {reply, undefined, connected, StateData, Ka};
 
 %TODO: prevent subscribing multiple times to the same topic
-connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T, keepalive=Ka}) ->
+connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, 
+          StateData=#session{deviceid=DeviceID, topics=T, keepalive=Ka}) ->
 	MsgId  = proplists:get_value(msgid, P),
     Topics = proplists:get_value(topics, P),
 
     % subscribe to all listed topics (creating it if it don't exists)
     EQoses = lists:map(fun({Topic, TQos}) ->
-            mqtt_topic_registry:subscribe(Topic, TQos, {?MODULE, publish, self()}),
-            S = {?MODULE, publish, self()},
+            mqtt_topic_registry:subscribe(Topic, TQos, {?MODULE, publish, self(), DeviceID}),
+            S = {?MODULE, publish, self(), DeviceID},
             mqtt_retain:publish(S, Topic, TQos),
 
             TQos
@@ -400,13 +401,14 @@ connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T
     lager:info("Ka=~p", [Ka]),
     {reply, Resp, connected, StateData#session{topics=Topics++T}, Ka};
 
-connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _, StateData=#session{topics=OldTopics, keepalive=Ka}) ->
+connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _, 
+          StateData=#session{deviceid=DeviceID, topics=OldTopics, keepalive=Ka}) ->
 	MsgId  = proplists:get_value(msgid, P),
     Topics = proplists:get_value(topics, P),
 
     % subscribe to all listed topics (creating it if it don't exists)
     lists:foreach(fun(T) ->
-            mqtt_topic_registry:unsubscribe(T, {?MODULE,publish,self()})
+            mqtt_topic_registry:unsubscribe(T, {?MODULE,publish,self(), DeviceID})
         end,
         Topics
     ),
@@ -439,6 +441,7 @@ connected({timeout, _, timeout1}, _StateData) ->
 % ASYNC
 
 % publish message with QoS 0 (fire n forget)
+% TODO: match DeviceID
 connected({publish, _, {Topic,_}, Content, Qos=0, Retain},
           StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
     lager:debug(">PUBLISH ~p (qos ~p) to subscr", [Topic, Qos]),
@@ -593,7 +596,7 @@ terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, op
     %      where topic is not registered
     %      instead, update target process in topic registry
     lists:foreach(fun({Topic, _Qos}) ->
-            mqtt_topic_registry:unsubscribe(Topic, {?MODULE, publish, self()})
+            mqtt_topic_registry:unsubscribe(Topic, {?MODULE, publish, self(), DeviceID})
         end,
         T
     ),
@@ -669,7 +672,9 @@ offline_store(DeviceID, 0, Subscriptions) ->
     wave_db:set({s, <<"session:", DeviceID/binary>>}, 1),
 
     Flatten = offline_store2(Subscriptions, []),
-    wave_db:push(["topics:", DeviceID], Flatten).
+    wave_db:push(["topics:", DeviceID], Flatten),
+
+    ok.
 
 % serialize topics
 offline_store2([], Acc) ->
@@ -700,15 +705,15 @@ offline_unstore2(true , DeviceID) ->
     {ok, FlatTopics} = wave_db:range(<<"topics:", DeviceID/binary>>),
     wave_db:del(<<"topics:", DeviceID/binary>>),
 
-    offline_unstore3(FlatTopics, []).
+    offline_unstore3(DeviceID, FlatTopics, []).
 
 % unserialize topics
-offline_unstore3([]             , Acc) ->
+offline_unstore3(_       , []             , Acc) ->
     Acc;
-offline_unstore3([Topic, Qos| T], Acc) ->
+offline_unstore3(DeviceID, [Topic, Qos| T], Acc) ->
     Qos2 = wave_utils:int(Qos),
     % register topic for this session
-    mqtt_topic_registry:subscribe(Topic, Qos2, {?MODULE,publish,self()}),
+    mqtt_topic_registry:subscribe(Topic, Qos2, {?MODULE,publish,self(),DeviceID}),
 
-    offline_unstore3(T, [{Topic, Qos2} | Acc]).
+    offline_unstore3(DeviceID, T, [{Topic, Qos2} | Acc]).
 

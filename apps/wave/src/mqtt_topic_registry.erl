@@ -30,7 +30,7 @@
     peers
 }).
 
--type subscriber()   :: {Module :: module(), Fun :: atom(), Pid :: pid()}.
+-type subscriber()   :: {Module :: module(), Fun :: atom(), Pid :: pid(), DeviceID :: mqtt_clientid()|undefined}.
 -type subscription() :: {Re :: binary(), Fields :: list(integer()), Qos :: integer(), Subscriber :: subscriber()}.
 -type match()        :: {Position :: integer(), Value :: binary()}.
 -type match_result() :: {Re :: binary(), Qos :: integer(), Subscriber :: subscriber(), Matches :: list(match())}.

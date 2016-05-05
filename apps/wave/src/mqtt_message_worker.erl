@@ -222,10 +222,10 @@ code_change(_OldVsn, StateName, StateData, _Extra) ->
 
 % Forward a message to subscriber
 %
--spec send(publish, Receiver::{module(), atom(), pid()}, {Topic::binary(), TFilter::binary()}, 
+-spec send(publish, Receiver::mqtt_topic_registry:subscriber(), {Topic::binary(), TFilter::binary()}, 
            Payload::binary(), Qos::integer(), Retain::mqtt_retain()) -> ok.
-send(publish, {Mod,Fun,Pid}, Topic, Payload, Qos, Retain) ->
-    Mod:Fun(Pid, self(), Topic, Payload, Qos, Retain).
+send(publish, {Mod,Fun,Pid,DeviceID}, Topic, Payload, Qos, Retain) ->
+    Mod:Fun(Pid, self(), DeviceID, Topic, Payload, Qos, Retain).
 
 % send provisional response (PUBREC)
 % ONLY for QoS 2
@@ -261,7 +261,7 @@ publish_to_subscribers(_From, #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain, 
     Content = proplists:get_value(data, P),
 
     lager:info("subscribers= ~p", [Subscribers]),
-    S2 = lists:filtermap(fun(S={TopicMatch, SQos, Subscriber={_,_,Pid}, _}) ->
+    S2 = lists:filtermap(fun(S={TopicMatch, SQos, Subscriber={_,_,Pid,_}, _}) ->
             EQos = min(Qos, SQos),
             lager:debug("~p: effective qos=~p", [Pid, EQos]),
 
