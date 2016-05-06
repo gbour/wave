@@ -20,6 +20,9 @@
 
 %% Application callbacks
 -export([start/0, start/2, stop/1, loglevel/1]).
+-ifdef(DEBUG).
+    -export([debug_cleanup/0]).
+-endif.
 
 
 %% ===================================================================
@@ -141,3 +144,9 @@ module_init([Modname|Rest], Opts) ->
 
     module_init(Rest, Opts).
 
+-ifdef(DEBUG).
+debug_cleanup() ->
+    mqtt_topic_registry:debug_cleanup(),
+
+    ok.
+-endif.
