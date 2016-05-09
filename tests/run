@@ -3,13 +3,18 @@
 
 import os
 import sys
+import time
 import redis
 import inspect
 import logging
+import threading
 
 import TestSuite
 import testsuite
 from lib import env
+
+from twisted.internet import reactor, defer
+import twotp
 
 #from testsuite import *
 #from testsuite import plop
@@ -53,15 +58,17 @@ def print_summary():
 
 def setup_db():
     env.db = redis.Redis(host='localhost', port=6379, db=0)
-
-    # cleanup redis db before running tests
     #logging.debug("Redis: {0}".format(env.db.info('keyspace')))
-    env.db.flushdb()
+
+def setup_twotp(node, cookie):
+    return twotp.Process(node, cookie)
 
 
-if __name__ == '__main__':
-    setup_logger()
-    setup_db()
+STATUS = True
+
+@defer.inlineCallbacks
+def run_tests():
+    global STATUS
 
     modfilter = None
     if len(sys.argv) > 1:
@@ -70,8 +77,6 @@ if __name__ == '__main__':
     testfilter = None
     if len(sys.argv) > 2:
         testfilter = sys.argv[2]
-
-    status = True
 
     for (modname, mod) in inspect.getmembers(testsuite, predicate=inspect.ismodule):
         if modfilter and not modfilter in modname:
@@ -84,9 +89,26 @@ if __name__ == '__main__':
                 continue
 
             #print modname,clsname, inspect.getmro(cls)
-            (ret, counters) = cls().run(testfilter)
-            status = ret and status
+            (ret, counters) = yield cls().run(testfilter)
+            STATUS = ret and STATUS
             update_counters(counters)
 
     print_summary()
-    sys.exit(0 if status else 11)
+    reactor.stop()
+
+if __name__ == '__main__':
+    setup_logger()
+    setup_db()
+    env.twotp = setup_twotp('wave_tests@127.0.0.1', 'wave')
+
+    def on_reactor_started():
+        # launching unittests in a dedicated thread
+        t = threading.Thread(target=run_tests)
+        t.start()
+        t.join()
+
+    reactor.callWhenRunning(on_reactor_started)
+    reactor.run()
+
+    # reactor ended
+    sys.exit(0 if STATUS else 11)

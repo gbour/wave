@@ -38,6 +38,9 @@
 
 %
 -export([dump/0, subscribe/3, unsubscribe/1, unsubscribe/2, match/1]).
+-ifdef(DEBUG).
+    -export([debug_cleanup/0]).
+-endif.
 % gen_server API
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
@@ -81,6 +84,11 @@ match(Name) ->
 dump() ->
     gen_server:call(?MODULE, dump).
 
+% flush all registry
+-ifdef(DEBUG).
+debug_cleanup() ->
+    gen_server:call(?MODULE, debug_cleanup).
+-endif.
 
 %%
 %% PRIVATE API
@@ -89,6 +97,10 @@ dump() ->
 handle_call(dump, _, State=#state{subscriptions=S}) ->
     priv_dump(S),
     {reply, ok, State};
+
+handle_call(debug_cleanup, _, _State) ->
+    lager:warning("clearing registry"),
+    {reply, ok, #state{}};
 
 handle_call({subscribe, Topic, Qos, Subscriber}, _, State=#state{subscriptions=Subscriptions}) ->
     {TopicName, Fields} = case Topic of

@@ -36,10 +36,10 @@ setup:
 run: build setup
 	# run application in choosed environment
 	@echo "running in *$(env)* environment"
-	erl -pa `find -L _build/$(env) -name ebin` -s $(APP) -s sync -config .wave.$(env).config -s observer -init debug +v
+	erl -pa `find -L _build/$(env) -name ebin` -name 'wave@127.0.0.1' -setcookie wave -s $(APP) -s sync -config .wave.$(env).config -s observer -init debug +v
 
 test:
-	cd tests && DEBUG=$(DEBUG) PYTHONPATH=./nyamuk ./run
+	cd tests && DEBUG=$(DEBUG) PYTHONPATH=./nyamuk:./twotp ./run
 
 release:
 	./rebar3 release

@@ -6,6 +6,9 @@ import inspect
 import logging
 import traceback
 import subprocess
+from twisted.internet import defer, reactor
+
+from lib import env
 
 p = subprocess.Popen(["stty","size"], stdout=subprocess.PIPE)
 WIDTH = int(p.stdout.read()[:-1].split(' ')[-1])
@@ -38,10 +41,20 @@ def skip(fun):
         return 'skip'
     return _
 
+
+@defer.inlineCallbacks
+def clean_states():
+    """ cleaning server state (db, internals) between each test """
+    env.db.flushdb()
+    yield env.twotp.callRemote('wave@127.0.0.1', 'wave_app', 'debug_cleanup')
+    #defer.returnValue(None)
+
+
 class TestSuite(object):
     def __init__(self, suitename):
         self.suitename = suitename
 
+    @defer.inlineCallbacks
     def run(self, testfilter):
         status = True
         counters = {'passed':0, 'failed': 0, 'skipped': 0}
@@ -53,6 +66,7 @@ class TestSuite(object):
             if testfilter and not testfilter in name:
                 continue
 
+            yield clean_states()
             logging.debug(">> "+name)
             ret = test()
             try:
@@ -65,7 +79,7 @@ class TestSuite(object):
             counters[DISPLAY[ret][1].lower()] += 1
             status &= DISPLAY[ret][-1]
 
-        return (status, counters)
+        defer.returnValue((status, counters))
 
     def _print(self, (color, text, _ign), funcname, testname):
         #print "{0}{1}[\033[{2}m{3}\033[0m]".format(testname, ' '*(WIDTH-10-len(testname)), color, text)

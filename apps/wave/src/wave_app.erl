@@ -21,6 +21,14 @@
 %% Application callbacks
 -export([start/0, start/2, stop/1, loglevel/1]).
 
+-define(DEBUGW(X), ok).
+-ifdef(DEBUG).
+    -export([debug_cleanup/0]).
+
+    -undef(DEBUGW).
+    -define(DEBUGW(X), lager:error(X)).
+-endif.
+
 
 %% ===================================================================
 %% Application callbacks
@@ -36,6 +44,7 @@ start() ->
 
 start(_StartType, _StartArgs) ->
 	lager:debug("starting wave app"),
+    ?DEBUGW("DEBUG MODE ACTIVATED"),
 
     % initialize syn (global process registry)
     syn:init(),
@@ -144,3 +153,9 @@ module_init([Modname|Rest], Opts) ->
 
     module_init(Rest, Opts).
 
+-ifdef(DEBUG).
+debug_cleanup() ->
+    mqtt_topic_registry:debug_cleanup(),
+
+    ok.
+-endif.
