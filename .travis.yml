@@ -19,7 +19,7 @@ addons:
 
 install:
     # get deps, compile code, generates config according to choosed environment
-    - make env=travis all
+    - DEBUG=1 make env=travis all
     # create autosigned certificate
     - make cert
     # need to enable TLSv1 as python2.7 do not support TLS >= 1.1
