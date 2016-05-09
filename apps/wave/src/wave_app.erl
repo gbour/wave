@@ -20,8 +20,13 @@
 
 %% Application callbacks
 -export([start/0, start/2, stop/1, loglevel/1]).
+
+-define(DEBUGW(X), ok).
 -ifdef(DEBUG).
     -export([debug_cleanup/0]).
+
+    -undef(DEBUGW).
+    -define(DEBUGW(X), lager:error(X)).
 -endif.
 
 
@@ -39,6 +44,7 @@ start() ->
 
 start(_StartType, _StartArgs) ->
 	lager:debug("starting wave app"),
+    ?DEBUGW("DEBUG MODE ACTIVATED"),
 
     % start topics registry
     % TODO: use supervisor
