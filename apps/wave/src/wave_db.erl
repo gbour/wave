@@ -80,7 +80,9 @@ set(Key={_,K}, Value, [{expiration,Expiration}|Opts]) ->
             end;
 
         Err -> Err
-    end.
+    end;
+set({s, Key}, Value, [nx]) ->
+    sharded_eredis:q(["SETNX", Key, Value]).
 
 -spec del(binary()) -> return().
 del(Key) ->
@@ -106,7 +108,7 @@ exists(Key) ->
 %%
 -spec incr(binary()) -> return().
 incr(Key) ->
-    sharded_eredis:q(["INC", Key]).
+    sharded_eredis:q(["INCR", Key]).
 
 -spec decr(binary()) -> return().
 decr(Key) ->

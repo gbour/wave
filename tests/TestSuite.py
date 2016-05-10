@@ -59,7 +59,8 @@ class TestSuite(object):
         status = True
         counters = {'passed':0, 'failed': 0, 'skipped': 0}
 
-        logging.info("\n\033[1m... {0} ...\033[0m".format(self.suitename))
+        fname = inspect.getfile(self.__class__).replace('.','/',).split('/')[-2]
+        logging.info("\n\033[1m... {0}: {1} ...\033[0m".format(fname, self.suitename))
 
         tests = [(name, meth) for (name, meth) in inspect.getmembers(self, predicate=inspect.ismethod) if name.startswith('test_')]
         for (name, test) in tests:

@@ -156,6 +156,7 @@ module_init([Modname|Rest], Opts) ->
 -ifdef(DEBUG).
 debug_cleanup() ->
     mqtt_topic_registry:debug_cleanup(),
+    mqtt_offline:debug_cleanup(),
 
     ok.
 -endif.

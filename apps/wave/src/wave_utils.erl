@@ -18,7 +18,7 @@
 -module(wave_utils).
 -author("Guillaume Bour <guillaume@bour.cc>").
 
--export([atom/1, str/1, bin/1, int/1]).
+-export([atom/1, str/1, bin/1, int/1, hex/1]).
 
 %%
 %% @doc converts to atom
@@ -67,4 +67,12 @@ int(X) when is_list(X) ->
     erlang:list_to_integer(X);
 int(_) ->
     erlang:error(wrongtype).
+
+
+-spec hex(binary()) -> binary().
+hex(X) ->
+    << <<(hex2(H)),(hex2(L))>> || <<H:4,L:4>> <= X >>.
+
+hex2(C) when C < 10 -> $0 + C;
+hex2(C)             -> $a + C - 10.
 

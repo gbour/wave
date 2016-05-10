@@ -210,4 +210,34 @@ class CleanSession(TestSuite):
         c2.disconnect()
         return True
 
-    
+    @catch
+    @desc("[MQTT-3.1.2-5] server is storing offline messages")
+    def test_020(self):
+        c = MqttClient("cs", connect=4, clean_session=0)
+        c.subscribe("/cs/topic1/+", qos=2)
+        c.disconnect()
+
+        pub = MqttClient("pub", connect=4)
+        pubmsgs= {
+            "/cs/topic1/q0": [0, env.gen_msg(42)],
+            "/cs/topic1/q1": [1, env.gen_msg(42)],
+            "/cs/topic1/q2": [2, env.gen_msg(42)],
+        }
+
+        for (topic, (qos, msg)) in pubmsgs.iteritems():
+            ack = pub.publish(topic, msg, qos=qos)
+            if qos == 2:
+                pub.pubrel(ack.mid)
+        pub.disconnect()
+
+        msgs = env.db.lrange("queue:" + c.clientid(), 0, -1)
+        for (topic, qos, msgid) in [msgs[i:i+3] for i in range(0, len(msgs), 3)]:
+            content = env.db.get("msg:" + msgid)
+
+            origin = pubmsgs.get(topic, [-1, ""])
+            #print topic, origin, qos, content
+            if int(qos) != origin[0] or content != origin[1]:
+                return False
+
+        return True
+

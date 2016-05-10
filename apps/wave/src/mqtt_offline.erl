@@ -26,7 +26,10 @@
 -include("mqtt_msg.hrl").
 
 % public API
--export([register/2]).
+-export([register/2, publish/7]).
+-ifdef(DEBUG).
+    -export([debug_cleanup/0]).
+-endif.
 % gen_server internals
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 % internal funs
@@ -48,41 +51,40 @@ register(DeviceID, TopicFs) ->
     gen_server:call(?MODULE, {register, DeviceID, TopicFs}).
 
 
--spec recover(binary()) -> list({Topic:: binary(), Qos :: integer()}).
-recover(DeviceID) ->
-    gen_server:call(?MODULE, {recover, DeviceID}).
+%-spec publish() -> ok.
+publish(Pid, From, DeviceID, Topic, Content, Qos, Retain) ->
+    gen_server:call(?MODULE, {publish, DeviceID, Topic, Content, Qos, Retain}).
 
+-ifdef(DEBUG).
+debug_cleanup() ->
+    gen_server:call(?MODULE , debug_cleanup).
+-endif.
 
 %%
 %% INTERNAL CALLBACKS
 %%
 
+handle_call(debug_cleanup, _, _State) ->
+    lager:warning("clearing offline"),
+    {reply, ok, #{}};
 
 handle_call({register, DeviceID, TopicFs}, _, State) ->
     priv_register(DeviceID, TopicFs),
 
     {reply, ok, State#{DeviceID => TopicFs}};
 
+handle_call({publish, DeviceID, {Topic, TopicF}, Content, Qos, Retain}, _, State) ->
     %TODO: optimisation: for messages shorted than len(HMAC),
     %      store directly the message in the queue
-    MsgID = wave_utils:bin(hmac:hexlify(hmac:hmac("", Content))),
-    Ret = wave_db:set({s, <<"msg:", MsgID/binary>>}, Content),
-    lager:info("~p", [Ret]),
+    MsgID = wave_utils:hex(crypto:hash(sha256, Content)),
+    wave_db:set({s, <<"msg:", MsgID/binary>>}, Content, [nx]),
 
-    [
-        case T2 of
-            TopicMatch ->
-                wave_db:push(<<"queue:", DeviceID/binary>>, [Topic, MsgID]),
-                wave_db:incr(<<"msg:", MsgID/binary, ":refcount">>);
-
-            _     ->
-                pass
-        end
-
-        || {T2, DeviceID} <- R
-    ],
-
-    {reply, ok, State};
+    wave_db:push(<<"queue:", DeviceID/binary>>, [Topic, Qos, MsgID]),
+    R3 = wave_db:incr(<<"msg:", MsgID/binary, ":refcount">>),
+    lager:info("~p", [R3]),
+ 
+     {reply, ok, State};
+ 
 
 handle_call(_,_,State) ->
     {reply, ok, State}.
