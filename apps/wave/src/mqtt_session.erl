@@ -674,6 +674,7 @@ offline_store(DeviceID, 0, Subscriptions) ->
     Flatten = offline_store2(Subscriptions, []),
     wave_db:push(["topics:", DeviceID], Flatten),
 
+    mqtt_offline:register(DeviceID, Subscriptions),
     ok.
 
 % serialize topics
