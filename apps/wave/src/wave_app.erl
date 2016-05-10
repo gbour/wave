@@ -56,6 +56,7 @@ start(_StartType, _StartArgs) ->
     wave_ctlmngr:start_link(),
     mqtt_lastwill_session:start_link(),
     mqtt_retain:start_link(),
+    mqtt_offline_session:start_link(),
 
 	% start mqtt listeners
     {ok, _} = ranch:start_listener(wave, 1, ranch_tcp, [

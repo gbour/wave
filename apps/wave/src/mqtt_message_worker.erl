@@ -63,7 +63,7 @@ init(_) ->
 publish(Pid, From, Msg) ->
     gen_fsm:send_event(Pid, {publish, From, Msg, undefined}).
 
--spec publish(Worker::pid(), Emitter::pid()|'retain_session', Msg::mqtt_msg(), 
+-spec publish(Worker::pid(), Emitter::pid()|'retain_session'|'offline_session', Msg::mqtt_msg(), 
               list(mqtt_topic_registry:match_result())) -> ok.
 publish(Pid, From, Msg, Subscribers) ->
     gen_fsm:send_event(Pid, {publish, From, Msg, Subscribers}).

@@ -21,6 +21,8 @@ class MqttClient(object):
             logfile   = DEBUG
 
         clean_session = kwargs.pop('clean_session', 1)
+        self._connack = None
+        read_connack  = kwargs.pop('read_connack', True)
         server = 'localhost'
 
         self.client_id = client_id if client_id is not None else \
@@ -34,7 +36,9 @@ class MqttClient(object):
         # connect takes protocol version (3 or 4) or is True (set version to 3)
         if connect is not False:
             version = connect if isinstance(connect, int) else 3
-            self._connack = self.connect(version=version, clean_session = clean_session)
+            self._c.connect(version=version, clean_session = clean_session)
+            if read_connack:
+                self._connack = self.recv()
             return
 
         # open TCP connection
@@ -83,6 +87,7 @@ class MqttClient(object):
         return self._c.conn_is_alive()
 
     def recv(self):
+        self._c.packet_write()
         self._c.loop()
         return self._c.pop_event()
 

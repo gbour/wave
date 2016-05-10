@@ -241,3 +241,167 @@ class CleanSession(TestSuite):
 
         return True
 
+    @catch
+    @desc("broker store message as many times as there are matching subscriptions")
+    def test_021(self):
+        c = MqttClient("cs", connect=4, clean_session=0)
+        c.subscribe("/cs/topic1/+", qos=2)
+        c.subscribe("/cs/topic1/q2", qos=1)
+        c.disconnect()
+
+        pub = MqttClient("pub", connect=4)
+        pubmsg= {
+            'topic'  : "/cs/topic1/q2",
+            'qos'    : 2,
+            'payload': env.gen_msg(42)
+        }
+        ack = pub.publish(**pubmsg)
+        pub.pubrel(ack.mid)
+        pub.disconnect()
+
+        msgs = env.db.lrange("queue:" + c.clientid(), 0, -1)
+        if len(msgs) != 2*3:
+            return False
+
+        for (topic, qos, msgid) in [msgs[i:i+3] for i in range(0, len(msgs), 3)]:
+            content = env.db.get("msg:" + msgid)
+            if topic != pubmsg['topic'] or content != pubmsg['payload']:
+                return False
+
+            if int(qos) not in (1,2):
+                return False
+
+        return True
+
+    @catch
+    @desc("[MQTT-3.1.2-4] if cleansession is set to 0, messages are stored offline")
+    def test_022(self):
+        c = MqttClient("cs", connect=4, clean_session=0)
+        c.subscribe("/cs/topic1/+", qos=0)
+        c.disconnect()
+
+        pub = MqttClient("pub", connect=4)
+        pubmsg= {
+            'topic'  : "/cs/topic1/q2",
+            'qos'    : 2,
+            'payload': env.gen_msg(42)
+        }
+        ack = pub.publish(**pubmsg)
+        pub.pubrel(ack.mid)
+        pub.disconnect()
+
+        c2 = MqttClient(client_id=c.client_id, connect=4, clean_session=0, read_connack=False)
+
+        #NOTE: response order is not guaranteed
+        acked = False; pubevt = False
+        while True:
+            evt = c2.recv()
+            #print evt
+            if isinstance(evt, EventConnack):
+                if evt.session_present != 1:
+                    return False
+
+                acked = True; continue
+
+            if isinstance(evt, EventPublish) and\
+                    evt.msg.topic   == pubmsg['topic'] and\
+                    evt.msg.payload == pubmsg['payload'] and\
+                    evt.msg.qos     == 0:
+                pubevt = evt; continue
+
+            if evt != None:
+                return False
+            break
+
+        c2.disconnect()
+        return True
+
+    @desc("[MQTT-3.1.2-4] cleansession is set to 0, messages qos is preserved")
+    def test_023(self):
+        c = MqttClient("cs", connect=4, clean_session=0)
+        c.subscribe("/cs/topic1/+", qos=2)
+        c.disconnect()
+
+        pub = MqttClient("pub", connect=4)
+        pubmsgs= {
+            "/cs/topic1/q0": [0, env.gen_msg(42)],
+            "/cs/topic1/q1": [1, env.gen_msg(42)],
+            "/cs/topic1/q2": [2, env.gen_msg(42)],
+        }
+
+        pubmsg= {
+            'topic'  : "/cs/topic1/q2",
+            'qos'    : 2,
+            'payload': env.gen_msg(42)
+        }
+        for (topic, (qos, msg)) in pubmsgs.iteritems():
+            ack = pub.publish(topic, msg, qos=qos)
+            if qos == 2:
+                pub.pubrel(ack.mid)
+        pub.disconnect()
+
+
+        c2 = MqttClient(client_id=c.client_id, connect=4, clean_session=0, read_connack=False)
+
+        #NOTE: response order is not guaranteed
+        acked = False; pubcnt = 0
+        while True:
+            evt = c2.recv()
+            print evt
+            if isinstance(evt, EventConnack):
+                if evt.session_present != 1:
+                    return False
+
+                acked = True; continue
+
+            if isinstance(evt, EventPublish):
+                orig = pubmsgs.get(evt.msg.topic,[None,None])
+                if evt.msg.payload == orig[1] and evt.msg.qos == orig[0]:
+                    pubcnt += 1; continue
+
+            if evt != None:
+                return False
+            break
+
+        if not acked:
+            return False
+        if pubcnt != 3:
+            return False
+
+        c2.disconnect()
+        return True
+
+    @catch
+    @desc("[MQTT-3.1.2-6] cleansession set DISCARD any previous session")
+    def test_024(self):
+        c = MqttClient("cs", connect=4, clean_session=0)
+        c.subscribe("/cs/topic1/+", qos=0)
+        c.disconnect()
+
+        pub = MqttClient("pub", connect=4)
+        pubmsg= {
+            'topic'  : "/cs/topic1/q2",
+            'qos'    : 2,
+            'payload': env.gen_msg(42)
+        }
+        ack = pub.publish(**pubmsg)
+        pub.pubrel(ack.mid)
+
+        # clean_session = 1 => offline subscriptions & published messages dropped
+        c2 = MqttClient(client_id=c.client_id, connect=4, clean_session=1)
+        if c2.connack().session_present != 0:
+            return False
+
+        if c2.recv() is not None:
+            return False
+
+        pub.publish("/cs/topic1/qz", env.gen_msg(42), qos=0)
+        pub.disconnect()
+       
+        if c2.recv() is not None:
+            return False
+
+        c2.disconnect()
+        return True
+
+

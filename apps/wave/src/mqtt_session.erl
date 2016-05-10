@@ -222,17 +222,6 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
             lager:debug("restored topics: ~p", [Topics2]),
             {0, Exists, Topics2};
 
-            % if connection is successful, we need to check if we have offline messages
-%            Topics1 = mqtt_offline:recover(DeviceID),
-%            lager:info("offline topics: ~p", [Topics1]),
-%            [ mqtt_topic_registry:subscribe(Topic, Qos, {?MODULE,publish,self()}) || {Topic,Qos} <- Topics1 ],
-%            % flush is async
-%            case Topics1 of
-%                [] -> ok;
-%                _  ->
-%                    mqtt_offline:flush(DeviceID, {?MODULE,publish,self()})
-%            end,
-
         {error, taken}   ->
             {2, false, []};
         {error, wrong_id} ->
@@ -249,6 +238,9 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
 
     case Retcode of
         0 ->
+            % remove offline subscriptions, publish stored messages
+            mqtt_offline:release(self(), DeviceID, Clean),
+
             Will = proplists:get_value(will, P),
             {reply, Resp, connected, StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, 
                                                        topics=Topics, will=Will}, Ka};
@@ -603,27 +595,6 @@ terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, op
 
     % saving topics if clean unset
     offline_store(DeviceID, proplists:get_value(clean, Opts, 1), T),
-%    case proplists:get_value(clean, Opts, 1) of
-%        0 ->
-%            lager:debug("clean=0: saving client's subscriptions qos 1 & 2 messages will be stored until client reconnects"),
-%
-%            lists:foreach(fun({Topic, Qos}) ->
-%                    case Qos of
-%                        0 ->
-%                            lager:debug("qps 0 topics: ~p/~p/~p", [DeviceID, Topic, Qos]),
-%                            wave_redis:topic(DeviceID, Topic, Qos);
-%
-%                        _ ->
-%                            mqtt_offline:register(Topic, Qos, DeviceID)
-%                    end
-%                end,
-%                T
-%            );
-%
-%        _ ->
-%            lager:debug("clean=1: cleaning client subscriptions")
-%    end,
-
     send_last_will(StateData),
     terminate.
 
