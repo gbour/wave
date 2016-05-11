@@ -37,7 +37,7 @@ start_link() ->
     gen_server:start_link({local,?MODULE}, ?MODULE, [], []).
 
 init(_) ->
-    mqtt_topic_registry:subscribe(<<"/adm/wavectl/+">>, 0, {?MODULE,process,self()}),
+    mqtt_topic_registry:subscribe(<<"/adm/wavectl/+">>, 0, {?MODULE,process,self(), undefined}),
 
     {ok, #state{}}.
 

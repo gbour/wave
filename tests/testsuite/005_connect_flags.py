@@ -172,7 +172,7 @@ class ConnectFlags(TestSuite):
 
         ## reconnects, without explicitly subscribing topic
         dummy = MqttClient(dummyid, rand=False)
-        evt = dummy.do("connect", clean_session=1)
+        evt = dummy.do("connect", clean_session=0)
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
             return False
 

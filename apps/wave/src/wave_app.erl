@@ -46,6 +46,9 @@ start(_StartType, _StartArgs) ->
 	lager:debug("starting wave app"),
     ?DEBUGW("DEBUG MODE ACTIVATED"),
 
+    % initialize syn (global process registry)
+    syn:init(),
+
     % start topics registry
     % TODO: use supervisor
     mqtt_topic_registry:start_link(),
@@ -53,6 +56,7 @@ start(_StartType, _StartArgs) ->
     wave_ctlmngr:start_link(),
     mqtt_lastwill_session:start_link(),
     mqtt_retain:start_link(),
+    mqtt_offline_session:start_link(),
 
 	% start mqtt listeners
     {ok, _} = ranch:start_listener(wave, 1, ranch_tcp, [
@@ -153,6 +157,7 @@ module_init([Modname|Rest], Opts) ->
 -ifdef(DEBUG).
 debug_cleanup() ->
     mqtt_topic_registry:debug_cleanup(),
+    mqtt_offline:debug_cleanup(),
 
     ok.
 -endif.

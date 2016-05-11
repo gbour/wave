@@ -30,13 +30,36 @@ class Qos1(TestSuite):
         return True
 
     @catch
-    @desc("downgraded delivery qos")
+    @desc("downgraded delivery qos (subscr qos = 1)")
     def test_002(self):
         sub = self.newclient('sub')
         sub.subscribe('a/b', 1)
 
         pub = self.newclient('pub')
+        # published with qos 0
         pub.publish('a/b', "foobar")
+        pub.disconnect()
+
+        e = sub.recv()
+        sub.unsubscribe('a/b')
+        sub.disconnect()
+
+        if not isinstance(e, EventPublish) or \
+           e.msg.payload != "foobar" or \
+           e.msg.qos     != 0:
+            return False
+
+        return True
+
+    @catch
+    @desc("downgraded delivery qos (pub qos = 1)")
+    def test_022(self):
+        sub = self.newclient('sub')
+        sub.subscribe('a/b', 0)
+
+        pub = self.newclient('pub')
+        # published with qos 0
+        pub.publish('a/b', "foobar", qos=1)
         pub.disconnect()
 
         e = sub.recv()
@@ -112,7 +135,7 @@ class Qos1(TestSuite):
         return True
 
     @catch
-    @desc("invalid qos 2 messages while transaction is qos 1")
+    @desc("unexpected qos 2 PUBREC/PUBREL/PUBCOMP msgs while transaction is qos 1")
     def test_006(self):
         sub = self.newclient('sub')
         sub.subscribe('a/b', 1)
@@ -122,7 +145,6 @@ class Qos1(TestSuite):
         pub.recv()
 
         e = sub.recv()
-
         if not isinstance(e, EventPublish) or \
            e.msg.payload != "foobar2" or \
            e.msg.qos     != 1:
@@ -147,8 +169,6 @@ class Qos1(TestSuite):
         if not puback_evt is None:
             return False
 
-
-        
         sub.unsubscribe('a/b')
         
         sub.disconnect()

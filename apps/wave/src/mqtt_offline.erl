@@ -25,114 +25,92 @@
 
 -include("mqtt_msg.hrl").
 
--record(state, {
-    registrations = []
-}).
-
-%
-%-export([get/1, subscribe/2, get_subscribers/1]).
--export([register/3, recover/1, flush/2, dump/0, event/3]).
-% gen_server API
+% public API
+-export([register/2, release/3, publish/7]).
+-ifdef(DEBUG).
+    -export([debug_cleanup/0]).
+-endif.
+% gen_server internals
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+% internal funs
 
+-spec start_link() -> {ok, pid()} | ignore | {error, any()}.
 start_link() ->
-    gen_server:start_link({local,?MODULE}, ?MODULE, [], []).
+    % name = mqtt_offline
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init(_) ->
-    {ok, #state{}}.
+    {ok, #{}}.
 
 %%
 %% PUBLIC API
 %%
 
-%
-% todo: there may be wildcard in topic name => need to do a search
--spec register(binary(), integer(), binary()) -> ok.
-register(Topic, Qos, DeviceID) ->
-    gen_server:call(?MODULE, {register, Topic, Qos, DeviceID}).
+-spec register(binary(), list({binary(), 0|1|2})) -> ok.
+register(DeviceID, TopicFs) ->
+    gen_server:call(?MODULE, {register, DeviceID, TopicFs}).
 
+-spec release(pid(), binary(), 0|1) -> ok.
+release(Session, DeviceID, Clean) ->
+    gen_server:call(?MODULE, {release, Session, DeviceID, Clean}).
 
--spec recover(binary()) -> list({Topic:: binary(), Qos :: integer()}).
-recover(DeviceID) ->
-    gen_server:call(?MODULE, {recover, DeviceID}).
+%-spec publish() -> ok.
+publish(Pid, From, DeviceID, Topic, Content, Qos, Retain) ->
+    gen_server:call(?MODULE, {publish, DeviceID, Topic, Content, Qos, Retain}).
 
--spec flush(binary(), mqtt_topic_registry:subscriber()) -> ok.
-flush(DeviceID, Session) ->
-    gen_server:cast(?MODULE, {flush, DeviceID, Session}).
-
--spec dump() -> ok.
-dump() ->
-    gen_server:call(?MODULE,dump).
-
--spec event(pid(), binary(), binary()) -> ok.
-event(_Pid, Topic, Content) ->
-    gen_server:call(?MODULE, {event, Topic, Content}).
+-ifdef(DEBUG).
+debug_cleanup() ->
+    gen_server:call(?MODULE , debug_cleanup).
+-endif.
 
 %%
-%% PRIVATE API
+%% INTERNAL CALLBACKS
 %%
 
-handle_call(dump, _, State=#state{registrations=R}) ->
-    lager:info("~p", [R]),
-    {reply, ok, State};
+handle_call(debug_cleanup, _, _State) ->
+    lager:warning("clearing offline"),
+    {reply, ok, #{}};
 
-handle_call({register, Topic, Qos, DeviceID}, _, State=#state{registrations=R}) ->
-    mqtt_topic_registry:subscribe(Topic, Qos, {?MODULE, event, self()}),
+handle_call({register, DeviceID, TopicFs}, _, State) ->
+    priv_register(DeviceID, TopicFs),
 
-    {reply, ok, State#state{registrations=[{Topic, Qos, DeviceID}|R]}};
+    {reply, ok, maps:put(DeviceID, TopicFs, State)};
 
-handle_call({recover, DeviceID}, _, State=#state{registrations=R}) ->
-    {R2, DTopics} = lists:partition(fun({_Topic, _Qos, DeviceID2}) -> DeviceID2 =/= DeviceID end, R),
-    lager:info("~p / ~p", [R2, DTopics]),
-    DTopics2 = lists:map(fun({Topic, Qos, _DeviceID}) ->
-            mqtt_topic_registry:unsubscribe(Topic, {?MODULE,event,self()}),
-
-            {Topic, Qos}
-        end,
-        DTopics
+%TODO: operations should be atomic
+handle_call({release, Session, DeviceID, Clean}, _, State) ->
+    lager:debug("release: ~p :: ~p", [DeviceID, maps:get(DeviceID, State, undefined)]),
+   
+    % unregistering from topic registry
+    lists:foreach(fun({TopicF, Qos}) ->
+            mqtt_topic_registry:unsubscribe(TopicF, {?MODULE, publish, self(), DeviceID})
+        end, maps:get(DeviceID, State, [])
     ),
 
-    {reply, DTopics2, State#state{registrations=R2}};
+    % publishing stored messages
+    priv_release(Clean, Session, DeviceID, wave_db:range(<<"queue:", DeviceID/binary>>)),
+    wave_db:del(<<"queue:", DeviceID/binary>>),
 
-%TODO: add MatchTopic in parameters
-%      ie the matching topic rx that lead to executing this callback
-handle_call({event, {Topic,TopicMatch}, Content}, _, State=#state{registrations=R}) ->
-    lager:info("received event on ~p (matched with ~s)", [Topic, TopicMatch]),
+    {reply, ok, maps:remove(DeviceID, State)};
 
+%
+%NOTE: Qos here is min(publish qos, subscribe qos), so don't need to store original subscribed qos
+%
+handle_call({publish, DeviceID, {Topic, TopicF}, Content, Qos, Retain}, _, State) ->
     %TODO: optimisation: for messages shorted than len(HMAC),
     %      store directly the message in the queue
-    MsgID = wave_utils:bin(hmac:hexlify(hmac:hmac("", Content))),
-    Ret = wave_db:set({s, <<"msg:", MsgID/binary>>}, Content),
-    lager:info("~p", [Ret]),
+    MsgID = wave_utils:hex(crypto:hash(sha256, Content)),
+    wave_db:set({s, <<"msg:", MsgID/binary>>}, Content, [nx]),
 
-    [
-        case T2 of
-            TopicMatch ->
-                wave_db:push(<<"queue:", DeviceID/binary>>, [Topic, MsgID]),
-                wave_db:incr(<<"msg:", MsgID/binary, ":refcount">>);
-
-            _     ->
-                pass
-        end
-
-        || {T2, DeviceID} <- R
-    ],
-
-    {reply, ok, State};
+    %TODO: store TopicF also ?
+    wave_db:push(<<"queue:", DeviceID/binary>>, [Topic, Qos, MsgID]),
+    R3 = wave_db:incr(<<"msg:", MsgID/binary, ":refcount">>),
+    lager:info("~p", [R3]),
+ 
+     {reply, ok, State};
+ 
 
 handle_call(_,_,State) ->
     {reply, ok, State}.
-
-handle_cast({flush, DeviceID, Device={_M,_F,_Pid}}, State) ->
-    lager:info("flush ~p", [DeviceID]),
-
-    {ok, MsgIDs} = wave_db:range(<<"queue:", DeviceID/binary>>),
-    priv_flush(MsgIDs, Device),
-
-    %TODO: delete queue item
-    wave_db:del(<<"queue:",DeviceID/binary>>, length(MsgIDs)),
-
-    {noreply, State};
 
 handle_cast(_, State) ->
     {noreply, State}.
@@ -141,46 +119,63 @@ handle_cast(_, State) ->
 handle_info(_, State) ->
     {noreply, State}.
 
-
 terminate(_,_) ->
+    lager:error("~p terminated", [?MODULE]),
     ok.
-
 
 code_change(_, State, _) ->
     {ok, State}.
 
+
 %%
-%% PRIVATE FUNS
+%% INTERNAL FUNS
 %%
+
+-spec priv_register(binary(), list({TopicF::binary(), mqtt_qos()})) -> ok.
+priv_register(_       , []) ->
+    ok;
+priv_register(DeviceID, [{TopicF, Qos} |T]) ->
+    mqtt_topic_registry:subscribe(TopicF, Qos, {?MODULE, publish, self(), DeviceID}),
+    priv_register(DeviceID, T).
+
 
 % "unstore" & "emit" messages from db
-%   - decrement message reference counter
-%   - if counter is 0, deletes message content
+% - decrement message reference counter
+% - if counter is 0, deletes message content
 %
-% MsgIDs: lists of serialized topic+msgid
-%           [topic1, msgid1, topic2, msgid2, ...]
-%
--spec priv_flush(MsgIDs :: list(binary()), Device :: mqtt_topic_registry:subscriber()) -> ok.
-priv_flush([], _) ->
+-spec priv_release(0|1, pid(), binary(), {ok, list(binary())}) -> ok.
+priv_release(Clean, Session, DeviceID, {ok, Msgs}) ->
+    lager:debug("queue: ~p", [Msgs]),
+    priv_release2(Clean, Session, DeviceID, Msgs).
+
+priv_release2(_,       _,        _, []) ->
     ok;
-priv_flush([Topic, MsgID |T], Device={M,F,Pid}) ->
-    {ok, Msg} = wave_db:get({s, <<"msg:", MsgID/binary>>}),
-    lager:info("flush msg: ~p (id: ~p, topic= ~p)", [Msg, MsgID, Topic]),
-    M:F(Pid, {Topic, undefined}, Msg),
+priv_release2(1, Session, DeviceID, [_,_,MsgID|T]) ->
+    {ok, Cnt}  = wave_db:decr(<<"msg:", MsgID/binary, ":refcount">>),
+    priv_clean_msg(wave_utils:int(Cnt), MsgID),
+    priv_release2(1, Session, DeviceID, T);
+priv_release2(0, Session, DeviceID, [Topic, Qos, MsgID |T]) ->
+    {ok, Data} = wave_db:get({s, <<"msg:", MsgID/binary>>}),
+    {ok, Cnt}  = wave_db:decr(<<"msg:", MsgID/binary, ":refcount">>),
+    priv_clean_msg(wave_utils:int(Cnt), MsgID),
+    lager:debug("publishing ~p (q ~p):: ~p)", [Topic, Qos, Data]),
 
-    %TODO: operation must be atomic (including the LRANGE ?)
-    %      use MULTI/EXEC
-    {ok, Cnt} = wave_db:decr(<<"msg:", MsgID/binary,":refcount">>),
-    Cnt2 = wave_utils:int(Cnt),
-    if 
-        Cnt2 =< 0 ->
-            wave_db:del(<<"msg:", MsgID/binary>>),
-            wave_db:del(<<"msg:", MsgID/binary, ":refcount">>);
+    Msg = #mqtt_msg{type='PUBLISH', qos=wave_utils:int(Qos), retain=0, payload=[{topic, Topic}, {data, Data}]},
+    %              {TopicF, Qos, Subscriber, Matches}
+    %              TopicF never used
+    Subscription = {undefined, wave_utils:int(Qos), {mqtt_session, publish, Session, DeviceID}, []},
+    {ok, MsgWorker} = mqtt_message_worker:start_link(),
+    mqtt_message_worker:publish(MsgWorker, offline_session, Msg, [Subscription]),
+    
+    priv_release2(0, Session, DeviceID, T).
 
-        true ->
-            ok
-    end,
-
-    % next queued message
-    priv_flush(T, Device).
-
+-spec priv_clean_msg(integer(), binary()) -> ok.
+priv_clean_msg(  0, MsgID)              ->
+    wave_db:del(<<"msg:", MsgID/binary>>),
+    wave_db:del(<<"msg:", MsgID/binary, ":refcount">>),
+    ok;
+priv_clean_msg(Cnt, MsgID) when Cnt < 0 ->
+    lager:error("~p msg count is negative", [MsgID]),
+    priv_clean_msg(0, MsgID);
+priv_clean_msg(  _,     _)              ->
+    ok.

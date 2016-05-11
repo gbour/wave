@@ -19,7 +19,7 @@
 
 -export([get/1, set/2, set/3, del/1]).
 -export([incr/1, decr/1]).
--export([append/2, push/2, pop/1, range/1, del/2, search/1]).
+-export([append/2, push/2, pop/1, range/1, del/2, search/1, exists/1]).
 
 -type return() :: {ok, Value::eredis:return_value()} | {error, Reason::binary()}.
 
@@ -80,7 +80,9 @@ set(Key={_,K}, Value, [{expiration,Expiration}|Opts]) ->
             end;
 
         Err -> Err
-    end.
+    end;
+set({s, Key}, Value, [nx]) ->
+    sharded_eredis:q(["SETNX", Key, Value]).
 
 -spec del(binary()) -> return().
 del(Key) ->
@@ -97,13 +99,16 @@ del(Key, Start) ->
 search(Pattern) ->
     sharded_eredis:q(["KEYS", Pattern]).
 
+-spec exists(iodata()) -> return().
+exists(Key) ->
+    sharded_eredis:q(["EXISTS", Key]).
 
 %%
 %% Counters operations
 %%
 -spec incr(binary()) -> return().
 incr(Key) ->
-    sharded_eredis:q(["INC", Key]).
+    sharded_eredis:q(["INCR", Key]).
 
 -spec decr(binary()) -> return().
 decr(Key) ->
@@ -117,7 +122,7 @@ decr(Key) ->
 append(List, Value) ->
     sharded_eredis:q(["LPUSH", List, Value]).
 
--spec push(atom()|binary(), any()) -> return().
+-spec push(iodata(), any()) -> return().
 push(List, Value) when is_list(Value) ->
     sharded_eredis:q(["RPUSH", List|Value]);
 push(List, Value) ->

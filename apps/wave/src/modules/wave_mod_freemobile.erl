@@ -30,7 +30,7 @@
 % gen_server API
 -export([start_link/1, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 % module public functions
--export([trigger/6]).
+-export([trigger/7]).
 
 %%
 %%
@@ -57,7 +57,7 @@ init([Conf]) ->
 
     [
         %lager:info("topic= ~p", [Topic]),
-        mqtt_topic_registry:subscribe(wave_utils:bin(Topic), 0, {?MODULE,trigger,self()})
+        mqtt_topic_registry:subscribe(wave_utils:bin(Topic), 0, {?MODULE,trigger,self(),undefined})
         
         || Topic <- proplists:get_value(topics, Conf)
     ],
@@ -68,7 +68,7 @@ init([Conf]) ->
 %%
 
 %
-trigger(Pid, _, _Topic, Payload, _Qos, _Retain) ->
+trigger(Pid, _, _DeviceID, _Topic, Payload, _Qos, _Retain) ->
     P = jiffy:decode(Payload, [return_maps]),
     lager:info("trigger ~p", [P]),
 

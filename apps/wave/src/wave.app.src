@@ -8,12 +8,11 @@
   {applications, [
       kernel,
       stdlib,
-      gproc,
+      syn,
       ranch,
       sharded_eredis,
       lager,
-      jiffy,
-      uuid
+      jiffy
   ]},
   {env, []},
   {modules, []},

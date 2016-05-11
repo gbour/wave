@@ -25,7 +25,7 @@
 % gen_server API
 -export([start_link/1, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 % public functions
--export([notify/6]).
+-export([notify/7]).
 
 start(Opts) ->
     case start_link(Opts) of
@@ -44,14 +44,14 @@ start_link(Conf) ->
 init([Conf]) ->
     lager:info("starting ~p module ~p", [?MODULE, Conf]),
 
-    mqtt_topic_registry:subscribe(<<"$/mqtt/CONNECT">>, 0, {?MODULE, notify, self()}),
+    mqtt_topic_registry:subscribe(<<"$/mqtt/CONNECT">>, 0, {?MODULE, notify, self(), undefined}),
     {ok, undefined}.
 
 %%
 %% PUBLIC API
 %%
 
-notify(_Pid, _, {<<"$/mqtt/CONNECT">>,_}, P, _Qos, _Retain) ->
+notify(_Pid, _, _DeviceID, {<<"$/mqtt/CONNECT">>,_}, P, _Qos, _Retain) ->
     lager:debug("notify connect"),
     {P2} = jiffy:decode(P),
     Dev = proplists:get_value(<<"deviceid">>, P2),

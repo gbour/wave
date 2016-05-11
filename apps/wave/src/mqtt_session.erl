@@ -25,7 +25,7 @@
 % gen_fsm
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
--export([handle/2, publish/6, ack/4, provisional/4, is_alive/1, garbage_collect/1, disconnect/2, landed/2]).
+-export([handle/2, publish/7, ack/4, provisional/4, is_alive/1, garbage_collect/1, disconnect/2, landed/2]).
 -export([initiate/3, connected/2, connected/3]).
 %
 % role
@@ -137,8 +137,8 @@ garbage_collect(_Pid) ->
 %
 % a message is published for me
 %
--spec publish(pid(), pid(), binary(), binary(), mqtt_qos(), mqtt_retain()) -> ok.
-publish(Pid, From, Topic, Content, Qos, Retain) ->
+-spec publish(pid(), pid(), mqtt_clientid(), binary(), binary(), mqtt_qos(), mqtt_retain()) -> ok.
+publish(Pid, From, _DeviceID, Topic, Content, Qos, Retain) ->
     gen_fsm:send_event(Pid, {publish, From, Topic, Content, Qos, Retain}).
 
 -spec provisional(request|response, pid(), binary(), pid()) -> ok.
@@ -180,70 +180,70 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
     {MSecs, Secs, _} = os:timestamp(),
     Vals             = [{state,connecting},{username,User},{ts, MSecs*1000000+Secs},{clean, Clean} | Opts],
 
-    Res = case wave_redis:connect(DeviceID, Vals) of
-        % device already connected
-        {error, exists} ->
-            %TODO: reject connections
-            %TODO: make it configurable (globally/per device) -> optionaly replace old device
+    Res1 = case {Clean, DeviceID} of
+        {0, <<>>} ->
+            % 0-length DeviceID is forbidden when clean-session unset
+            lager:debug("invalid empty client-id with Clean Session 0"),
+            {error, wrong_id};
+
+        {1, <<>>} ->
+            %NOTE: if DeviceID is empty, we do not register process
+            %      (we could have an infinite number of processes with empty deviceid)
+            %TODO: should we generate (optionally) a random clientid ?
+            ok;
+
+        % non-empty deviceid
+        {_, DeviceID} ->
+            % register process with deviceid as key
+            % returns 'ok' if deviceid not used, {error, taken} if deviceid already used
+
+            %NOTE: registration is AUTOMATICALLY removed when process ends
+
+            %TODO: optionaly, if deviceid already defined, replace instead of reject ?
+            %      make it configurable (globally/per device) -> optionaly replace old device
             %      (and disconnect old device)
             %      /!\ there may be a flickering risk of both devices retries to reconnect
             %      alternativelly
-            {error, exists};
-
-        _ ->
-            wave_auth:check(application:get_env(wave, auth_required), DeviceID, {User, Pwd}, Settings)
+            %TODO: should be moved AFTER auth check, so we don't block another client w/ same id
+            %      to connect
+            syn:register(DeviceID, self())
     end,
 
-    {Retcode, Topics} = case Res of
+    Res2 = case Res1 of
+        ok ->
+            wave_auth:check(application:get_env(wave, auth_required), DeviceID, {User, Pwd}, Settings);
+
+        Err1 -> Err1
+    end,
+
+    {Retcode, SessionPresent, Topics} = case Res2 of
         {ok, _} ->
-            % if connection is successful, we need to check if we have offline messages
-            Topics1 = mqtt_offline:recover(DeviceID),
-            lager:info("offline topics: ~p", [Topics1]),
-            [ mqtt_topic_registry:subscribe(Topic, Qos, {?MODULE,publish,self()}) || {Topic,Qos} <- Topics1 ],
-            % flush is async
-            case Topics1 of
-                [] -> ok;
-                _  ->
-                    mqtt_offline:flush(DeviceID, {?MODULE,publish,self()})
-            end,
+            {Exists, Topics2} = offline_unstore(DeviceID, Clean),
+            lager:debug("restored topics: ~p", [Topics2]),
+            {0, Exists, Topics2};
 
-            Topics2 = wave_redis:topic(DeviceID, 0),
-            lager:debug("qos 0 saved topics= ~p", [Topics2]),
-            lists:foreach(fun({T,_}) -> mqtt_topic_registry:subscribe(T, 0, {?MODULE,publish,self()}) end, Topics2),
-
-            {0, Topics1++Topics2};
-
-        {error, exists}   ->
-            {2, []};
+        {error, taken}   ->
+            {2, false, []};
         {error, wrong_id} ->
-            {2, []};
+            {2, false, []};
         {error, bad_credentials} ->
-            {4, []} % not authorized
+            {4, false, []} % not authorized
     end,
 
     wave_event_router:route(<<"$/mqtt/CONNECT">>, [{deviceid, DeviceID}, {retcode, Retcode}]),
 
     % update device status in redis
-    lager:debug("RES= ~p", [Res]),
-    NextState = case Res of
-        {error, exists} -> initiate;
-        {error, _}      ->
-            wave_redis:update(DeviceID, state, disconnected),
-            initiate;
-
-        _               ->
-            wave_redis:update(DeviceID, state, connected),
-            connected
-    end,
-
-    Resp = #mqtt_msg{type='CONNACK', payload=[{session,0},{retcode, Retcode}]},
+    lager:debug("RES= ~p", [Res2]),
+    Resp = #mqtt_msg{type='CONNACK', payload=[{session, wave_utils:int(SessionPresent)},{retcode, Retcode}]},
 
     case Retcode of
         0 ->
+            % remove offline subscriptions, publish stored messages
+            mqtt_offline:release(self(), DeviceID, Clean),
+
             Will = proplists:get_value(will, P),
-            {reply, Resp, NextState,
-                StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, topics=Topics, will=Will}, Ka
-            };
+            {reply, Resp, connected, StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, 
+                                                       topics=Topics, will=Will}, Ka};
 
         _ ->
             % because we need to close connection after having sent non-zero CONNACK
@@ -373,14 +373,15 @@ connected(Msg=#mqtt_msg{type='PUBCOMP', payload=P}, _, StateData=#session{keepal
     {reply, undefined, connected, StateData, Ka};
 
 %TODO: prevent subscribing multiple times to the same topic
-connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T, keepalive=Ka}) ->
+connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, 
+          StateData=#session{deviceid=DeviceID, topics=T, keepalive=Ka}) ->
 	MsgId  = proplists:get_value(msgid, P),
     Topics = proplists:get_value(topics, P),
 
     % subscribe to all listed topics (creating it if it don't exists)
     EQoses = lists:map(fun({Topic, TQos}) ->
-            mqtt_topic_registry:subscribe(Topic, TQos, {?MODULE, publish, self()}),
-            S = {?MODULE, publish, self()},
+            mqtt_topic_registry:subscribe(Topic, TQos, {?MODULE, publish, self(), DeviceID}),
+            S = {?MODULE, publish, self(), DeviceID},
             mqtt_retain:publish(S, Topic, TQos),
 
             TQos
@@ -392,13 +393,14 @@ connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, StateData=#session{topics=T
     lager:info("Ka=~p", [Ka]),
     {reply, Resp, connected, StateData#session{topics=Topics++T}, Ka};
 
-connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _, StateData=#session{topics=OldTopics, keepalive=Ka}) ->
+connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _, 
+          StateData=#session{deviceid=DeviceID, topics=OldTopics, keepalive=Ka}) ->
 	MsgId  = proplists:get_value(msgid, P),
     Topics = proplists:get_value(topics, P),
 
     % subscribe to all listed topics (creating it if it don't exists)
     lists:foreach(fun(T) ->
-            mqtt_topic_registry:unsubscribe(T, {?MODULE,publish,self()})
+            mqtt_topic_registry:unsubscribe(T, {?MODULE,publish,self(), DeviceID})
         end,
         Topics
     ),
@@ -431,6 +433,7 @@ connected({timeout, _, timeout1}, _StateData) ->
 % ASYNC
 
 % publish message with QoS 0 (fire n forget)
+% TODO: match DeviceID
 connected({publish, _, {Topic,_}, Content, Qos=0, Retain},
           StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
     lager:debug(">PUBLISH ~p (qos ~p) to subscr", [Topic, Qos]),
@@ -577,42 +580,21 @@ terminate(_Reason, _StateName, undefined) ->
     lager:info("session terminate with undefined state: ~p", [_Reason]),
     terminate;
 
+%NOTE: process/deviceid automatically unregistered from syn when process terminate
 terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, opts=Opts}) ->
     lager:info("~n * deviceid : ~p~n * reason   : ~p~n * stateName: ~p~n * stateData: ~p", [DeviceID, _Reason, StateName, StateData]),
 
+    %TODO: if unsubscribe THEN subscribe in offline, there is a small interval of time
+    %      where topic is not registered
+    %      instead, update target process in topic registry
     lists:foreach(fun({Topic, _Qos}) ->
-            mqtt_topic_registry:unsubscribe(Topic, {?MODULE, publish, self()})
+            mqtt_topic_registry:unsubscribe(Topic, {?MODULE, publish, self(), DeviceID})
         end,
         T
     ),
 
-    case proplists:get_value(clean, Opts, 1) of
-        0 ->
-            lager:debug("clean=0: saving client's subscriptions qos 1 & 2 messages will be stored until client reconnects"),
-
-            lists:foreach(fun({Topic, Qos}) ->
-                    case Qos of
-                        0 ->
-                            lager:debug("qps 0 topics: ~p/~p/~p", [DeviceID, Topic, Qos]),
-                            wave_redis:topic(DeviceID, Topic, Qos);
-
-                        _ ->
-                            mqtt_offline:register(Topic, Qos, DeviceID)
-                    end
-                end,
-                T
-            );
-
-        _ ->
-            lager:debug("clean=1: cleaning client subscriptions")
-    end,
-
-    % change redis device state only if connected
-    case StateName of
-        connected -> wave_redis:update(DeviceID, state, disconnected);
-        _         -> pass
-    end,
-
+    % saving topics if clean unset
+    offline_store(DeviceID, proplists:get_value(clean, Opts, 1), T),
     send_last_will(StateData),
     terminate.
 
@@ -649,4 +631,61 @@ send_last_will(#session{will=#{topic := Topic, message := Data, qos := Qos, reta
     mqtt_message_worker:publish(MsgWorker, lastwill_session, Msg), % async
 
     ok.
+
+
+-spec offline_store(DeviceID::binary(), CleanSession::0|1, Topics::list({binary(), 0|1|2})) -> ok.
+offline_store(_, 1, _) ->
+    ok;
+%offline_store(_, 0, []) ->
+%    ok;
+offline_store(DeviceID, 0, Subscriptions) ->
+    lager:debug("storing offline subscriptions: ~p", [Subscriptions]),
+    wave_db:set({s, <<"session:", DeviceID/binary>>}, 1),
+
+    Flatten = offline_store2(Subscriptions, []),
+    wave_db:push(["topics:", DeviceID], Flatten),
+
+    mqtt_offline:register(DeviceID, Subscriptions),
+    ok.
+
+% serialize topics
+offline_store2([], Acc) ->
+    Acc;
+offline_store2([{Topic, Qos}| T], Acc) ->
+    offline_store2(T, [Topic, Qos| Acc]).
+
+
+-spec offline_unstore(DeviceID::binary(), CleanSession::0|1) -> {boolean(), list({binary(), 0|1|2})}.
+offline_unstore(DeviceID, 1) ->
+    lager:debug("cleansession unset, deleting saved topics"),
+    wave_db:del(<<"session:", DeviceID/binary>>),
+    wave_db:del(<<"topics:", DeviceID/binary>>),
+    {false, []};
+offline_unstore(DeviceID, 0) ->
+    Exists = case wave_db:exists(<<"session:", DeviceID/binary>>) of
+        {ok, <<"0">>} -> false;
+        {ok, <<"1">>} -> 
+            wave_db:del(<<"session:", DeviceID/binary>>),
+            true
+    end,
+
+    {Exists, offline_unstore2(Exists, DeviceID)}.
+
+offline_unstore2(false, _) ->
+    [];
+offline_unstore2(true , DeviceID) -> 
+    {ok, FlatTopics} = wave_db:range(<<"topics:", DeviceID/binary>>),
+    wave_db:del(<<"topics:", DeviceID/binary>>),
+
+    offline_unstore3(DeviceID, FlatTopics, []).
+
+% unserialize topics
+offline_unstore3(_       , []             , Acc) ->
+    Acc;
+offline_unstore3(DeviceID, [Topic, Qos| T], Acc) ->
+    Qos2 = wave_utils:int(Qos),
+    % register topic for this session
+    mqtt_topic_registry:subscribe(Topic, Qos2, {?MODULE,publish,self(),DeviceID}),
+
+    offline_unstore3(DeviceID, T, [{Topic, Qos2} | Acc]).
 

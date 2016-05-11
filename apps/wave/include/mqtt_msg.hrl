@@ -31,7 +31,8 @@
 -type mqtt_qos()    :: 0|1|2.
 -type mqtt_retain() :: 0|1.
 
--type mqtt_topic()  :: unicode:unicode_binary().
+-type mqtt_topic()      :: unicode:unicode_binary().
+-type mqtt_clientid()   :: unicode:unicode_binary().
 
 %%
 %% OTP compatibility macros

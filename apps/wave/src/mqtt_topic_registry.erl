@@ -30,7 +30,7 @@
     peers
 }).
 
--type subscriber()   :: {Module :: module(), Fun :: atom(), Pid :: pid()}.
+-type subscriber()   :: {Module :: module(), Fun :: atom(), Pid :: pid(), DeviceID :: mqtt_clientid()|undefined}.
 -type subscription() :: {Re :: binary(), Fields :: list(integer()), Qos :: integer(), Subscriber :: subscriber()}.
 -type match()        :: {Position :: integer(), Value :: binary()}.
 -type match_result() :: {Re :: binary(), Qos :: integer(), Subscriber :: subscriber(), Matches :: list(match())}.
@@ -164,8 +164,8 @@ code_change(_, State, _) ->
 % dump subscribers list
 %
 -spec priv_dump(list(subscription())) -> ok.
-priv_dump([{Topic, Fields, Subscriber} |T]) ->
-    lager:info("~p (~p) -> ~p", [Topic, Fields, Subscriber]),
+priv_dump([{Topic, Fields, Qos, Subscriber} |T]) ->
+    lager:info("~p (~p) (qos ~p) -> ~p", [Topic, Fields, Qos, Subscriber]),
     priv_dump(T);
 
 priv_dump([]) ->

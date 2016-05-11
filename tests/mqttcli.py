@@ -11,7 +11,7 @@ import nyamuk.nyamuk_const as NC
 from nyamuk.mqtt_pkt import MqttPkt
 
 class MqttClient(object):
-    def __init__(self, prefix, rand=True, connect=False, raw_connect=False, **kwargs):
+    def __init__(self, prefix="", rand=True, client_id=None, connect=False, raw_connect=False, **kwargs):
         loglevel = logging.DEBUG; logfile = None
 
         DEBUG   = os.environ.get('DEBUG', '0')
@@ -20,17 +20,25 @@ class MqttClient(object):
         elif DEBUG != '1':
             logfile   = DEBUG
 
+        clean_session = kwargs.pop('clean_session', 1)
+        self._connack = None
+        read_connack  = kwargs.pop('read_connack', True)
         server = 'localhost'
 
-        self._c = nyamuk.Nyamuk("test:{0}:{1}".format(prefix, random.randint(0,9999) if rand else 0),
-            None, None, server=server, log_level=loglevel, log_file=logfile, **kwargs)
+        self.client_id = client_id if client_id is not None else \
+            "test:{0}:{1}".format(prefix, random.randint(0,9999) if rand else 0)
+
+        self._c = nyamuk.Nyamuk(self.client_id, None, None, server=server, log_level=loglevel, log_file=logfile, 
+                                **kwargs)
 
         # MQTT connection
         # 
         # connect takes protocol version (3 or 4) or is True (set version to 3)
         if connect is not False:
             version = connect if isinstance(connect, int) else 3
-            self.connect(version=version)
+            self._c.connect(version=version, clean_session = clean_session)
+            if read_connack:
+                self._connack = self.recv()
             return
 
         # open TCP connection
@@ -47,6 +55,9 @@ class MqttClient(object):
                 raise e
 
             self._c.sock = sock
+    
+    def connack(self):
+        return self._connack
 
     def disconnect(self):
         self._c.disconnect(); self._c.packet_write()
@@ -76,6 +87,7 @@ class MqttClient(object):
         return self._c.conn_is_alive()
 
     def recv(self):
+        self._c.packet_write()
         self._c.loop()
         return self._c.pop_event()
 
