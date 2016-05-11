@@ -319,6 +319,8 @@ class CleanSession(TestSuite):
     @desc("[MQTT-3.1.2-4] cleansession is set to 0, messages qos is preserved")
     def test_023(self):
         c = MqttClient("cs", connect=4, clean_session=0)
+        if c.connack().session_present != 0:
+            return False
         c.subscribe("/cs/topic1/+", qos=2)
         c.disconnect()
 
@@ -347,7 +349,7 @@ class CleanSession(TestSuite):
         acked = False; pubcnt = 0
         while True:
             evt = c2.recv()
-            print evt
+            #print evt
             if isinstance(evt, EventConnack):
                 if evt.session_present != 1:
                     return False
@@ -375,6 +377,8 @@ class CleanSession(TestSuite):
     @desc("[MQTT-3.1.2-6] cleansession set DISCARD any previous session")
     def test_024(self):
         c = MqttClient("cs", connect=4, clean_session=0)
+        if c.connack().session_present != 0:
+            return False
         c.subscribe("/cs/topic1/+", qos=0)
         c.disconnect()
 
