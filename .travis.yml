@@ -30,12 +30,18 @@ install:
 
 before_script:
     - kerl list installations
+    # starting wave broker
+    - "erl -pa `find -L _build/travis -name ebin` -s wave_app -config .wave.travis.config -noinput -name 'wave@127.0.0.1' -setcookie wave&"
+    - PID=$!
+    # wait until broker started
+    - sleep 10
 
 script:
     - make dialyze
-    - ./.travis-run.sh
+    - make DEBUG=/tmp/wave.tests.log WAVELOGS=/tmp/wave.travis.log test
 
 after_script:
+    - kill -HUP $PID
     - cat /tmp/wave.tests.log
     - cat /tmp/wave.travis.log
 
