@@ -74,7 +74,7 @@ handle_call(debug_cleanup, _, _State) ->
 handle_call({register, DeviceID, TopicFs}, _, State) ->
     priv_register(DeviceID, TopicFs),
 
-    {reply, ok, State#{DeviceID => TopicFs}};
+    {reply, ok, maps:put(DeviceID, TopicFs, State)};
 
 %TODO: operations should be atomic
 handle_call({release, Session, DeviceID, Clean}, _, State) ->
