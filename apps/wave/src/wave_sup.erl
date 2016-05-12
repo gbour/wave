@@ -39,5 +39,12 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    {ok, { {one_for_one, 5, 10}, []} }.
+    {ok, {{one_for_one, 5, 10}, [
+        ?CHILD(mqtt_topic_registry, worker)
+        ,?CHILD(mqtt_retain, worker)
+        ,?CHILD(mqtt_offline, worker)
+        ,?CHILD(mqtt_offline_session, worker)
+        ,?CHILD(mqtt_lastwill_session, worker)
+        ,?CHILD(wave_ctlmngr, worker)
+    ]}}.
 

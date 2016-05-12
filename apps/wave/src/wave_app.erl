@@ -49,14 +49,8 @@ start(_StartType, _StartArgs) ->
     % initialize syn (global process registry)
     syn:init(),
 
-    % start topics registry
-    % TODO: use supervisor
-    mqtt_topic_registry:start_link(),
-    mqtt_offline:start_link(),
-    wave_ctlmngr:start_link(),
-    mqtt_lastwill_session:start_link(),
-    mqtt_retain:start_link(),
-    mqtt_offline_session:start_link(),
+    % start supervised servers
+    App = wave_sup:start_link(),
 
 	% start mqtt listeners
     {ok, _} = ranch:start_listener(wave, 1, ranch_tcp, [
@@ -82,8 +76,6 @@ start(_StartType, _StartArgs) ->
             {hibernate_after, 1000}
 
         ], mqtt_ranch_protocol, []),
-
-    App = wave_sup:start_link(),
 
     %% loading modules
     ok = load_modules(),
