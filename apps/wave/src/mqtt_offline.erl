@@ -164,7 +164,7 @@ priv_release2(0, Session, DeviceID, [Topic, Qos, MsgID |T]) ->
     %              {TopicF, Qos, Subscriber, Matches}
     %              TopicF never used
     Subscription = {undefined, wave_utils:int(Qos), {mqtt_session, publish, Session, DeviceID}, []},
-    {ok, MsgWorker} = mqtt_message_worker:start_link(),
+    {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
     mqtt_message_worker:publish(MsgWorker, offline_session, Msg, [Subscription]),
     
     priv_release2(0, Session, DeviceID, T).
