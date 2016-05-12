@@ -59,14 +59,14 @@ start(_StartType, _StartArgs) ->
     ),
 
 	% start mqtt listeners
-    {ok, _} = ranch:start_listener(wave, 1, ranch_tcp, [
+    supervisor:start_child(WaveSup, ranch:child_spec(wave_tcp, 1, ranch_tcp, [
             {port, env([plain, port])}
             ,{keepalive, true}
-        ], mqtt_ranch_protocol, []),
+        ], mqtt_ranch_protocol, [])),
 
     Ciphers = check_ciphers(env([ssl, ciphers])),
     lager:info("ciphers= (~p) ~p", [erlang:length(Ciphers), Ciphers]),
-    {ok, _} = ranch:start_listener(wave_ssl, 1, ranch_ssl, [
+    supervisor:start_child(WaveSup, ranch:child_spec(wave_ssl, 1, ranch_ssl, [
             {port    , env([ssl, port])},
             {keepalive, true},
             {certfile, env([ssl, certfile])},
@@ -81,10 +81,7 @@ start(_StartType, _StartArgs) ->
             % reduce memory usage
             {hibernate_after, 1000}
 
-        ], mqtt_ranch_protocol, []),
-
-    %% loading modules
-    ok = load_modules(),
+        ], mqtt_ranch_protocol, [])),
 
     {ok, WaveSup}.
 
