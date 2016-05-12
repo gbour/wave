@@ -27,16 +27,25 @@ install:
     # nyamuk is a python MQTT client used for blackbox tests
     - "git clone -b enhancement https://github.com/gbour/nyamuk.git tests/nyamuk"
     - "git clone https://github.com/nyov/twotp.git tests/twotp"
+    - "git clone https://github.com/gbour/paho.mqtt.testing tests/paho"
 
 before_script:
     - kerl list installations
+    # starting wave broker
+    - "erl -pa `find -L _build/travis -name ebin` -s wave_app -config .wave.travis.config -noinput -name 'wave@127.0.0.1' -setcookie wave&"
+    - PID=$!
+    # wait until broker started
+    - sleep 10
 
 script:
     - make dialyze
-    - ./.travis-run.sh
+    - make DEBUG=/tmp/wave.tests.log WAVELOGS=/tmp/wave.travis.log test
+    - python3 tests/paho/interoperability/client_test.py --iterations 3 -z 2> /tmp/wave.paho.log
 
 after_script:
+    - kill -HUP $PID
     - cat /tmp/wave.tests.log
+    - cat /tmp/wave.paho.log
     - cat /tmp/wave.travis.log
 
 notifications:
