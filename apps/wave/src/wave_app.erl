@@ -49,8 +49,14 @@ start(_StartType, _StartArgs) ->
     % initialize syn (global process registry)
     syn:init(),
 
-    % start supervised servers
-    App = wave_sup:start_link(),
+    % start master supervisor (starting named servers)
+    {ok, WaveSup} = wave_sup:start_link(),
+
+    % start modules supervisor, add it as master sup child
+    supervisor:start_child(WaveSup, {wave_modules_sup,
+        {wave_modules_sup, start_link, []}, 
+        permanent, 5000, supervisor, [wave_modules_sup]}
+    ),
 
 	% start mqtt listeners
     {ok, _} = ranch:start_listener(wave, 1, ranch_tcp, [
@@ -80,7 +86,7 @@ start(_StartType, _StartArgs) ->
     %% loading modules
     ok = load_modules(),
 
-    App.
+    {ok, WaveSup}.
 
 stop(_State) ->
     ok.
@@ -114,37 +120,6 @@ check_ciphers(Ciphers) ->
 loglevel(Level) ->
     lager:set_loglevel(lager_console_backend, Level).
 
-
-%%
-%% MODULES MANAGEMENT
-%%
-
--spec load_modules() -> ok.
-load_modules() ->
-    {ok, Mods} = application:get_env(wave, modules),
-
-    Enabled = proplists:get_value(enabled, Mods),
-    Opts    = proplists:get_value(settings, Mods, []),
-
-    module_init(Enabled, Opts).
-
--spec module_init(list(atom), any()) -> ok.
-module_init([], _) ->
-    ok;
-module_init([Modname|Rest], Opts) ->
-    lager:info("initializing ~p module", [Modname]),
-    M = (wave_utils:atom("wave_mod_" ++ wave_utils:str(Modname))),
-
-    % webservice entries
-    case erlang:function_exported(M, ws, 0) of
-        true  -> M:ws();
-        false -> ok
-    end,
-
-    % start module
-    M:start(proplists:get_value(Modname, Opts, [])),
-
-    module_init(Rest, Opts).
 
 -ifdef(DEBUG).
 debug_cleanup() ->
