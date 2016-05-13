@@ -408,4 +408,27 @@ class CleanSession(TestSuite):
         c2.disconnect()
         return True
 
+    @catch
+    @desc("[MQTT-3.2.0-1] first packet received MUST be CONNACK (offline storage context)")
+    def test_030(self):
+        c = MqttClient("cs", connect=4, clean_session=0)
+        c.subscribe("/cs/topic1/+", qos=0)
+        c.disconnect()
+
+        pub = MqttClient("pub", connect=4)
+        pubmsg= {
+            'topic'  : "/cs/topic1/waz",
+            'qos'    : 0,
+            'payload': env.gen_msg(42)
+        }
+        ack = pub.publish(**pubmsg)
+
+        c2 = MqttClient(client_id=c.client_id, connect=4, clean_session=0)
+        if not isinstance(c2.connack(), EventConnack):
+            return False
+
+        c2.recv()
+
+        c2.disconnect(); pub.disconnect()
+        return True
 

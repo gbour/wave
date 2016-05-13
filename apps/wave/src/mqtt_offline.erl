@@ -52,7 +52,7 @@ register(DeviceID, TopicFs) ->
 
 -spec release(pid(), binary(), 0|1) -> ok.
 release(Session, DeviceID, Clean) ->
-    gen_server:call(?MODULE, {release, Session, DeviceID, Clean}).
+    gen_server:cast(?MODULE, {release, Session, DeviceID, Clean}).
 
 %-spec publish() -> ok.
 publish(Pid, From, DeviceID, Topic, Content, Qos, Retain) ->
@@ -76,22 +76,6 @@ handle_call({register, DeviceID, TopicFs}, _, State) ->
 
     {reply, ok, maps:put(DeviceID, TopicFs, State)};
 
-%TODO: operations should be atomic
-handle_call({release, Session, DeviceID, Clean}, _, State) ->
-    lager:debug("release: ~p :: ~p", [DeviceID, maps:get(DeviceID, State, undefined)]),
-   
-    % unregistering from topic registry
-    lists:foreach(fun({TopicF, Qos}) ->
-            mqtt_topic_registry:unsubscribe(TopicF, {?MODULE, publish, self(), DeviceID})
-        end, maps:get(DeviceID, State, [])
-    ),
-
-    % publishing stored messages
-    priv_release(Clean, Session, DeviceID, wave_db:range(<<"queue:", DeviceID/binary>>)),
-    wave_db:del(<<"queue:", DeviceID/binary>>),
-
-    {reply, ok, maps:remove(DeviceID, State)};
-
 %
 %NOTE: Qos here is min(publish qos, subscribe qos), so don't need to store original subscribed qos
 %
@@ -114,6 +98,23 @@ handle_call({publish, DeviceID, {Topic, TopicF}, Content, Qos, Retain, MsgWorker
 handle_call(Event,_,State) ->
     lager:warning("non catched call: ~p", [Event]),
     {reply, ok, State}.
+
+
+%TODO: operations should be atomic
+handle_cast({release, Session, DeviceID, Clean}, State) ->
+    lager:debug("release: ~p :: ~p", [DeviceID, maps:get(DeviceID, State, undefined)]),
+   
+    % unregistering from topic registry
+    lists:foreach(fun({TopicF, Qos}) ->
+            mqtt_topic_registry:unsubscribe(TopicF, {?MODULE, publish, self(), DeviceID})
+        end, maps:get(DeviceID, State, [])
+    ),
+
+    % publishing stored messages
+    priv_release(Clean, Session, DeviceID, wave_db:range(<<"queue:", DeviceID/binary>>)),
+    wave_db:del(<<"queue:", DeviceID/binary>>),
+
+    {noreply, maps:remove(DeviceID, State)};
 
 handle_cast(Event, State) ->
     lager:warning("non catched cast: ~p", [Event]),
