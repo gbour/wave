@@ -195,7 +195,7 @@ waitacks({ack, From, Msg=#mqtt_msg{type=MsgType, payload=P}}, State=#state{publi
         acked ->
             MsgID = proplists:get_value(msgid, P),
             mqtt_session:landed(From, MsgID), % message no more in in-flight mode
-            {next_state, waitacks, State#state{subscribers=Rest}, 5000}
+            {next_state, waitacks, State#state{inflight=Rest}, 5000}
     end;
 
 
