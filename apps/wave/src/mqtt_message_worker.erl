@@ -89,7 +89,7 @@ start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscri
     MsgID   = proplists:get_value(msgid, P),
     send(provreq, From, MsgID, 2),
 
-    {next_state, provisional, #state{publisher=From, message=Msg, subscribers=Subscribers}};
+    {next_state, provisional, #state{publisher=From, message=Msg, subscribers=Subscribers}, 5000};
 
 start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscribers}, State) ->
     lager:debug("publish: ~p from ~p (qos=~p) ~p", [Msg, From, Qos, Subscribers]),
@@ -110,7 +110,7 @@ start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscri
 
         {_, _} ->
             % wait subscribers acknowledgement
-            {next_state, waitacks, #state{publisher=From, message=Msg, inflight=S2}}
+            {next_state, waitacks, #state{publisher=From, message=Msg, inflight=S2}, 5000}
     end.
 
 % qos=2
@@ -129,13 +129,24 @@ provisional({provresp, From, Msg=#mqtt_msg{type='PUBREL', payload=P}},
 
         _ ->
             % wait subscribers acknowledgement
-            {next_state, waitacks, State#state{inflight=Inflight}}
+            {next_state, waitacks, State#state{inflight=Inflight}, 5000}
     end;
+
 
 provisional({Event, From, Msg}, State) ->
     lager:warning("received invalid ~p event (~p) from ~p while in provisional state", [Event, Msg, From]),
-    {next_state, provisional, State}.
+    {next_state, provisional, State, 5000};
 
+provisional(timeout, State=#state{publisher=From, message=#mqtt_msg{qos=Qos}}) ->
+    case is_process_alive(From) of
+        % publisher still, waiting PUBREL
+        true -> {next_state, provisional, State, 5000};
+
+        % publisher dead, stopping worker
+        _    -> 
+            lager:warning("publisher ~p is dead: canceling message delivery (qos ~p, no PUBREL received)", [From, Qos]),
+            {stop, normal, State}
+    end.
 
 %
 % waiting subscribers acknowledgements
@@ -149,11 +160,11 @@ waitacks({provreq, From, Msg=#mqtt_msg{payload=P}}, State=#state{inflight=Inflig
     case lists:partition(fun({_,_,Pid,_}) -> Pid =:= From end, Inflight) of
         {[], _} ->
             lager:error("~p not found in message subscribers", [From]),
-            {next_state, waitacks, State};
+            {next_state, waitacks, State, 5000};
 
         {[{2,provisional,From,_}], _} ->
             lager:info("Provisional response duplicate for ~p", [From]),
-            {next_state, waitacks, State};
+            {next_state, waitacks, State, 5000};
 
         % PUBREC
         {[{2,published,From,Args}], Inflight2} ->
@@ -161,20 +172,20 @@ waitacks({provreq, From, Msg=#mqtt_msg{payload=P}}, State=#state{inflight=Inflig
             MsgID = proplists:get_value(msgid, P),
             send(provresp, From, MsgID, 2),
 
-            {next_state, waitacks, State#state{inflight=[{2,provisional,From,Args}|Inflight2]}};
+            {next_state, waitacks, State#state{inflight=[{2,provisional,From,Args}|Inflight2]}, 5000};
 
         {[{Qos,_,_,_}], _}              ->
             lager:info("~p: no provisional response needed for ~p QoS", [From, Qos]),
-            {next_state, waitacks, State}
+            {next_state, waitacks, State, 5000}
     end;
 
-waitacks({ack, From, Msg=#mqtt_msg{type=MsgType, payload=P}}, State=#state{inflight=Inflight}) ->
+waitacks({ack, From, Msg=#mqtt_msg{type=MsgType, payload=P}}, State=#state{publisher=Pub, inflight=Inflight}) ->
     lager:debug("received ack from ~p: ~p", [From, Msg]),
 
     {Match, Rest} = lists:partition(fun({_,_,Pid,_}) -> Pid =:= From end, Inflight),
     case checkack(MsgType, Match, Rest, State) of
         pass  ->
-            {next_state, waitacks, State};
+            {next_state, waitacks, State, 5000};
 
         stop  ->
             MsgID = proplists:get_value(msgid, P),
@@ -184,16 +195,32 @@ waitacks({ack, From, Msg=#mqtt_msg{type=MsgType, payload=P}}, State=#state{infli
         acked ->
             MsgID = proplists:get_value(msgid, P),
             mqtt_session:landed(From, MsgID), % message no more in in-flight mode
-            {next_state, waitacks, State#state{subscribers=Rest}}
+            {next_state, waitacks, State#state{subscribers=Rest}, 5000}
     end;
+
 
 waitacks({Event, From, Msg}, State) ->
     lager:warning("~p: invalid ~p event in waitacks state: ~p. Ignored", [From, Event, Msg]),
-    {next_state, waitacks, State}.
+    {next_state, waitacks, State, 5000};
+
+waitacks(timeout, State=#state{inflight=Inflight}) ->
+    {Inflight2, Dead} = lists:partition(fun({_,_,Pid,_}) -> is_process_alive(Pid) end, Inflight),
+    lager:warning("dead subscribers: ~p", [Dead]),
+    
+    case Inflight2 of
+        [] ->
+            lager:warning("no more alive subscribers: canceling message delivery"),
+            {stop, normal, State};
+
+        Inflight2 ->
+            {next_state, waitacks, State#state{inflight=Inflight2}, 5000}
+    end.
+
 
 %%
 %% GENERIC FSM CALLBACKS
 %%
+
 
 handle_event(_Event, _StateName, StateData) ->
     lager:debug("event ~p", [_StateName]),
@@ -222,6 +249,8 @@ code_change(_OldVsn, StateName, StateData, _Extra) ->
 
 % Forward a message to subscriber
 %
+%TODO: check return status (if sender died => stop message delivery) when possible
+%      (when is async, result is always 'ok')
 -spec send(publish, Receiver::mqtt_topic_registry:subscriber(), {Topic::binary(), TFilter::binary()}, 
            Payload::binary(), Qos::integer(), Retain::mqtt_retain()) -> ok.
 send(publish, {Mod,Fun,Pid,DeviceID}, Topic, Payload, Qos, Retain) ->

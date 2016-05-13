@@ -86,7 +86,7 @@ publish2([Match = <<"retain:", Topic/binary>>|Keys], Subscription) ->
     Qos  = wave_utils:int(proplists:get_value(<<"qos">> , Values, "0")),
     Msg  = #mqtt_msg{type='PUBLISH', qos=Qos, retain=1, payload=[{topic, Topic}, {data, Data}]},
 
-    {ok, MsgWorker} = mqtt_message_worker:start_link(),
+    {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
     mqtt_message_worker:publish(MsgWorker, retain_session, Msg, [Subscription]), 
 
     publish2(Keys, Subscription).

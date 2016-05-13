@@ -56,7 +56,7 @@ release(Session, DeviceID, Clean) ->
 
 %-spec publish() -> ok.
 publish(Pid, From, DeviceID, Topic, Content, Qos, Retain) ->
-    gen_server:call(?MODULE, {publish, DeviceID, Topic, Content, Qos, Retain}).
+    gen_server:call(?MODULE, {publish, DeviceID, Topic, Content, Qos, Retain, From}).
 
 -ifdef(DEBUG).
 debug_cleanup() ->
@@ -95,7 +95,7 @@ handle_call({release, Session, DeviceID, Clean}, _, State) ->
 %
 %NOTE: Qos here is min(publish qos, subscribe qos), so don't need to store original subscribed qos
 %
-handle_call({publish, DeviceID, {Topic, TopicF}, Content, Qos, Retain}, _, State) ->
+handle_call({publish, DeviceID, {Topic, TopicF}, Content, Qos, Retain, MsgWorker}, _, State) ->
     %TODO: optimisation: for messages shorted than len(HMAC),
     %      store directly the message in the queue
     MsgID = wave_utils:hex(crypto:hash(sha256, Content)),
@@ -105,18 +105,31 @@ handle_call({publish, DeviceID, {Topic, TopicF}, Content, Qos, Retain}, _, State
     wave_db:push(<<"queue:", DeviceID/binary>>, [Topic, Qos, MsgID]),
     R3 = wave_db:incr(<<"msg:", MsgID/binary, ":refcount">>),
     lager:info("~p", [R3]),
- 
-     {reply, ok, State};
+
+    % when qos > 0, message must be acknowledged
+    priv_ack(Qos, MsgWorker),
+    {reply, ok, State};
  
 
-handle_call(_,_,State) ->
+handle_call(Event,_,State) ->
+    lager:warning("non catched call: ~p", [Event]),
     {reply, ok, State}.
 
-handle_cast(_, State) ->
+handle_cast(Event, State) ->
+    lager:warning("non catched cast: ~p", [Event]),
     {noreply, State}.
 
 
-handle_info(_, State) ->
+%NOTE: this is a very special case, where this gen_server receives a gen_fsm event
+%      mqtt_offline is acting as a subscriber for a mqtt_message_worker sending qos 2 message
+%      msg worker received a PUBREC (see priv_ack) and is sending back a PUBREL through
+%      mqtt_session:provisional(response, ...) API
+handle_info({'$gen_event', {provresp, MsgID, MsgWorker}}, State) ->
+    mqtt_message_worker:ack(MsgWorker, self(), #mqtt_msg{type='PUBCOMP', payload=[{msgid, 1}]}),
+    {noreply, State};
+
+handle_info(Info, State) ->
+    lager:warning("non catched info: ~p", [Info]),
     {noreply, State}.
 
 terminate(_,_) ->
@@ -164,7 +177,7 @@ priv_release2(0, Session, DeviceID, [Topic, Qos, MsgID |T]) ->
     %              {TopicF, Qos, Subscriber, Matches}
     %              TopicF never used
     Subscription = {undefined, wave_utils:int(Qos), {mqtt_session, publish, Session, DeviceID}, []},
-    {ok, MsgWorker} = mqtt_message_worker:start_link(),
+    {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
     mqtt_message_worker:publish(MsgWorker, offline_session, Msg, [Subscription]),
     
     priv_release2(0, Session, DeviceID, T).
@@ -178,4 +191,13 @@ priv_clean_msg(Cnt, MsgID) when Cnt < 0 ->
     lager:error("~p msg count is negative", [MsgID]),
     priv_clean_msg(0, MsgID);
 priv_clean_msg(  _,     _)              ->
+    ok.
+
+
+-spec priv_ack(0|1|2, pid()) -> ok.
+priv_ack(1, MsgWorker) ->
+    mqtt_message_worker:ack(MsgWorker, self(), #mqtt_msg{type='PUBACK', payload=[{msgid, 1}]});
+priv_ack(2, MsgWorker) ->
+    mqtt_message_worker:provisional(request, MsgWorker, self(), #mqtt_msg{type='PUBREC', payload=[{msgid,1}]});
+priv_ack(_, _) ->
     ok.

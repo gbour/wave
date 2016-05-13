@@ -43,7 +43,7 @@ init(Ref, Socket, Transport, _Opts = []) ->
     % ie: tcp:127.0.0.1:55435
     Addr = string:join([wave_utils:str(Transport:name()), inet_parse:ntoa(Ip), wave_utils:str(Port)], ":"),
 
-    {ok, Session} = mqtt_session:start_link({?MODULE, Transport, Socket}, [{addr, Addr}]),
+    {ok, Session} = supervisor:start_child(wave_sessions_sup, [{?MODULE, Transport, Socket}, [{addr, Addr}]]),
     lager:debug("fsm= ~p (~p : ~p) from ~p", [Session, Transport, Socket, Addr]),
     loop(Socket, Transport, Session, <<"">>, 0).
 

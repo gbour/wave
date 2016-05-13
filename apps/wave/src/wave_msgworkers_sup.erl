@@ -14,7 +14,7 @@
 %%    You should have received a copy of the GNU Affero General Public License
 %%    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
--module(wave_sup).
+-module(wave_msgworkers_sup).
 -author("Guillaume Bour <guillaume@bour.cc>").
 -behaviour(supervisor).
 
@@ -25,7 +25,7 @@
 -export([init/1]).
 
 %% Helper macro for declaring children of supervisor
--define(CHILD(I, Type), {I, {I, start_link, []}, permanent, 5000, Type, [I]}).
+-define(CHILD(I, Type), {I, {I, start_link, []}, temporary, 5000, Type, [I]}).
 
 %% ===================================================================
 %% API functions
@@ -39,15 +39,7 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    {ok, {{one_for_one, 5, 10}, [
-        ?CHILD(mqtt_topic_registry, worker)
-        ,?CHILD(mqtt_retain, worker)
-        ,?CHILD(mqtt_offline, worker)
-        ,?CHILD(mqtt_offline_session, worker)
-        ,?CHILD(mqtt_lastwill_session, worker)
-        ,?CHILD(wave_ctlmngr, worker)
-
-        ,?CHILD(wave_sessions_sup, supervisor)
-        ,?CHILD(wave_msgworkers_sup, supervisor)
+    {ok, {{simple_one_for_one, 5, 10}, [
+        ?CHILD(mqtt_message_worker, worker)
     ]}}.
 

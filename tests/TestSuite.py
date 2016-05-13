@@ -75,6 +75,9 @@ class TestSuite(object):
             except:
                 desc   = self.__module__ + "." + name
 
+            if isinstance(ret, defer.Deferred):
+                ret = yield ret
+
             self._print(DISPLAY[ret], name, desc)
 
             counters[DISPLAY[ret][1].lower()] += 1

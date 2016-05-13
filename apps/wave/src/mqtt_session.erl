@@ -282,7 +282,7 @@ connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _, StateData=#session{deviceid=_
 
     %TODO: save message in DB
     %      pass MsgID to message_worker
-    {ok, MsgWorker} = mqtt_message_worker:start_link(),
+    {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
     mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
 
     {reply, undefined, connected, StateData, Ka};
@@ -298,7 +298,7 @@ connected(Msg=#mqtt_msg{type='PUBLISH', payload=P, dup=Dup}, _,
             % only if retain=1
             mqtt_retain:store(Msg),
             %      pass MsgID to message_worker
-            {ok, MsgWorker} = mqtt_message_worker:start_link(),
+            {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
             mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
             
             [{MsgID, MsgWorker} | Inflight];
@@ -627,7 +627,7 @@ send_last_will(#session{will=#{topic := Topic, message := Data, qos := Qos, reta
     lager:debug("sending last will"),
 
     Msg = #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain, payload=[{msgid, -1},{topic, Topic}, {data, Data}]},
-    {ok, MsgWorker} = mqtt_message_worker:start_link(),
+    {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
     mqtt_message_worker:publish(MsgWorker, lastwill_session, Msg), % async
 
     ok.

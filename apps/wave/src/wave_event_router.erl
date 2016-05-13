@@ -45,13 +45,13 @@ init([Conf]) ->
 route(Topic, Msg) ->
     lager:debug("routing internal message (~p)", [Topic]),
 
-    {ok, Worker} = mqtt_message_worker:start_link(),
+    {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
     % async
     %NOTE: for now, all internal events are sent using QoS 0
     %      (because we have no fake publisher to receipt qos1/2 replies)
     %TODO: respect subscriber qos (mqtt_router should mimic a mqtt_session then)
     %TODO: config setting for internal events max qos
-    mqtt_message_worker:publish(Worker, self(),
+    mqtt_message_worker:publish(MsgWorker, self(),
         #mqtt_msg{type='PUBLISH', qos=0, payload=[{topic, Topic},{data, jiffy:encode({Msg})}]}
     ),
     ok.

@@ -14,7 +14,7 @@
 %%    You should have received a copy of the GNU Affero General Public License
 %%    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
--module(wave_sup).
+-module(wave_modules_sup).
 -author("Guillaume Bour <guillaume@bour.cc>").
 -behaviour(supervisor).
 
@@ -25,7 +25,7 @@
 -export([init/1]).
 
 %% Helper macro for declaring children of supervisor
--define(CHILD(I, Type), {I, {I, start_link, []}, permanent, 5000, Type, [I]}).
+-define(CHILD(I, Args, Type), {I, {I, start_link, [Args]}, permanent, 5000, Type, [I]}).
 
 %% ===================================================================
 %% API functions
@@ -39,15 +39,30 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    {ok, {{one_for_one, 5, 10}, [
-        ?CHILD(mqtt_topic_registry, worker)
-        ,?CHILD(mqtt_retain, worker)
-        ,?CHILD(mqtt_offline, worker)
-        ,?CHILD(mqtt_offline_session, worker)
-        ,?CHILD(mqtt_lastwill_session, worker)
-        ,?CHILD(wave_ctlmngr, worker)
+    {ok, {{one_for_one, 5, 10}, load_modules()}}.
 
-        ,?CHILD(wave_sessions_sup, supervisor)
-        ,?CHILD(wave_msgworkers_sup, supervisor)
-    ]}}.
+% return list of Child Specifications
+-spec load_modules() -> list(term()).
+load_modules() ->
+    {ok, Mods} = application:get_env(wave, modules),
 
+    Enabled = proplists:get_value(enabled, Mods),
+    Opts    = proplists:get_value(settings, Mods, []),
+
+    module_init(Enabled, Opts, []).
+
+-spec module_init(list(atom), any(), list(term())) -> list(term()).
+module_init([], _, ChildSpecs) ->
+    ChildSpecs;
+module_init([Modname|Rest], Opts, ChildSpecs) ->
+    lager:info("starting module: ~p", [Modname]),
+    Mod  = (wave_utils:atom("wave_mod_" ++ wave_utils:str(Modname))),
+    Args = proplists:get_value(Modname, Opts, []),   
+
+    % webservice entries
+%    case erlang:function_exported(M, ws, 0) of
+%        true  -> M:ws();
+%        false -> ok
+%    end,
+
+    module_init(Rest, Opts, [?CHILD(Mod, Args, worker) | ChildSpecs]).
