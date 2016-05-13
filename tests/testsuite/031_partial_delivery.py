@@ -190,3 +190,28 @@ class PartialDelivery(TestSuite):
 
         pub.disconnect()
         defer.returnValue(True)
+
+    @catch
+    @desc("clean-session off and offline storage")
+    @defer.inlineCallbacks
+    def test_010(self):
+        sub = MqttClient("sub", connect=4, clean_session=0)
+        sub.subscribe("foo/+", qos=2)
+        sub.disconnect()
+
+        if (yield self.msgworkers_count()) != 0:
+            defer.returnValue(False)
+
+        pub = MqttClient("pub", connect=4)
+        rec = pub.publish("foo/bar", env.gen_msg(42), qos=2)
+        ack = pub.pubrel(rec.mid)
+        print ack
+        if not isinstance(ack, EventPubcomp):
+            defer.returnValue(False)
+
+        # msg is published to offline storage, msg worker should exit immediately
+        if (yield self.msgworkers_count()) != 0:
+            defer.returnValue(False)
+
+        defer.returnValue(True)
+
