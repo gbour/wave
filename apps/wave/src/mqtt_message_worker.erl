@@ -104,9 +104,8 @@ start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscri
             % send PUBACK/PUBREL immediately
             MsgID   = proplists:get_value(msgid, P),
             send(ack, From, MsgID, Qos),
-            mqtt_session:landed(From, MsgID), % message no more in in-flight mode
 
-            {stop, normal, State};
+            {stop, normal, #state{publisher=From,message=Msg}};
 
         {_, _} ->
             % wait subscribers acknowledgement
@@ -114,6 +113,7 @@ start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscri
     end.
 
 % qos=2
+% TODO: From should be equal to Pub, to test
 provisional({provresp, From, Msg=#mqtt_msg{type='PUBREL', payload=P}}, 
             State=#state{publisher=Pub, message=PubMsg, subscribers=Subscribers}) ->
     lager:debug("provisional state: received provisional response ~p", [Msg]),
@@ -123,7 +123,6 @@ provisional({provresp, From, Msg=#mqtt_msg{type='PUBREL', payload=P}},
             % send PUBCOMP immediately
             MsgID   = proplists:get_value(msgid, P),
             send(ack, From, MsgID, 2),
-            mqtt_session:landed(From, MsgID), % message no more in in-flight mode
 
             {stop, normal, State};
 
@@ -154,7 +153,8 @@ provisional(timeout, State=#state{publisher=From, message=#mqtt_msg{qos=Qos}}) -
 % for QOS 1, they must send back a PUBACK message
 % for QOS 2, they must send back a PUBREC, then latter on a PUBCOMP
 %
-
+% From = subscriber responding PUBREC to PUBLISH
+%
 waitacks({provreq, From, Msg=#mqtt_msg{payload=P}}, State=#state{inflight=Inflight}) ->
     lager:debug("received provisional response from ~p: ~p", [From, Msg]),
 
@@ -186,7 +186,9 @@ waitacks({provreq, From, Msg=#mqtt_msg{payload=P}}, State=#state{inflight=Inflig
             {next_state, waitacks, State, 5000}
     end;
 
-waitacks({ack, From, Msg=#mqtt_msg{type=MsgType, payload=P}}, State=#state{publisher=Pub, inflight=Inflight}) ->
+%
+% From = subscriber responding PUBACK/PUBCOMP
+waitacks({ack, From, Msg=#mqtt_msg{type=MsgType, payload=P}}, State=#state{inflight=Inflight}) ->
     lager:debug("received ack from ~p: ~p", [From, Msg]),
 
     MsgID         = proplists:get_value(msgid, P),
@@ -240,6 +242,14 @@ handle_sync_event(_Event, _From, _StateName, StateData) ->
 handle_info(_Info, _StateName, StateData) ->
     lager:debug("info ~p", [_StateName]),
     {stop, error, StateData}.
+
+terminate(normal, StateName, #state{publisher=Pub, message=#mqtt_msg{payload=P}}) ->
+    lager:debug("normal terminaison (state ~p)", [StateName]),
+    
+    MsgID = proplists:get_value(msgid, P),
+    mqtt_session:landed(Pub, MsgID), % message no more in in-flight mode
+
+    terminate;
 
 terminate(_Reason, StateName, _StateData) ->
     lager:debug("terminate: ~p ~p ~p", [_Reason, StateName, _StateData]),
