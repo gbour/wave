@@ -139,6 +139,8 @@ handle_cast(Event, State) ->
 handle_info({'$gen_event', {provresp, MsgID, MsgWorker}}, State) ->
     mqtt_message_worker:ack(MsgWorker, self(), #mqtt_msg{type='PUBCOMP', payload=[{msgid, MsgID}]}),
     {noreply, State};
+handle_info({'$gen_event', {'msg-landed', _}}, State) ->
+    {noreply, State};
 
 handle_info(Info, State) ->
     lager:warning("non catched info: ~p", [Info]),
