@@ -94,7 +94,9 @@ init([Transport, Opts]) ->
     {ok, initiate, #session{transport=Transport, opts=Opts, next_msgid=random:uniform(65535)}, 
          ?CONNECT_TIMEOUT}.
 
-%%
+%
+% process message received on socket
+% TODO: error cases
 -spec handle(pid(), mqtt_msg()) -> {ok, any()}.
 handle(Pid, Msg) ->
 	Resp = gen_fsm:sync_send_event(Pid, Msg),
@@ -611,6 +613,7 @@ code_change(_OldVsn, StateName, StateData, _Extra) ->
 % return next message id
 % bounded to 2^16 (2 bytes long)
 %
+%TODO: improve algorithm (MsgID =:= 65535)
 -spec next_msgid(integer()) -> integer().
 next_msgid(MsgID) ->
     if

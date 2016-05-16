@@ -267,6 +267,9 @@ class Will(TestSuite):
     @catch
     @desc("[MQTT-3.1.2-9] if will flag set to 1, will topic MUST be present")
     def test_20(self):
+        """
+            broker throwing exception (mqtt_msg:decode_string())
+        """
         client  = MqttClient("rabbit", raw_connect=True)
         client.forge(NC.CMD_CONNECT, 0, [
             ('string', 'MQTT'),
@@ -283,6 +286,10 @@ class Will(TestSuite):
     @catch
     @desc("[MQTT-3.1.2-9] if will flag set to 1, will msg MUST be present")
     def test_21(self):
+        """
+            throwing "anonymous" exception on binary pattern matching
+            (mqtt_msg:decode_connect2())
+        """
         client  = MqttClient("rabbit", raw_connect=True)
         client.forge(NC.CMD_CONNECT, 0, [
             ('string', 'MQTT'),
