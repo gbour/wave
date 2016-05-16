@@ -26,7 +26,7 @@
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
 -export([handle/2, publish/7, ack/4, provisional/4, is_alive/1, garbage_collect/1, disconnect/2, landed/2]).
--export([initiate/3, connected/2, connected/3]).
+-export([initiate/3, initiate/2, connected/2, connected/3]).
 %
 % role
 %   store active sessions (== 1 device connection)
