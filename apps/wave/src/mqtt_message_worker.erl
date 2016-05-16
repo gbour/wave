@@ -83,7 +83,7 @@ ack(Pid, From, Msg) ->
 %%
 
 start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscribers}, _State) when Qos =:= 2 ->
-    lager:debug("publish: ~p from ~p (qos=2)", [Msg, From]),
+    lager:debug("publish: ~p from ~p (qos=2) => subs ~p", [Msg, From, Subscribers]),
 
     %TODO: store message
     MsgID   = proplists:get_value(msgid, P),
@@ -92,7 +92,7 @@ start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscri
     {next_state, provisional, #state{publisher=From, message=Msg, subscribers=Subscribers}, 5000};
 
 start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscribers}, State) ->
-    lager:debug("publish: ~p from ~p (qos=~p) ~p", [Msg, From, Qos, Subscribers]),
+    lager:debug("publish: ~p from ~p (qos=~p) => subs ~p", [Msg, From, Qos, Subscribers]),
     S2 = publish_to_subscribers(From, Msg, Subscribers),
 
     case {Qos, length(S2)} of
@@ -104,9 +104,8 @@ start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscri
             % send PUBACK/PUBREL immediately
             MsgID   = proplists:get_value(msgid, P),
             send(ack, From, MsgID, Qos),
-            mqtt_session:landed(From, MsgID), % message no more in in-flight mode
 
-            {stop, normal, State};
+            {stop, normal, #state{publisher=From,message=Msg}};
 
         {_, _} ->
             % wait subscribers acknowledgement
@@ -114,6 +113,7 @@ start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscri
     end.
 
 % qos=2
+% TODO: From should be equal to Pub, to test
 provisional({provresp, From, Msg=#mqtt_msg{type='PUBREL', payload=P}}, 
             State=#state{publisher=Pub, message=PubMsg, subscribers=Subscribers}) ->
     lager:debug("provisional state: received provisional response ~p", [Msg]),
@@ -123,7 +123,6 @@ provisional({provresp, From, Msg=#mqtt_msg{type='PUBREL', payload=P}},
             % send PUBCOMP immediately
             MsgID   = proplists:get_value(msgid, P),
             send(ack, From, MsgID, 2),
-            mqtt_session:landed(From, MsgID), % message no more in in-flight mode
 
             {stop, normal, State};
 
@@ -154,48 +153,58 @@ provisional(timeout, State=#state{publisher=From, message=#mqtt_msg{qos=Qos}}) -
 % for QOS 1, they must send back a PUBACK message
 % for QOS 2, they must send back a PUBREC, then latter on a PUBCOMP
 %
-
+% From = subscriber responding PUBREC to PUBLISH
+%
 waitacks({provreq, From, Msg=#mqtt_msg{payload=P}}, State=#state{inflight=Inflight}) ->
     lager:debug("received provisional response from ~p: ~p", [From, Msg]),
-    case lists:partition(fun({_,_,Pid,_}) -> Pid =:= From end, Inflight) of
+
+    MsgID         = proplists:get_value(msgid, P),
+    {Match, Rest} = lists:partition(fun({_,_,Pid,ID,_}) -> Pid =:= From andalso ID =:= MsgID end, Inflight),
+
+    case {Match, Rest} of 
         {[], _} ->
             lager:error("~p not found in message subscribers", [From]),
             {next_state, waitacks, State, 5000};
 
-        {[{2,provisional,From,_}], _} ->
+        {[{2,provisional,From,_,_}], _} ->
             lager:info("Provisional response duplicate for ~p", [From]),
             {next_state, waitacks, State, 5000};
 
         % PUBREC
-        {[{2,published,From,Args}], Inflight2} ->
+        {[{2,published,From,MsgID,Args}], Rest} ->
             lager:debug("~p: matched provisional response. waiting acknowledgment", [From]),
-            MsgID = proplists:get_value(msgid, P),
             send(provresp, From, MsgID, 2),
 
-            {next_state, waitacks, State#state{inflight=[{2,provisional,From,Args}|Inflight2]}, 5000};
+            {next_state, waitacks, State#state{inflight=[{2,provisional,From,MsgID,Args} | Rest]}, 5000};
 
-        {[{Qos,_,_,_}], _}              ->
+        {[{Qos,_,_,_,_}], _}              ->
             lager:info("~p: no provisional response needed for ~p QoS", [From, Qos]),
+            {next_state, waitacks, State, 5000};
+
+        {Match, _}                        ->
+            lager:error("~p: more than 1 match found: ~p", [From, Match]),
             {next_state, waitacks, State, 5000}
     end;
 
-waitacks({ack, From, Msg=#mqtt_msg{type=MsgType, payload=P}}, State=#state{publisher=Pub, inflight=Inflight}) ->
+%
+% From = subscriber responding PUBACK/PUBCOMP
+waitacks({ack, From, Msg=#mqtt_msg{type=MsgType, payload=P}}, State=#state{inflight=Inflight}) ->
     lager:debug("received ack from ~p: ~p", [From, Msg]),
 
-    {Match, Rest} = lists:partition(fun({_,_,Pid,_}) -> Pid =:= From end, Inflight),
+    MsgID         = proplists:get_value(msgid, P),
+    {Match, Rest} = lists:partition(fun({_,_,Pid,ID,_}) -> Pid =:= From andalso ID =:= MsgID end, Inflight),
+
     case checkack(MsgType, Match, Rest, State) of
         pass  ->
             {next_state, waitacks, State, 5000};
 
         stop  ->
-            MsgID = proplists:get_value(msgid, P),
             mqtt_session:landed(From, MsgID), % message no more in in-flight mode
             {stop, normal, State};
 
         acked ->
-            MsgID = proplists:get_value(msgid, P),
             mqtt_session:landed(From, MsgID), % message no more in in-flight mode
-            {next_state, waitacks, State#state{subscribers=Rest}, 5000}
+            {next_state, waitacks, State#state{inflight=Rest}, 5000}
     end;
 
 
@@ -204,7 +213,7 @@ waitacks({Event, From, Msg}, State) ->
     {next_state, waitacks, State, 5000};
 
 waitacks(timeout, State=#state{inflight=Inflight}) ->
-    {Inflight2, Dead} = lists:partition(fun({_,_,Pid,_}) -> is_process_alive(Pid) end, Inflight),
+    {Inflight2, Dead} = lists:partition(fun({_,_,Pid,_,_}) -> is_process_alive(Pid) end, Inflight),
     lager:warning("dead subscribers: ~p", [Dead]),
     
     case Inflight2 of
@@ -234,6 +243,14 @@ handle_info(_Info, _StateName, StateData) ->
     lager:debug("info ~p", [_StateName]),
     {stop, error, StateData}.
 
+terminate(normal, StateName, #state{publisher=Pub, message=#mqtt_msg{payload=P}}) ->
+    lager:debug("normal terminaison (state ~p)", [StateName]),
+    
+    MsgID = proplists:get_value(msgid, P),
+    mqtt_session:landed(Pub, MsgID), % message no more in in-flight mode
+
+    terminate;
+
 terminate(_Reason, StateName, _StateData) ->
     lager:debug("terminate: ~p ~p ~p", [_Reason, StateName, _StateData]),
     terminate.
@@ -252,7 +269,7 @@ code_change(_OldVsn, StateName, StateData, _Extra) ->
 %TODO: check return status (if sender died => stop message delivery) when possible
 %      (when is async, result is always 'ok')
 -spec send(publish, Receiver::mqtt_topic_registry:subscriber(), {Topic::binary(), TFilter::binary()}, 
-           Payload::binary(), Qos::integer(), Retain::mqtt_retain()) -> ok.
+           Payload::binary(), Qos::integer(), Retain::mqtt_retain()) -> integer().
 send(publish, {Mod,Fun,Pid,DeviceID}, Topic, Payload, Qos, Retain) ->
     Mod:Fun(Pid, self(), DeviceID, Topic, Payload, Qos, Retain).
 
@@ -294,18 +311,19 @@ publish_to_subscribers(_From, #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain, 
             EQos = min(Qos, SQos),
             lager:debug("~p: effective qos=~p", [Pid, EQos]),
 
-            case is_process_alive(Pid) of
+            MsgID = case is_process_alive(Pid) of
                 true ->
                     send(publish, Subscriber, {Topic, TopicMatch}, Content, EQos, Retain);
 
                 _    ->
                     %NOTE: SHOULD NEVER HAPPEND
-                    lager:error("deadbeef: ~p subscriber is dead", [Pid])
+                    lager:error("deadbeef: ~p subscriber is dead", [Pid]),
+                    0
             end,
 
             if
-                EQos > 0 -> {true, {EQos, published, Pid, S}};
-                true     -> false
+                EQos > 0 andalso MsgID > 0 -> {true, {EQos, published, Pid, MsgID, S}};
+                true                       -> false
             end
 
         end, Subscribers
@@ -326,20 +344,21 @@ checkack(_, _Match=[], _, _) ->
 % qos 1
 % no remaining subscribers waiting for acknowledgement 
 % we send acknowledgement back to publisher
-checkack('PUBACK', [{_EQos=1, _,_,_}], [], #state{publisher=Pub, message=#mqtt_msg{qos=Qos, payload=P}}) ->
+checkack('PUBACK', [{_EQos=1, _,_,_,_}], [], #state{publisher=Pub, message=#mqtt_msg{qos=Qos, payload=P}}) ->
     lager:debug("message delivery acknowledged by all subscribers: sending ack to publisher"),
     MsgID = proplists:get_value(msgid, P),
     send(ack, Pub, MsgID, Qos),
     stop;
 
-checkack('PUBACK', [{_EQos=1, _,_,_}], Rest, _) ->
+checkack('PUBACK', [{_EQos=1, _,_,_,_}], Rest, _) ->
     lager:debug("waiting all acknowledgements (~p remaining)", [length(Rest)]),
     acked;
 
 % qos 2
 % no remaining subscribers 
 % we send
-checkack('PUBCOMP', [{_EQos=2, Status, _,_}], [], #state{publisher=Pub, message=#mqtt_msg{qos=Qos, payload=P}}) ->
+checkack('PUBCOMP', [{_EQos=2, Status, _,_,_}], [], 
+         #state{publisher=Pub, message=#mqtt_msg{qos=Qos, payload=P}}) ->
     case Status of
         published ->
             lager:info("~p: provisional response not received before acknowledgement. accepted anyway");
@@ -352,7 +371,7 @@ checkack('PUBCOMP', [{_EQos=2, Status, _,_}], [], #state{publisher=Pub, message=
     send(ack, Pub, MsgID, Qos),
     stop;
 
-checkack('PUBCOMP', [{_EQos=2, Status, _,_}], Rest, _) ->
+checkack('PUBCOMP', [{_EQos=2, Status, _,_,_}], Rest, _) ->
     case Status of
         published ->
             lager:info("~p: provisional response not received before acknowledgement. accepted anyway");
@@ -360,10 +379,10 @@ checkack('PUBCOMP', [{_EQos=2, Status, _,_}], Rest, _) ->
             pass
     end,
 
-    lager:debug("waiting all acknowledgements (~p remaining)", [length(Rest)]),
+    lager:debug("waiting all acknowledgements (~p remaining): ~p", [length(Rest), Rest]),
     acked;
 
-checkack(MsgType, [{EQos, _,_,_}], _,_) ->
+checkack(MsgType, [{EQos, _,_,_,_}], _,_) ->
     lager:warning("invalid ~p message for Qos ~p ", [MsgType, EQos]),
     pass;
 

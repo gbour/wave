@@ -5,6 +5,7 @@ import types
 
 from TestSuite import TestSuite, desc, catch
 from mqttcli import MqttClient
+from lib import env
 from nyamuk.event import *
 
 class Qos1(TestSuite):
@@ -191,6 +192,41 @@ class Qos1(TestSuite):
         pub.publish("foo/bar", "2d msg", qos=1)
         e2 = sub.recv()
         if e2.msg.mid != e1.msg.mid + 1:
+            return False
+
+        return True
+
+    @catch
+    @desc("pairing ack with right publish (using msgid)")
+    def test_31(self):
+        sub = MqttClient("sub", connect=4)
+        ack = sub.subscribe_multi([('foo/+', 1), ('foo/#', 1)])
+        print ack
+
+        pub = MqttClient("pub", connect=4)
+        pub.publish("foo/bar", env.gen_msg(42), qos=1)
+
+        evt = sub.recv()
+        if not isinstance(evt, EventPublish) or\
+                evt.msg.topic != 'foo/bar' or\
+                evt.msg.qos   != 1:
+            return False
+        sub.puback(evt.msg.mid, read_response=False)
+
+        evt = pub.recv()
+        if evt is not None:
+            return False
+
+        # receive 2d publish
+        evt = sub.recv()
+        if not isinstance(evt, EventPublish) or\
+                evt.msg.topic != 'foo/bar' or\
+                evt.msg.qos   != 1:
+            return False
+        sub.puback(evt.msg.mid)
+
+        evt = pub.recv()
+        if not isinstance(evt, EventPuback):
             return False
 
         return True

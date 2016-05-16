@@ -137,9 +137,13 @@ garbage_collect(_Pid) ->
 %
 % a message is published for me
 %
--spec publish(pid(), pid(), mqtt_clientid(), binary(), binary(), mqtt_qos(), mqtt_retain()) -> ok.
+-spec publish(pid(), pid(), mqtt_clientid(), {Topic::binary(), TopicF::binary()}, 
+              binary(), mqtt_qos(), mqtt_retain()) -> integer().
 publish(Pid, From, _DeviceID, Topic, Content, Qos, Retain) ->
-    gen_fsm:send_event(Pid, {publish, From, Topic, Content, Qos, Retain}).
+    MsgID = gen_fsm:sync_send_event(Pid, {next_msgid, Qos}),
+    gen_fsm:send_event(Pid, {publish, MsgID, From, Topic, Content, Qos, Retain}),
+
+    MsgID.
 
 -spec provisional(request|response, pid(), binary(), pid()) -> ok.
 provisional(request, Pid, MsgID, From) ->
@@ -423,8 +427,14 @@ connected(ping, _, StateData=#session{transport={Callback,Transport,Socket}}) ->
             {reply, ok, connected, StateData, 5000}
     end;
 
-connected(_,_, _StateData) ->
-    {stop, normal, disconnect, undefined}.
+connected({next_msgid, _Qos=0}, _, State) ->
+    {reply, 0, connected, State};
+connected({next_msgid, _}, _, State=#session{next_msgid=MsgID}) ->
+    {reply, MsgID, connected, State#session{next_msgid=next_msgid(MsgID)}};
+
+connected(Event, _, State) ->
+    lager:error("unknown event: ~p", [Event]),
+    {stop, error, disconnect, State}.
 
 connected({timeout, _, timeout1}, _StateData) ->
 	lager:info("timeout after connection"),
@@ -434,7 +444,7 @@ connected({timeout, _, timeout1}, _StateData) ->
 
 % publish message with QoS 0 (fire n forget)
 % TODO: match DeviceID
-connected({publish, _, {Topic,_}, Content, Qos=0, Retain},
+connected({publish, _, _, {Topic, _}, Content, Qos=0, Retain},
           StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
     lager:debug(">PUBLISH ~p (qos ~p) to subscr", [Topic, Qos]),
 
@@ -452,8 +462,9 @@ connected({publish, _, {Topic,_}, Content, Qos=0, Retain},
     end;
 
 % QoS 1 or 2
-connected({publish, From, {Topic,_}, Content, Qos, Retain},
-          StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka,inflight=Inflight,next_msgid=MsgID}) ->
+% NOTE: MsgID as already been impl. in {next_msgid, Qos} handler
+connected({publish, MsgID, From, {Topic,_}, Content, Qos, Retain},
+          StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka,inflight=Inflight}) ->
     lager:debug("send PUBLISH to subscriber (msgid=~p, qos=~p)", [MsgID, Qos]),
 
     Msg   = #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain,
@@ -467,9 +478,7 @@ connected({publish, From, {Topic,_}, Content, Qos, Retain},
 
         ok ->
             lager:debug("OK, continue"),
-            {next_state, connected,
-             StateData#session{next_msgid=next_msgid(MsgID),inflight=[{MsgID, From}|Inflight]}, Ka
-            }
+            {next_state, connected, StateData#session{inflight=[{MsgID, From}|Inflight]}, Ka}
     end;
 
 %
@@ -553,20 +562,20 @@ connected(ping_timeout, _StateData=#session{transport={Callback,Transport,Socket
 
 
 handle_event({disconnect, Reason}, _StateName, StateData) ->
-    lager:info("session terminated. cause: ~p", [Reason]),
+    lager:error("session terminated. cause: ~p", [Reason]),
     {stop, normal, StateData};
 
 handle_event(_Event, _StateName, StateData) ->
-	lager:debug("event ~p", [_StateName]),
+	lager:error("event ~p", [_StateName]),
     {stop, error, StateData}.
 
 
 handle_sync_event(_Event, _From, _StateName, StateData) ->
-	lager:debug("syncevent ~p", [_StateName]),
+	lager:error("syncevent ~p", [_StateName]),
     {stop, error, error, StateData}.
 
 handle_info(_Info, _StateName, StateData) ->
-	lager:debug("info ~p", [_StateName]),
+	lager:error("info ~p", [_StateName]),
     {stop, error, StateData}.
 
 %

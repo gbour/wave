@@ -34,13 +34,18 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 % internal funs
 
+-record(state, {
+    next_msgid    = 1   :: integer(),
+    subscriptions = #{} :: map()
+ }).
+
 -spec start_link() -> {ok, pid()} | ignore | {error, any()}.
 start_link() ->
     % name = mqtt_offline
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init(_) ->
-    {ok, #{}}.
+    {ok, #state{}}.
 
 %%
 %% PUBLIC API
@@ -52,9 +57,13 @@ register(DeviceID, TopicFs) ->
 
 -spec release(pid(), binary(), 0|1) -> ok.
 release(Session, DeviceID, Clean) ->
-    gen_server:call(?MODULE, {release, Session, DeviceID, Clean}).
+    gen_server:cast(?MODULE, {release, Session, DeviceID, Clean}).
 
-%-spec publish() -> ok.
+%
+%NOTE: msg_worker, calling publish(), needs to know the MsgID assigned to
+%      MQTT PUBLISH msg sent to peer client, in order to match responses (provreq and/or ack)
+-spec publish(pid(), pid(), mqtt_clientid(), {Topic::binary(), TopicF::binary()}, 
+              binary(), mqtt_qos(), mqtt_retain()) -> integer().
 publish(Pid, From, DeviceID, Topic, Content, Qos, Retain) ->
     gen_server:call(?MODULE, {publish, DeviceID, Topic, Content, Qos, Retain, From}).
 
@@ -69,51 +78,53 @@ debug_cleanup() ->
 
 handle_call(debug_cleanup, _, _State) ->
     lager:warning("clearing offline"),
-    {reply, ok, #{}};
+    {reply, ok, #state{}};
 
-handle_call({register, DeviceID, TopicFs}, _, State) ->
+handle_call({register, DeviceID, TopicFs}, _, State=#state{subscriptions=Subs}) ->
     priv_register(DeviceID, TopicFs),
 
-    {reply, ok, maps:put(DeviceID, TopicFs, State)};
+    {reply, ok, State#state{subscriptions=maps:put(DeviceID, TopicFs, Subs)}};
+
+%
+%NOTE: Qos here is min(publish qos, subscribe qos), so don't need to store original subscribed qos
+%
+handle_call({publish, DeviceID, {Topic, TopicF}, Content, Qos, Retain, MsgWorker}, _, 
+            State=#state{next_msgid=MsgID}) ->
+    %TODO: optimisation: for messages shorted than len(HMAC),
+    %      store directly the message in the queue
+    MsgHash = wave_utils:hex(crypto:hash(sha256, Content)),
+    wave_db:set({s, <<"msg:", MsgHash/binary>>}, Content, [nx]),
+
+    %TODO: store TopicF also ?
+    wave_db:push(<<"queue:", DeviceID/binary>>, [Topic, Qos, MsgHash]),
+    R3 = wave_db:incr(<<"msg:", MsgHash/binary, ":refcount">>),
+    lager:info("~p", [R3]),
+
+    % when qos > 0, message must be acknowledged
+    priv_ack(Qos, MsgWorker, MsgID),
+    {reply, MsgID, State#state{next_msgid=next_msgid(MsgID)}};
+ 
+
+handle_call(Event,_,State) ->
+    lager:warning("non catched call: ~p", [Event]),
+    {reply, ok, State}.
+
 
 %TODO: operations should be atomic
-handle_call({release, Session, DeviceID, Clean}, _, State) ->
-    lager:debug("release: ~p :: ~p", [DeviceID, maps:get(DeviceID, State, undefined)]),
+handle_cast({release, Session, DeviceID, Clean}, State=#state{subscriptions=Subs}) ->
+    lager:debug("release: ~p :: ~p", [DeviceID, maps:get(DeviceID, Subs, undefined)]),
    
     % unregistering from topic registry
     lists:foreach(fun({TopicF, Qos}) ->
             mqtt_topic_registry:unsubscribe(TopicF, {?MODULE, publish, self(), DeviceID})
-        end, maps:get(DeviceID, State, [])
+        end, maps:get(DeviceID, Subs, [])
     ),
 
     % publishing stored messages
     priv_release(Clean, Session, DeviceID, wave_db:range(<<"queue:", DeviceID/binary>>)),
     wave_db:del(<<"queue:", DeviceID/binary>>),
 
-    {reply, ok, maps:remove(DeviceID, State)};
-
-%
-%NOTE: Qos here is min(publish qos, subscribe qos), so don't need to store original subscribed qos
-%
-handle_call({publish, DeviceID, {Topic, TopicF}, Content, Qos, Retain, MsgWorker}, _, State) ->
-    %TODO: optimisation: for messages shorted than len(HMAC),
-    %      store directly the message in the queue
-    MsgID = wave_utils:hex(crypto:hash(sha256, Content)),
-    wave_db:set({s, <<"msg:", MsgID/binary>>}, Content, [nx]),
-
-    %TODO: store TopicF also ?
-    wave_db:push(<<"queue:", DeviceID/binary>>, [Topic, Qos, MsgID]),
-    R3 = wave_db:incr(<<"msg:", MsgID/binary, ":refcount">>),
-    lager:info("~p", [R3]),
-
-    % when qos > 0, message must be acknowledged
-    priv_ack(Qos, MsgWorker),
-    {reply, ok, State};
- 
-
-handle_call(Event,_,State) ->
-    lager:warning("non catched call: ~p", [Event]),
-    {reply, ok, State}.
+    {noreply, State#state{subscriptions=maps:remove(DeviceID, Subs)}};
 
 handle_cast(Event, State) ->
     lager:warning("non catched cast: ~p", [Event]),
@@ -124,8 +135,9 @@ handle_cast(Event, State) ->
 %      mqtt_offline is acting as a subscriber for a mqtt_message_worker sending qos 2 message
 %      msg worker received a PUBREC (see priv_ack) and is sending back a PUBREL through
 %      mqtt_session:provisional(response, ...) API
+%NOTE: need to set msgid to pair ack msg w/ publish
 handle_info({'$gen_event', {provresp, MsgID, MsgWorker}}, State) ->
-    mqtt_message_worker:ack(MsgWorker, self(), #mqtt_msg{type='PUBCOMP', payload=[{msgid, 1}]}),
+    mqtt_message_worker:ack(MsgWorker, self(), #mqtt_msg{type='PUBCOMP', payload=[{msgid, MsgID}]}),
     {noreply, State};
 
 handle_info(Info, State) ->
@@ -194,10 +206,22 @@ priv_clean_msg(  _,     _)              ->
     ok.
 
 
--spec priv_ack(0|1|2, pid()) -> ok.
-priv_ack(1, MsgWorker) ->
-    mqtt_message_worker:ack(MsgWorker, self(), #mqtt_msg{type='PUBACK', payload=[{msgid, 1}]});
-priv_ack(2, MsgWorker) ->
-    mqtt_message_worker:provisional(request, MsgWorker, self(), #mqtt_msg{type='PUBREC', payload=[{msgid,1}]});
-priv_ack(_, _) ->
+-spec priv_ack(0|1|2, pid(), integer()) -> ok.
+priv_ack(1, MsgWorker, MsgID) ->
+    mqtt_message_worker:ack(MsgWorker, self(), #mqtt_msg{type='PUBACK', payload=[{msgid, MsgID}]});
+priv_ack(2, MsgWorker, MsgID) ->
+    mqtt_message_worker:provisional(request, MsgWorker, self(), 
+                                    #mqtt_msg{type='PUBREC', payload=[{msgid, MsgID}]});
+priv_ack(_, _, _) ->
     ok.
+
+% return next message id
+% bounded to 2^16 (2 bytes long)
+% TODO: MsgID is not sent on MQTT wire, so is not bounded
+-spec next_msgid(integer()) -> integer().
+next_msgid(MsgID) ->
+    if
+        MsgID =:= 65535 -> 1;
+        true            -> MsgID+1
+    end.
+
