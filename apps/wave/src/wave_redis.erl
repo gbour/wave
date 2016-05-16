@@ -23,13 +23,11 @@
                                         | {error, binary()|[binary()]} 
                                         | {ok, jiffy:json_value()}.
 device({deviceid, DeviceID}) ->
-    lager:info("id>=~p", [DeviceID]),
     device2({id, eget(<<"d:", DeviceID/binary, ":id">>)}).
 
 device2({id, Err={error, _}}) ->
     Err;
 device2({id, {ok, ID}})->
-    lager:info("id=~p", [ID]),
     decode(eget(<<"d:", ID/binary>>)).
 
 -spec eget(binary()) -> {error, notfound} | wave_db:return().

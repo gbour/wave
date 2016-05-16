@@ -135,18 +135,18 @@ decode_payload('PUBLISH', {_, Qos, _}, {_Len, Rest}) ->
     {ok, Ret};
 
 decode_payload('SUBSCRIBE', _, {_Len, <<MsgID:16, Payload/binary>>}) ->
-    lager:debug("SUBSCRIBE v3.1 ~p", [MsgID]),
+    %lager:debug("SUBSCRIBE v3.1 ~p", [MsgID]),
     case MsgID of
         0 -> erlang:throw({'SUBSCRIBE', "2.3.1-1", "null msgid"});
         _ -> pass
     end,
 
 	Topics = get_topics(Payload, [], true),
-	lager:debug("topics= ~p", [Topics]),
+	%lager:debug("topics= ~p", [Topics]),
 	{ok, [{msgid, MsgID},{topics, Topics}]};
 
 decode_payload('UNSUBSCRIBE', _, {_Len, <<MsgID:16, Payload/binary>>}) ->
-    lager:debug("UNSUBSCRIBE: ~p", [Payload]),
+    %lager:debug("UNSUBSCRIBE: ~p", [Payload]),
     case MsgID of
         0 -> erlang:throw({'UNSUBSCRIBE', "2.3.1-1", "null msgid"});
         _ -> pass
@@ -161,39 +161,39 @@ decode_payload('PINGRESP', _, {0, <<>>}) ->
     {ok, []};
 
 decode_payload('DISCONNECT', _, {0, <<>>}) ->
-    lager:debug("DISCONNECT"),
+    %lager:debug("DISCONNECT"),
     % not a real error, we just want to close the connection
     %TODO: return a disconnect object; and do cleanup upward
     %{error, disconnect};
     {ok, []};
 
 decode_payload('CONNACK', _, {_Len, <<_:8, RetCode:8/integer>>}) ->
-    lager:debug("CONNACK"),
+    %lager:debug("CONNACK"),
     {ok, [{retcode, RetCode}]};
 
 decode_payload('PUBACK', _, {_Len=2, <<MsgID:16>>}) ->
-    lager:debug("PUBACK. MsgID= ~p", [MsgID]),
+    %lager:debug("PUBACK. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
 decode_payload('PUBREC', _, {_Len, <<MsgID:16>>}) ->
-    lager:debug("PUBREC. MsgID= ~p", [MsgID]),
+    %lager:debug("PUBREC. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
 % TODO: throw exception with custom message when 'PUBREL' and qos != 1
 decode_payload('PUBREL', {_, _Qos=1, _}, {_Len, <<MsgID:16>>}) ->
-    lager:debug("PUBREL. MsgID= ~p", [MsgID]),
+    %lager:debug("PUBREL. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
 decode_payload('PUBCOMP', _, {_Len, <<MsgID:16>>}) ->
-    lager:debug("PUBREL. MsgID= ~p", [MsgID]),
+    %lager:debug("PUBREL. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
 decode_payload('SUBACK', _, {_Len, <<MsgID:16, _Qos/binary>>}) ->
-    lager:debug("SUBACK. MsgID= ~p", [MsgID]),
+    %lager:debug("SUBACK. MsgID= ~p", [MsgID]),
     {ok, [{msgid, MsgID}]};
 
 decode_payload(Cmd, Flags, Args) ->
-    lager:info("invalid command ~p (flags=~p, payload=~p)", [Cmd, Flags, Args]),
+    lager:notice("invalid command ~p (flags=~p, payload=~p)", [Cmd, Flags, Args]),
 
     {error, disconnect}.
 
@@ -234,8 +234,6 @@ decode_connect2(_, {<<_:2, WillRetain:1, _:2, WillFlag:1, _:1>>, _, _}) when Wil
     erlang:throw({'CONNECT', "MQTT-3.1.2-15", "if will flag is 0, will retain MUST be 0 too"});
 decode_connect2(Version,
         {<<User:1, Pwd:1, WillRetain:1, WillQos:2, WillFlag:1, Clean:1>>, Ka, Rest}) ->
-    lager:debug("CONNECT ~p (~p/~p/~p/~p/~p/~p)",
-        [Version, User,Pwd,WillRetain,WillQos,WillFlag,Clean]),
 
     % decoding Client-ID
     {ClientID, Rest2} = decode_string(Rest),
@@ -252,7 +250,10 @@ decode_connect2(Version,
 
             % Will message is any binary content. 2 first bytes are will message length
             %TODO: this throws an "anonymous" exception if MsgLen is missing
+            %      Effect is to "kill" ranch listener, and session is ended when timeout reached
+            %
             %      we should catch it (subfun) to throw a named exception
+            %TODO: test is ranch listener destruction do not disconnect other clients
             <<MsgLen:16/integer, _WillMsg:MsgLen/binary, _R2/binary>> = _R,
             {#{topic => _WillTopic, message => _WillMsg, qos => WillQos, retain => WillRetain}, _R2};
 
@@ -271,7 +272,6 @@ decode_connect2(Version,
         _ -> {undefined, Rest4}
     end,
 
-    lager:debug("~p / ~p / ~p / ~p, keepalive=~p", [ClientID, Will, Username, Password, Ka]),
     {ok, [
         {clientid , ClientID},
         {will     , Will},
@@ -367,8 +367,7 @@ encode_rlength(Size, RLen) ->
 -spec encode(mqtt_msg()) -> binary().
 encode(#mqtt_msg{retain=Retain, qos=Qos, dup=Dup, type=Type, payload=Payload}) ->
     P = encode_payload(Type, Qos, Payload),
-
-    lager:info("~p ~p", [P, is_binary(P)]),
+    %lager:info("~p ~p", [P, is_binary(P)]),
 
 	<<
         % fixed headers
@@ -426,7 +425,7 @@ encode_payload('PUBLISH', _Qos, Opts) ->
 
 encode_payload('SUBSCRIBE', _Qos, Opts) ->
     Topic = proplists:get_value(topic, Opts),
-    lager:info("topic= ~p", [Topic]),
+    %lager:info("topic= ~p", [Topic]),
 
     <<
         1:16, % MsgID - mandatory

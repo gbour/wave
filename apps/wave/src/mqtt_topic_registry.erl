@@ -61,7 +61,6 @@ init(_) ->
 % Name: TopicName | {TopicName, Fields}
 -spec subscribe(Topic :: binary(), Qos :: integer(), Subscriber :: subscriber()) -> ok | duplicate.
 subscribe(Name, Qos, Subscriber) ->
-    lager:debug("~p subscribing to ~p topic (qos ~p)", [Subscriber, Name, Qos]),
     gen_server:call(?MODULE, {subscribe, Name, Qos, Subscriber}).
 
 
@@ -103,6 +102,8 @@ handle_call(debug_cleanup, _, _State) ->
     {reply, ok, #state{}};
 
 handle_call({subscribe, Topic, Qos, Subscriber}, _, State=#state{subscriptions=Subscriptions}) ->
+    lager:debug("~p: subscribe to '~p' topic w/ qos ~p", [Subscriber, Topic, Qos]),
+
     {TopicName, Fields} = case Topic of
         {T, M} -> 
             {T, M};
@@ -115,7 +116,7 @@ handle_call({subscribe, Topic, Qos, Subscriber}, _, State=#state{subscriptions=S
             {ok, Subscriptions ++ [{TopicName,Fields,Qos,Subscriber}]};
 
         _  ->
-            lager:error("~p already subscribed to ~p (~p)", [Subscriber, TopicName, Fields]),
+            lager:notice("~p already subscribed to ~p (~p)", [Subscriber, TopicName, Fields]),
             {duplicate, Subscriptions}
     end,
 
@@ -127,11 +128,13 @@ handle_call({unsubscribe, Subscriber}, _, State=#state{subscriptions=S}) ->
 
 handle_call({unsubscribe, TopicName, Subscriber}, _, State=#state{subscriptions=S}) ->
     lager:debug("unsubscribe ~p from ~p", [Subscriber, TopicName]),
+
     S2 = lists:filter(fun({T,_,_,Sub}) ->
             {T,Sub} =/= {TopicName, Subscriber}
         end, S
     ),
-    lager:debug("unsub2 ~p / ~p", [S, S2]),
+    
+    %lager:debug("unsub2 ~p / ~p", [S, S2]),
     {reply, ok, State#state{subscriptions=S2}};
 
 handle_call({match, TopicName}, _, State=#state{subscriptions=S}) ->

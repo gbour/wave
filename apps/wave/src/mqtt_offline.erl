@@ -98,7 +98,7 @@ handle_call({publish, DeviceID, {Topic, TopicF}, Content, Qos, Retain, MsgWorker
     %TODO: store TopicF also ?
     wave_db:push(<<"queue:", DeviceID/binary>>, [Topic, Qos, MsgHash]),
     R3 = wave_db:incr(<<"msg:", MsgHash/binary, ":refcount">>),
-    lager:info("~p", [R3]),
+    %lager:info("~p", [R3]),
 
     % when qos > 0, message must be acknowledged
     priv_ack(Qos, MsgWorker, MsgID),

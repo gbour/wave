@@ -83,7 +83,7 @@ ack(Pid, From, Msg) ->
 %%
 
 start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscribers}, _State) when Qos =:= 2 ->
-    lager:debug("publish: ~p from ~p (qos=2) => subs ~p", [Msg, From, Subscribers]),
+    lager:debug("PUBLISH ~p from ~p (qos=2) => subs ~p", [Msg, From, Subscribers]),
 
     %TODO: store message
     MsgID   = proplists:get_value(msgid, P),
@@ -92,12 +92,12 @@ start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscri
     {next_state, provisional, #state{publisher=From, message=Msg, subscribers=Subscribers}, 5000};
 
 start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscribers}, State) ->
-    lager:debug("publish: ~p from ~p (qos=~p) => subs ~p", [Msg, From, Qos, Subscribers]),
+    lager:debug("PUBLISH ~p from ~p (qos=~p) => subs ~p", [Msg, From, Qos, Subscribers]),
     S2 = publish_to_subscribers(From, Msg, Subscribers),
 
     case {Qos, length(S2)} of
         {0, 0} ->
-            lager:info("Qos 0: exit immediately"),
+            lager:debug("Qos 0: exit immediately"),
             {stop, normal, State};
 
         {_, 0} ->
@@ -116,7 +116,8 @@ start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscri
 % TODO: From should be equal to Pub, to test
 provisional({provresp, From, Msg=#mqtt_msg{type='PUBREL', payload=P}}, 
             State=#state{publisher=Pub, message=PubMsg, subscribers=Subscribers}) ->
-    lager:debug("provisional state: received provisional response ~p", [Msg]),
+    lager:debug("provisional state: received provisional response from ~p: ~p", [From, Msg]),
+
     Inflight = publish_to_subscribers(Pub, PubMsg, Subscribers),
     case length(Inflight) of
         0 ->
@@ -133,7 +134,7 @@ provisional({provresp, From, Msg=#mqtt_msg{type='PUBREL', payload=P}},
 
 
 provisional({Event, From, Msg}, State) ->
-    lager:warning("received invalid ~p event (~p) from ~p while in provisional state", [Event, Msg, From]),
+    lager:notice("received invalid ~p event (~p) from ~p while in provisional state", [Event, Msg, From]),
     {next_state, provisional, State, 5000};
 
 provisional(timeout, State=#state{publisher=From, message=#mqtt_msg{qos=Qos}}) ->
@@ -143,7 +144,7 @@ provisional(timeout, State=#state{publisher=From, message=#mqtt_msg{qos=Qos}}) -
 
         % publisher dead, stopping worker
         _    -> 
-            lager:warning("publisher ~p is dead: canceling message delivery (qos ~p, no PUBREL received)", [From, Qos]),
+            lager:notice("publisher ~p is dead: canceling message delivery (qos ~p, no PUBREL received)", [From, Qos]),
             {stop, normal, State}
     end.
 
@@ -163,7 +164,7 @@ waitacks({provreq, From, Msg=#mqtt_msg{payload=P}}, State=#state{inflight=Inflig
 
     case {Match, Rest} of 
         {[], _} ->
-            lager:error("~p not found in message subscribers", [From]),
+            lager:notice("~p not found in message subscribers", [From]),
             {next_state, waitacks, State, 5000};
 
         {[{2,provisional,From,_,_}], _} ->
@@ -182,7 +183,7 @@ waitacks({provreq, From, Msg=#mqtt_msg{payload=P}}, State=#state{inflight=Inflig
             {next_state, waitacks, State, 5000};
 
         {Match, _}                        ->
-            lager:error("~p: more than 1 match found: ~p", [From, Match]),
+            lager:notice("~p: more than 1 match found: ~p", [From, Match]),
             {next_state, waitacks, State, 5000}
     end;
 
@@ -209,16 +210,16 @@ waitacks({ack, From, Msg=#mqtt_msg{type=MsgType, payload=P}}, State=#state{infli
 
 
 waitacks({Event, From, Msg}, State) ->
-    lager:warning("~p: invalid ~p event in waitacks state: ~p. Ignored", [From, Event, Msg]),
+    lager:notice("~p: invalid ~p event in waitacks state: ~p. Ignored", [From, Event, Msg]),
     {next_state, waitacks, State, 5000};
 
 waitacks(timeout, State=#state{inflight=Inflight}) ->
     {Inflight2, Dead} = lists:partition(fun({_,_,Pid,_,_}) -> is_process_alive(Pid) end, Inflight),
-    lager:warning("dead subscribers: ~p", [Dead]),
+    lager:debug("dead subscribers: ~p", [Dead]),
     
     case Inflight2 of
         [] ->
-            lager:warning("no more alive subscribers: canceling message delivery"),
+            lager:notice("no more alive subscribers: canceling message delivery"),
             {stop, normal, State};
 
         Inflight2 ->
@@ -232,15 +233,15 @@ waitacks(timeout, State=#state{inflight=Inflight}) ->
 
 
 handle_event(_Event, _StateName, StateData) ->
-    lager:debug("event ~p", [_StateName]),
+    lager:info("event ~p", [_StateName]),
     {stop, error, StateData}.
 
 handle_sync_event(_Event, _From, _StateName, StateData) ->
-    lager:debug("syncevent ~p", [_StateName]),
+    lager:info("syncevent ~p", [_StateName]),
     {stop, error, error, StateData}.
 
 handle_info(_Info, _StateName, StateData) ->
-    lager:debug("info ~p", [_StateName]),
+    lager:info("info ~p", [_StateName]),
     {stop, error, StateData}.
 
 terminate(normal, StateName, #state{publisher=Pub, message=#mqtt_msg{payload=P}}) ->
@@ -298,7 +299,7 @@ publish_to_subscribers(From, Msg=#mqtt_msg{payload=P}, undefined) ->
     publish_to_subscribers(From, Msg, mqtt_topic_registry:match(Topic));
 
 publish_to_subscribers(    _,                                                            _, []) ->
-    lager:info("no subscribers to publish message to"),
+    lager:debug("no subscribers to publish message to"),
     [];
 
 publish_to_subscribers(_From, #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain, payload=P}, Subscribers) ->
@@ -306,7 +307,7 @@ publish_to_subscribers(_From, #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain, 
     Topic   = proplists:get_value(topic, P),
     Content = proplists:get_value(data, P),
 
-    lager:info("subscribers= ~p", [Subscribers]),
+    lager:debug("subscribers= ~p", [Subscribers]),
     S2 = lists:filtermap(fun(S={TopicMatch, SQos, Subscriber={_,_,Pid,_}, _}) ->
             EQos = min(Qos, SQos),
             lager:debug("~p: effective qos=~p", [Pid, EQos]),
@@ -317,7 +318,7 @@ publish_to_subscribers(_From, #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain, 
 
                 _    ->
                     %NOTE: SHOULD NEVER HAPPEND
-                    lager:error("deadbeef: ~p subscriber is dead", [Pid]),
+                    lager:notice("deadbeef: ~p subscriber is dead", [Pid]),
                     0
             end,
 
@@ -338,7 +339,7 @@ publish_to_subscribers(_From, #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain, 
 -spec checkack(AckType::'PUBACK'|'PUBCOMP', Subscribers::[subscriber()], Rest::[subscriber()], state()) -> 
         pass|stop|acked.
 checkack(_, _Match=[], _, _) ->
-    lager:error("~p not found in message subscribers", ["Subscriber"]),
+    lager:notice("~p not found in message subscribers", ["Subscriber"]),
     pass;
 
 % qos 1
@@ -361,7 +362,7 @@ checkack('PUBCOMP', [{_EQos=2, Status, _,_,_}], [],
          #state{publisher=Pub, message=#mqtt_msg{qos=Qos, payload=P}}) ->
     case Status of
         published ->
-            lager:info("~p: provisional response not received before acknowledgement. accepted anyway");
+            lager:notice("~p: provisional response not received before acknowledgement. accepted anyway");
         _         ->
             pass
     end,
@@ -374,7 +375,7 @@ checkack('PUBCOMP', [{_EQos=2, Status, _,_,_}], [],
 checkack('PUBCOMP', [{_EQos=2, Status, _,_,_}], Rest, _) ->
     case Status of
         published ->
-            lager:info("~p: provisional response not received before acknowledgement. accepted anyway");
+            lager:notice("~p: provisional response not received before acknowledgement. accepted anyway");
         _         ->
             pass
     end,
@@ -383,10 +384,10 @@ checkack('PUBCOMP', [{_EQos=2, Status, _,_,_}], Rest, _) ->
     acked;
 
 checkack(MsgType, [{EQos, _,_,_,_}], _,_) ->
-    lager:warning("invalid ~p message for Qos ~p ", [MsgType, EQos]),
+    lager:notice("invalid ~p message for Qos ~p ", [MsgType, EQos]),
     pass;
 
 checkack(MsgType, Invalid, _, _) ->
-    lager:error("smth is going wrong: ~p, mst type= ~p", [Invalid, MsgType]),
+    lager:notice("smth is going wrong: ~p, mst type= ~p", [Invalid, MsgType]),
     pass.
 

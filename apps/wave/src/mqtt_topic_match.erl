@@ -83,19 +83,19 @@ match(Re, {Topic, Fields}) ->
 %
 -spec match(Re :: binary(), Topic :: binary(), Matches :: list(binary())) -> fail | {ok, list(binary())}.
 match(<<$#>>, _Match, Matches) ->
-    lager:info("# match ~p", [_Match]),
+    %lager:info("# match ~p", [_Match]),
     {ok, [_Match|Matches]};
 match(<<"/#">>, <<$/, _Match/binary>>, Matches) ->
-    lager:info("2: # match ~p", [_Match]),
+    %lager:info("2: # match ~p", [_Match]),
     {ok, [_Match|Matches]};
 match(<<"/#">>, <<"">> = _Match, Matches) ->
-    lager:info("3: # match ~p", [_Match]),
+    %lager:info("3: # match ~p", [_Match]),
     {ok, [_Match|Matches]};
 match(<<C:1/binary, Re/binary>>, <<C:1/binary, Rest/binary>>, Matches) ->
     match(Re, Rest, Matches);
 match(<<$+, Re/binary>>, Rest, Matches) ->
     {Rest2, Match} = eat(Rest, <<"">>),
-    lager:info("+ match ~p", [Match]),
+    %lager:info("+ match ~p", [Match]),
     match(Re, Rest2, [Match|Matches]);
 match(<<"">>, <<"">>, M) ->
     {ok, M};

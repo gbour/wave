@@ -44,7 +44,7 @@ init(Ref, Socket, Transport, _Opts = []) ->
     Addr = string:join([wave_utils:str(Transport:name()), inet_parse:ntoa(Ip), wave_utils:str(Port)], ":"),
 
     {ok, Session} = supervisor:start_child(wave_sessions_sup, [{?MODULE, Transport, Socket}, [{addr, Addr}]]),
-    lager:debug("fsm= ~p (~p : ~p) from ~p", [Session, Transport, Socket, Addr]),
+    lager:debug("~p connection on ~p: ~p", [Transport, Socket, Addr]),
     loop(Socket, Transport, Session, <<"">>, 0).
 
 -spec loop(ranch_socket(), ranch_transport(), Session::pid(), binary(), integer()) -> ok.
@@ -63,24 +63,24 @@ loop(Socket, Transport, Session, Buffer, Length) ->
             end;
 
         {error, timeout} ->
-            lager:notice("socket timeout. Sending ping"),
+            lager:notice("socket timeout. Sending MQTT PINGREQ"),
             Transport:send(Socket, mqtt_msg:encode(#mqtt_msg{type='PINGREQ'})),
             loop(Socket, Transport, Session, Buffer, Length);
 
         % socket closed by peer
         {error, closed} ->
-            lager:debug("~p: err:closed", [Socket]),
+            lager:notice("~p: err:closed", [Socket]),
             mqtt_session:disconnect(Session, peer_sock_closed),
             ok;
 
         % TCP keepalive timeout
         {error, etimedout} ->
-            lager:debug("~p: err:tcp keepalive timeout", [Socket]),
+            lager:notice("~p: err:tcp keepalive timeout", [Socket]),
             mqtt_session:disconnect(Session, peer_tcp_ka_timeout),
             ok;
 
         Err ->
-            lager:debug("~p: err ~p. closing socket", [Socket, Err]),
+            lager:notice("~p: err ~p. closing socket", [Socket, Err]),
             ok = Transport:close(Socket)
     end,
 
@@ -96,7 +96,7 @@ route(_,_,_, <<>>) ->
 route(Socket, Transport, Session, Raw) ->
     try mqtt_msg:decode(Raw) of
         {error, size, Extend} ->
-            lager:notice("Packet is too short, missing ~p bytes", [Extend]),
+            lager:info("Packet is too short, missing ~p bytes. Try filling...", [Extend]),
             {extend, Extend, Raw};
 
         {error, protocol_version, _} ->
@@ -110,35 +110,34 @@ route(Socket, Transport, Session, Raw) ->
             stop;
 
         {error, Reason, _} ->
-            lager:error("closing connection. Reason: ~p", [Reason]),
+            lager:notice("closing connection. Reason: ~p", [Reason]),
             ?GENFSM_STOP(Session, normal, 50),
             Transport:close(Socket),
             stop;
 
         {ok, Msg, Rest} ->
-            lager:info("MQTT msg decoded: ~p", [Msg]),
+            lager:debug("IN> ~p", [Msg]),
 
             %case answer(Msg) of
             case mqtt_session:handle(Session, Msg) of
                 {ok, Resp=#mqtt_msg{}} ->
-                    lager:info("sending resp ~p", [Resp]),
                     Res = Transport:send(Socket, mqtt_msg:encode(Resp)),
-                    lager:debug("msg send result= ~p", [Res]),
+                    lager:debug("OUT[~p], < ~p", [Res, Resp]),
                     route(Socket, Transport, Session, Rest);
 
                 {ok, undefined}  ->
-                    lager:info("nothing to return"),
+                    lager:debug("nothing to return"),
                     route(Socket, Transport, Session, Rest);
 
                 {ok, disconnect} ->
-                    lager:info("closing socket"),
+                    lager:debug("closing socket"),
                     %Transport:close(Socket),
                     stop;
 
                 % send message then close connection
                 {ok, {disconnect, M=#mqtt_msg{}}} ->
                     Res = Transport:send(Socket, mqtt_msg:encode(M)),
-                    lager:debug("msg send result= ~p", [Res]),
+                    lager:debug("OUT[disconnect: ~p] ~p", [Res, M]),
                     stop
             end;
 
@@ -150,7 +149,7 @@ route(Socket, Transport, Session, Raw) ->
 
     catch
         Exc ->
-            lager:error("failed decoding mqtt message: ~p", [Exc]),
+            lager:notice("failed decoding mqtt message: ~p", [Exc]),
             ?GENFSM_STOP(Session, normal, 50),
             Transport:close(Socket)
     end.
@@ -180,7 +179,7 @@ send(Transport, Socket, Msg) ->
 %
 -spec close(ranch_transport(), ranch_socket()) -> ok | {error, term()}.
 close(Transport, Socket) ->
-    lager:debug("closing ~p TCP sock", [Socket]),
+    lager:debug("~p: closing ~p TCP sock", [Transport, Socket]),
     Transport:close(Socket).
 
 -spec peername(ranch_ssl|ranch_tcp, inet:socket()) -> {ok, {inet:ipaddress(), inet:port_number()}} 
@@ -189,3 +188,4 @@ peername(ranch_ssl, Socket) ->
     ssl:peername(Socket);
 peername(_, Socket) ->
     inet:peername(Socket).
+
