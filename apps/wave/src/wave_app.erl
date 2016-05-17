@@ -49,6 +49,8 @@ start(_StartType, _StartArgs) ->
     % initialize syn (global process registry)
     syn:init(),
 
+    exometer_init(),
+
     % start master supervisor (starting named servers)
     {ok, WaveSup} = wave_sup:start_link(),
 
@@ -116,6 +118,21 @@ check_ciphers(Ciphers) ->
 -spec loglevel(integer) -> any().
 loglevel(Level) ->
     lager:set_loglevel(lager_console_backend, Level).
+
+
+%
+% automatically subscribe to metrics (sent to statsd)
+%
+exometer_init() ->
+    exometer_init(exometer:get_values(['_'])).
+
+exometer_init([]) ->
+    ok;
+exometer_init([{Name, Metrics}|T]) ->
+    DPs = lists:map(fun({DP,_}) -> DP end, Metrics),
+    exometer_report:subscribe(exometer_report_statsd, Name, DPs, 1000),
+
+    exometer_init(T).
 
 
 -ifdef(DEBUG).
