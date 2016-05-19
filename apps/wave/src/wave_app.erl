@@ -82,6 +82,18 @@ start(_StartType, _StartArgs) ->
             {hibernate_after, 1000}
 
         ], mqtt_ranch_protocol, [])),
+    
+    % websocket listener
+	Dispatch = cowboy_router:compile([
+		{'_', [
+			{"/websocket", wave_websocket_handler, []}
+		]}
+	]),
+
+	{ok, _} = cowboy:start_http(http, 1, [
+            {port, 8884}
+        ], [{env, [{dispatch, Dispatch}]}]),
+	%websocket_sup:start_link().
 
     {ok, WaveSup}.
 
