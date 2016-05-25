@@ -60,6 +60,11 @@ cert:
 msc:
 	find docs/ -iname *.msc | xargs -I '{}' /opt/mscgenx/bin/msc-gen -T png  '{}'
 
+#
+# build docker image used to compile wave
+docker-init:
+	docker build -f tools/docker/Dockerfile.build -t gbour/wave-build .
+
 ## testing freemobile sms module
 ## faking a ssh connection
 test_sms:

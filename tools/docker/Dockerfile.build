@@ -1,0 +1,19 @@
+# Docker image to build wave with docker/alpine/erlang as target
+
+#
+# execution:
+#   docker build -f tools/docker/build/Dockerfile -t gbour/wave-build
+
+FROM msaraiva/erlang
+MAINTAINER Guillaume Bour <guillaume@bour.cc>
+
+RUN apk update && \
+    # needed tools to build release
+    apk add bash make git && \
+    # rebar3 required modules
+    apk add erlang-syntax-tools && \
+    # jiffy NIF build
+    apk add g++ libstdc++ erlang-dev && \
+    # wave or dependencies required modules
+    apk add erlang-sasl erlang-inets erlang-crypto erlang-ssl erlang-public-key erlang-asn1 erlang-mnesia
+
