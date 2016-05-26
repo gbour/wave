@@ -65,6 +65,12 @@ msc:
 docker-init:
 	docker build -f tools/docker/Dockerfile.build -t gbour/wave-build .
 
+# compile wave with previous image
+docker-build:
+	# NIF not automatically rebuilded
+	rm -Rf _build/default/lib/jiffy/{ebin,priv}
+	docker run --rm -ti -v ${PWD}:${PWD} -w ${PWD} -u `id -u`:`id -g` -e HOME=${PWD} wave-build make env=alpine
+
 ## testing freemobile sms module
 ## faking a ssh connection
 test_sms:
