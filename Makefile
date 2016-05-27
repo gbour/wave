@@ -71,6 +71,11 @@ docker-build:
 	rm -Rf _build/default/lib/jiffy/{ebin,priv}
 	docker run --rm -ti -v ${PWD}:${PWD} -w ${PWD} -u `id -u`:`id -g` -e HOME=${PWD} wave-build make env=alpine
 
+# build docker target image
+# NOTE: tar is used to solve symlinks in build profile lib/ directory
+docker-pack:
+	tar czh . | docker build -f tools/docker/Dockerfile -t wave -
+
 ## testing freemobile sms module
 ## faking a ssh connection
 test_sms:
