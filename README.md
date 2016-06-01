@@ -1,4 +1,4 @@
-wave [![Build Status](https://secure.travis-ci.org/gbour/wave.png?branch=master)](http://travis-ci.org/gbour/wave) ![release 0.2.0](https://img.shields.io/badge/release-0.2.0-red.svg)
+wave [![Build Status](https://secure.travis-ci.org/gbour/wave.png?branch=master)](http://travis-ci.org/gbour/wave) ![release 0.3.0](https://img.shields.io/badge/release-0.3.0-red.svg)
 ====
 
 Wave is a MQTT Broker, written in Erlang.   
