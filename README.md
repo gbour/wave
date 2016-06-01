@@ -37,6 +37,9 @@ prerequisites:
 ```
 $> git clone https://github.com/gbour/wave.git wave
 $> cd wave && make
+# 'make cert' generates sample self-signed certificate, required to start wave with default configuration
+# you can alternatively provide your own
+$> make cert
 $> make run
 ```
 
