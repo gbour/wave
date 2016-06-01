@@ -41,8 +41,9 @@ run: build setup
 test:
 	cd tests && DEBUG=$(DEBUG) PYTHONPATH=./nyamuk:./twotp ./run
 
-release:
-	./rebar3 release
+release: setup
+	./rebar3 as $(env) tar
+
 
 dialyze:
 	if [[ "$$TRAVIS_OTP_RELEASE" > "18" ]]; then\
