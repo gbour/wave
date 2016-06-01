@@ -65,7 +65,7 @@ foo/bar is it working
 Authors
 -------
 
-Main developer: Guillaume Bour <guillaume@bour.cc>
+Main developer: Guillaume Bour &lt;guillaume@bour.cc&gt;
 
 License
 -------
