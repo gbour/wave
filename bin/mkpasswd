@@ -1,0 +1,136 @@
+#!/usr/bin/env escript
+%% vim: filetype=erlang
+%%! -env ERL_LIBS  _build/default/lib
+
+%%
+%%    Wave - MQTT Broker
+%%    Copyright (C) 2014-2016 - Guillaume Bour
+%%
+%%    This program is free software: you can redistribute it and/or modify
+%%    it under the terms of the GNU Affero General Public License as published
+%%    by the Free Software Foundation, version 3 of the License.
+%%
+%%    This program is distributed in the hope that it will be useful,
+%%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%%    GNU Affero General Public License for more details.
+%%
+%%    You should have received a copy of the GNU Affero General Public License
+%%    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+%%
+%% requirements:
+%%   - getopt
+%%   - erlpass
+
+%%
+%% purpose: manage user password
+%% author: Guillaume Bour <guillaume@bour.cc>
+%%
+
+main([]) ->
+    getopt:usage(options_spec_list(), escript:script_name(), "passwordfile username");
+main(Args) ->
+    OptsSpecList = options_spec_list(),
+    run(getopt:parse(OptsSpecList, Args)).
+
+run({ok, {Options, [File, User]}}) ->
+    application:ensure_all_started(erlpass),
+    
+    %NOTE: not working because escript is using old io server
+    io:setopts([{echo,false}]),
+    {ok, [Pass]} = io:fread("Password: ", "~s"),
+    Hash = erlpass:hash(Pass),
+
+    write(Options, File, User, Hash);
+run({ok, _}) ->
+    main([]);
+run({error, {Reason, Data}}) ->
+    io:format("~p: ~p~n~n", [Reason, Data]),
+    main([]).
+
+
+% file is truncated if exists, else created
+write([create], File, User, Hash) ->
+    {ok, F} = open(File, [write]),
+    file:write(F, [User, $:, Hash, $\n]),
+    file:close(F);
+
+write([delete], _,_,_) -> 
+    % TODO
+    io:format("no implemented yet~n"),
+    ok;
+
+% user password is updated if exists, else added
+write([], File, User, Hash) ->
+    {ok, F} = open(File, [read, binary]),
+    case match(F, file:read_line(F), list_to_binary(User), []) of
+        % just append user+hash at end of file
+        nomatch ->
+            {ok, F2} = open(File, [append]),
+            file:write(F2, [User, $:, Hash, $\n]),
+            file:close(F2);
+
+        % if user already exists, we create a temp file, copy current file except user line,
+        % then add user, and finally replace file
+        {match, Prev} ->
+            {ok, F2} = open([File,".tmp"], [write]),
+            file:write(F2, Prev),
+            copy(F, F2),
+
+            file:write(F2, [User, $:, Hash, $\n]),
+            file:close(F2),
+            file:rename([File,".tmp"], File);
+
+        Err -> 
+            io:format("> ~p~n", [Err])
+    end,
+    file:close(F);
+
+write(_, _, _, _) ->
+    pass.
+
+open(File, Mode) ->
+    case file:open(File, Mode) of
+        {ok, F} -> {ok, F};
+
+        {error, Err} ->
+            case Err of
+                enoent -> io:format("~s: No such file~n", [File]);
+                eacces -> io:format("~s: You don't have the rights to open the file~n", [File]);
+                Err    -> io:format("~s: failed to open file~n", [Err])
+            end,
+            halt(1)
+    end.
+
+
+match(_, eof, _, _) ->
+    nomatch;
+% user matched
+match(F, {ok, Line}, User, Acc) ->
+    try
+        Size = size(User),
+        <<User:Size/binary, $:, _/binary>> = Line,
+
+        {match, Acc}
+    catch
+        _:_ -> 
+            % no match, we continue
+            match(F, file:read_line(F), User, [Line | Acc])
+    end.
+
+copy(F1, F2) ->
+    case file:read(F1, 1000) of
+        {ok, Data} -> 
+            file:write(F2, Data),
+            copy(F1, F2);
+
+        _ -> pass
+    end.
+
+options_spec_list() ->
+    [
+        {create, $c, undefined, undefined, "create password file. If already exists, it is truncated first"},
+        {delete, $D, undefined, undefined, "delete the user"}
+    ].
+
