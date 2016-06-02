@@ -12,7 +12,8 @@
       ranch,
       sharded_eredis,
       lager,
-      jiffy
+      jiffy,
+      erlpass
   ]},
   {env, []},
   {modules, []},
