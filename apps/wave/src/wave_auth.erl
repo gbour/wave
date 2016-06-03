@@ -22,13 +22,21 @@
 % gen_server API
 -export([start_link/1, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
+-define(DFT_MONITOR_INTERVAL, 60000). % 1 minute
+
+-record(state, {
+    filename,
+    last_modified = undefined
+}).
+
 start_link(Args) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []).
 
 init(Args) ->
     ets:new(?MODULE, [set, named_table, private]),
-    erlang:send_after(500, self(), {reload, proplists:get_value(file, Args)}),
-    {ok, undefined}.
+    % 1st monitor will trigger file load
+    erlang:send_after(50, self(), monitor),
+    {ok, #state{filename=proplists:get_value(file, Args)}}.
 
 %%
 %% PUBLIC API
@@ -82,16 +90,18 @@ handle_cast(E, State) ->
     lager:error("cast ~p", [E]),
     {noreply, State}.
 
-handle_info({reload, File}, State) ->
-    ets:delete_all_objects(?MODULE),
+% monitor password file changes
+handle_info(monitor, State=#state{filename=File, last_modified=LastMod}) ->
+    LastMod2 = filelib:last_modified(File),
+    if LastMod2 =/= LastMod -> reload(File); true -> ok end,
 
-    % TODO: handle errors
-    {ok, F} = file:open(File, [read,binary]),
-    Count = fill_ets(F, file:read_line(F), 0),
-    file:close(F),
+    erlang:send_after(?DFT_MONITOR_INTERVAL, self(), monitor),
+    {noreply, State#state{last_modified=LastMod2}};
 
-    lager:debug("password file reloaded (~p lines found)", [Count]),
-    {noreply, State};
+% force reloading file
+handle_info(reload, State=#state{filename=File}) ->
+    reload(File),
+    {noreply, State#state{last_modified=filelib:last_modified(File)}};
 
 handle_info(E, State) ->
     lager:error("info ~p", [E]),
@@ -108,6 +118,22 @@ code_change(_, State, _) ->
 %%
 %% PRIVATE FUNS
 %%
+
+reload(File) ->
+    % TODO: handle errors
+    case file:open(File, [read,binary]) of
+        {ok, F} ->
+            % this is a security (avoiding blocking users if smth goes wrong with password file)
+            ets:delete_all_objects(?MODULE),
+
+            Count = fill_ets(F, file:read_line(F), 0),
+            file:close(F),
+
+            lager:debug("password file reloaded (~p lines found)", [Count]);
+
+        Err ->
+            lager:error("failed to (re)load password file ~p: ~p", [File, Err])
+    end.
 
 fill_ets(_, eof, Count) ->
     Count;
