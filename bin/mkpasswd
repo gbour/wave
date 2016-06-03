@@ -36,34 +36,55 @@ main(Args) ->
 
 run({ok, {Options, [File, User]}}) ->
     application:ensure_all_started(erlpass),
-    
-    %NOTE: not working because escript is using old io server
-    io:setopts([{echo,false}]),
-    {ok, [Pass]} = io:fread("Password: ", "~s"),
-    Hash = erlpass:hash(Pass),
-
-    write(Options, File, User, Hash);
+    do(Options, File, User);
 run({ok, _}) ->
     main([]);
 run({error, {Reason, Data}}) ->
     io:format("~p: ~p~n~n", [Reason, Data]),
     main([]).
 
+% read password on stdin, and return hash version
+readpass() ->
+    %NOTE: not working because escript is using old io server
+    io:setopts([{echo,false}]),
+    {ok, [Pass]} = io:fread("Password: ", "~s"),
+    erlpass:hash(Pass).
 
 % file is truncated if exists, else created
-write([create], File, User, Hash) ->
+do([create], File, User) ->
     {ok, F} = open(File, [write]),
+    Hash    = readpass(),
+        
     file:write(F, [User, $:, Hash, $\n]),
     file:close(F);
 
-write([delete], _,_,_) -> 
+do([delete], File, User) ->
     % TODO
-    io:format("no implemented yet~n"),
-    ok;
+    {ok, F} = open(File, [read, binary]),
+    case match(F, file:read_line(F), list_to_binary(User), []) of
+        % nothing to do
+        nomatch -> pass;
+
+        % if user already exists, we create a temp file, copy current file except user line,
+        % then replace original file
+        {match, Prev} ->
+            {ok, F2} = open([File,".tmp"], [write]),
+            file:write(F2, Prev),
+            copy(F, F2),
+            file:close(F2),
+
+            file:rename([File,".tmp"], File);
+
+        Err -> 
+            io:format("> ~p~n", [Err])
+    end,
+    file:close(F);
 
 % user password is updated if exists, else added
-write([], File, User, Hash) ->
+do([], File, User) ->
     {ok, F} = open(File, [read, binary]),
+    Hash    = readpass(),
+
     case match(F, file:read_line(F), list_to_binary(User), []) of
         % just append user+hash at end of file
         nomatch ->
@@ -82,12 +103,13 @@ write([], File, User, Hash) ->
             file:close(F2),
             file:rename([File,".tmp"], File);
 
-        Err -> 
+        Err ->
             io:format("> ~p~n", [Err])
     end,
     file:close(F);
 
-write(_, _, _, _) ->
+do(_Opts, _, _) ->
+    io:format("incompatible options~n"),
     pass.
 
 open(File, Mode) ->
@@ -96,7 +118,7 @@ open(File, Mode) ->
 
         {error, Err} ->
             case Err of
-                enoent -> io:format("~s: No such file~n", [File]);
+                enoent -> io:format("~s: No such file (use -c options to create file)~n", [File]);
                 eacces -> io:format("~s: You don't have the rights to open the file~n", [File]);
                 Err    -> io:format("~s: failed to open file~n", [Err])
             end,
