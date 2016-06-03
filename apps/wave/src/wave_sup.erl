@@ -46,6 +46,7 @@ init([]) ->
         ,?CHILD(mqtt_offline_session, worker)
         ,?CHILD(mqtt_lastwill_session, worker)
         ,?CHILD(wave_ctlmngr, worker)
+        ,?CHILD(wave_sys, worker)
 
         ,?CHILD(wave_sessions_sup, supervisor)
         ,?CHILD(wave_msgworkers_sup, supervisor)
