@@ -62,9 +62,12 @@ websocket_handle({binary, Raw}, Req, State=#{transport := Transport}) ->
 
     {ok, Req, State};
 
-websocket_handle(Data, Req, State) ->
-	lager:notice("unsupported frame: ~p", [Data]),
-	{ok, Req, State}.
+websocket_handle(Data, Req, State=#{transport := Transport}) ->
+    lager:notice("unsupported frame, closing connection: ~p", [Data]),
+    %NOTE: wave_websocket ang mqtt_session servers are automatically destroyed after timeout
+    %TODO: should we close them explicitely ?
+    %wave_websocket:close(Transport),
+    {stop, Req, State}.
 
 
 % response generated from wave internals (session) : forwarded to peer
