@@ -21,11 +21,36 @@
 
 init(Req, Opts) ->
     % is it standard ??
-	Req2 = cowboy_req:set_resp_header(<<"sec-websocket-protocol">>, <<"mqttv3.1">>, Req),
+    ClientSubProtocols = cowboy_req:header(<<"sec-websocket-protocol">>, Req, <<>>),
+    ServerSubProtocol  = lists:foldl(fun(SubProto, SrvSubProto) ->
+            case {SrvSubProto, SubProto} of
+                {undefined     , <<"mqtt">>}     -> <<"mqtt">>;
+                {undefined     , <<"mqttv3.1">>} -> <<"mqttv3.1">>;
+                {<<"mqttv3.1">>, <<"mqtt">>}     -> <<"mqtt">>;
 
-    % starts bridge ranch transport
-    {ok, Transport} = wave_websocket:start(),
-	{cowboy_websocket, Req2, #{transport => Transport}}.
+                _                                -> SrvSubProto
+            end
+        end,
+        undefined,
+        binary:split(ClientSubProtocols, <<",">>)
+    ),
+
+    case ServerSubProtocol of
+        undefined ->
+            % none of mqtt, mqttv3.1 subprotocols found
+            lager:debug("no valid subprotocol found"),
+            Reply = cowboy_req:reply(406, [{<<"sec-websocket-protocol">>, <<"null">>}], Req),
+            {ok, Reply, #{}};
+
+        _ ->
+            lager:debug("ws subprotocol= ~p", [ServerSubProtocol]),
+            % starts bridge ranch transport
+            {ok, Transport} = wave_websocket:start(),
+
+            Req2 = cowboy_req:set_resp_header(<<"sec-websocket-protocol">>, ServerSubProtocol, Req),
+            {cowboy_websocket, Req2, #{transport => Transport}}
+    end.
+
 
 %%
 %% we support only binary frames
