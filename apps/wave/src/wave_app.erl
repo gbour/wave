@@ -90,8 +90,24 @@ start(_StartType, _StartArgs) ->
 		]}
 	]),
 
-	{ok, _} = cowboy:start_http(http, 1, [
-            {port, 8884}
+	{ok, _} = cowboy:start_http(ws, 1, [
+            {port, 1884}
+        ], [{env, [{dispatch, Dispatch}]}]),
+
+	{ok, _} = cowboy:start_https(wss, 1, [
+            {port, 8884},
+            {certfile, env([ssl, certfile])},
+            {keyfile , env([ssl, keyfile])},
+
+            % increase security level
+            {secure_renegotiate, true},
+            {reuse_sessions, false},
+            {honor_cipher_order, true},
+            {versions, env([ssl, versions])},
+            {ciphers , Ciphers},
+            % reduce memory usage
+            {hibernate_after, 1000}
+
         ], [{env, [{dispatch, Dispatch}]}]),
 	%websocket_sup:start_link().
 

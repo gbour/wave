@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
 
+import ssl
 import time
 import websocket
 
@@ -9,6 +10,9 @@ from TestSuite import *
 from mqttcli import MqttClient
 from nyamuk import *
 
+# TLS > v1 not available on python2.7 except for Debian
+# TLSv1 and lower are disabled in OTP >= 18
+SSL_VERSION = ssl.PROTOCOL_TLSv1_2 if hasattr(ssl, 'PROTOCOL_TLSv1_2') else ssl.PROTOCOL_TLSv1
 
 class WebSocket(TestSuite):
     def __init__(self):
@@ -65,3 +69,15 @@ class WebSocket(TestSuite):
 
         return True
 
+    @catch
+    @desc("WSS (SSL) connection test")
+    def test_010(self):
+        cli = MqttClient("ws", port=8884, websocket=True, ssl=True, ssl_opts={'ssl_version': SSL_VERSION})
+        evt = cli.connect(version=4)
+        print evt
+        if not isinstance(evt, EventConnack):
+            return False
+
+        cli.disconnect()
+        return True
+        
