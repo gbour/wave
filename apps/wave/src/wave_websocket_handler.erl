@@ -19,7 +19,7 @@
 
 -export([init/2, websocket_handle/3, websocket_info/3]).
 
-init(Req, Opts) ->
+init(Req, _Opts) ->
     % is it standard ??
     ClientSubProtocols = cowboy_req:header(<<"sec-websocket-protocol">>, Req, <<>>),
     ServerSubProtocol  = lists:foldl(fun(SubProto, SrvSubProto) ->
@@ -62,7 +62,7 @@ websocket_handle({binary, Raw}, Req, State=#{transport := Transport}) ->
 
     {ok, Req, State};
 
-websocket_handle(Data, Req, State=#{transport := Transport}) ->
+websocket_handle(Data, Req, State=#{transport := _Transport}) ->
     lager:notice("unsupported frame, closing connection: ~p", [Data]),
     %NOTE: wave_websocket ang mqtt_session servers are automatically destroyed after timeout
     %TODO: should we close them explicitely ?
@@ -80,7 +80,7 @@ websocket_info(stop, Req, State) ->
     {stop, Req, State};
 
 % timeout
-websocket_info({timeout, _Ref, Msg}, Req, State) ->
+websocket_info({timeout, _Ref, _Msg}, Req, State) ->
     lager:debug("timeout"),
 	{ok, Req, State};
 

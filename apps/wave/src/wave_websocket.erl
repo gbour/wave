@@ -85,7 +85,7 @@ loop(State=#state{in=In, reader=Reader, wsh=Wsh}) ->
                     loop(State#state{reader=undefined})
             end;
 
-        {recv, Pid, Length} ->
+        {recv, Pid, _Length} ->
             lager:debug("recv command (from ~p)", [Pid]),
             case In of
                 <<>> -> 
@@ -97,7 +97,7 @@ loop(State=#state{in=In, reader=Reader, wsh=Wsh}) ->
                     loop(State#state{reader=undefined,in= <<>>})
             end;
 
-        {send, Pid, Pkt} ->
+        {send, _Pid, Pkt} ->
             Wsh ! {response, Pkt},
             loop(State);
 
