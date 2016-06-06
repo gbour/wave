@@ -86,16 +86,17 @@ start(_StartType, _StartArgs) ->
     % websocket listener
 	Dispatch = cowboy_router:compile([
 		{'_', [
-			{"/websocket", wave_websocket_handler, []}
+			{'_', wave_websocket_handler, []}
 		]}
 	]),
 
 	{ok, _} = cowboy:start_http(ws, 1, [
-            {port, 1884}
+            {port, env([websocket, port])}
         ], [{env, [{dispatch, Dispatch}]}]),
 
 	{ok, _} = cowboy:start_https(wss, 1, [
-            {port, 8884},
+            {port, env([websocket, ssl_port])},
+
             {certfile, env([ssl, certfile])},
             {keyfile , env([ssl, keyfile])},
 
