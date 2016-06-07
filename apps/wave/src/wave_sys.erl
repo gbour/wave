@@ -41,7 +41,7 @@ start_link() ->
 
 init(_) ->
     erlang:send_after(?DFT_TIMEOUT, self(), timeout),
-    {ok, #state{start=erlang:system_time(seconds)}}.
+    {ok, #state{start=?TIME}}.
 
 %%
 %% PUBLIC API
@@ -90,7 +90,7 @@ emit(T= <<"broker/version">>, _) ->
     publish(T, wave_utils:bin(Version));
 
 emit(T= <<"broker/uptime">>, #state{start=Start}) ->
-    Uptime = erlang:system_time(seconds) - Start,
+    Uptime = ?TIME - Start,
     %NOTE: we use same format as mosquitto (string :: "%d seconds")
     publish(T, <<(wave_utils:bin(Uptime))/binary, " seconds">>).
 

@@ -40,6 +40,7 @@
 
 -define(SEED, erlang:phash2([node()]), erlang:monotonic_time(), erlang:unique_integer()).
 -define(GENFSM_STOP(Ref, Reason, Timeout), gen_fsm:stop(Ref, Reason, Timeout)).
+-define(TIME, erlang:system_time(seconds)).
 
 -ifdef(OTP_RELEASE_17).
     % erlang:monotinic_time() & erlang:unique_integer() are not available on OTP < 18
@@ -51,4 +52,9 @@
     %
     -undef(GENFSM_STOP).
     -define(GENFSM_STOP(Ref, Reason, Timeout), gen_fsm:send_all_state_event(Ref, {disconnect, Reason})).
+
+    %
+    %
+    -undef(TIME).
+    -define(TIME, (fun() -> {Mega,Sec,_} = os:timestamp(), (Mega*1000000 + Sec) end)()).
 -endif.
