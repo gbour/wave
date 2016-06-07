@@ -19,7 +19,7 @@
 -behaviour(application).
 
 %% Application callbacks
--export([start/0, start/2, stop/1, loglevel/1]).
+-export([start/0, start/2, stop/1, loglevel/1, env/1]).
 
 -define(DEBUGW(X), ok).
 -ifdef(DEBUG).
@@ -52,7 +52,9 @@ start(_StartType, _StartArgs) ->
     exometer_init(),
 
     % start master supervisor (starting named servers)
-    {ok, WaveSup} = wave_sup:start_link(),
+    {ok, WaveSup} = wave_sup:start_link(#{
+        auth => env([auth])
+    }),
 
     % start modules supervisor, add it as master sup child
     supervisor:start_child(WaveSup, {wave_modules_sup,

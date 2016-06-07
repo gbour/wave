@@ -215,7 +215,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
 
     Res2 = case Res1 of
         ok ->
-            wave_auth:check(application:get_env(wave, auth_required), DeviceID, {User, Pwd}, Settings);
+            wave_auth:check(wave_app:env([auth,required]), DeviceID, {User, Pwd}, Settings);
 
         Err1 -> Err1
     end,
@@ -230,7 +230,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
             {2, false, []};
         {error, wrong_id} ->
             {2, false, []};
-        {error, bad_credentials} ->
+        {error, bad_creds} ->
             {4, false, []} % not authorized
     end,
 
