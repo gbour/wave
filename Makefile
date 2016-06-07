@@ -53,6 +53,11 @@ dialyze:
 clean:
 	./rebar3 clean
 
+clean-all:
+	./rebar3 clean -a
+	rm -Rf `find _build -name priv`
+
+
 cert:
 	openssl req -x509 -newkey rsa:2048 -keyout ./etc/wave_key.pem -out ./etc/wave_cert.pem -days 365 \
 		-nodes \
