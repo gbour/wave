@@ -244,6 +244,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
         0 ->
             % remove offline subscriptions, publish stored messages
             mqtt_offline:release(self(), DeviceID, Clean),
+            exometer:update([wave,sessions], 1),
 
             Will = proplists:get_value(will, P),
             {reply, Resp, connected, StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, 
@@ -286,6 +287,7 @@ connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=_Ref,keepaliv
 
 connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _, StateData=#session{deviceid=_DeviceID,keepalive=Ka}) ->
     % only if retain=1
+    exometer:update([wave,in,publish,0], 1),
     mqtt_retain:store(Msg),
 
     %TODO: save message in DB
@@ -296,9 +298,10 @@ connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _, StateData=#session{deviceid=_
     {reply, undefined, connected, StateData, Ka};
 
 % qos > 0
-connected(Msg=#mqtt_msg{type='PUBLISH', payload=P, dup=Dup}, _,
+connected(Msg=#mqtt_msg{type='PUBLISH', payload=P, qos=Qos, dup=Dup}, _,
           StateData=#session{deviceid=_DeviceID,keepalive=Ka,inflight=Inflight}) ->
 
+    exometer:update([wave,in,publish,Qos], 1),
     %TODO: save message in DB
     MsgID     = proplists:get_value(msgid, P),
     Inflight2 = case proplists:get_value(MsgID, Inflight) of
@@ -601,6 +604,11 @@ terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, in
     % saving topics if clean unset
     offline_store(DeviceID, proplists:get_value(clean, Opts, 1), T),
     send_last_will(StateData),
+
+    case StateName of
+        connected -> exometer:update([wave,sessions], -1);
+        _ -> ok
+    end,
     terminate.
 
 code_change(_OldVsn, StateName, StateData, _Extra) ->
