@@ -1004,8 +1004,77 @@ class V311(TestSuite):
         return True
 
     @catch
-    @desc("[MQTT-4.7.3-1] topics and topic filters MUST be 1-character long at least")
+    @desc("[MQTT-4.7.2-1] topic started with '$' MUST NOT match # wildcard")
     def test_252(self):
+        sub = MqttClient("conformity", connect=4)
+        sub.subscribe("#", qos=0)
+
+        pub = MqttClient("pub", connect=4)
+        pub.publish("foo/bar", "test1")
+
+        evt = sub.recv()
+        if not isinstance(evt, EventPublish) or\
+                evt.msg.topic != 'foo/bar' or\
+                evt.msg.payload != 'test1':
+            return False
+
+        pub.publish("$SYS/foo/bar", "test2")
+        evt = sub.recv()
+        if evt is not None:
+            return False
+
+        pub.disconnect(); sub.disconnect()
+        return True
+
+    @catch
+    @desc("[MQTT-4.7.2-1] topic started with '$' MUST NOT match topic filter starting with +")
+    def test_253(self):
+        sub = MqttClient("conformity", connect=4)
+        sub.subscribe("+/bar", qos=0)
+
+        pub = MqttClient("pub", connect=4)
+        pub.publish("foo/bar", "test1")
+
+        evt = sub.recv()
+        if not isinstance(evt, EventPublish) or\
+                evt.msg.topic != 'foo/bar' or\
+                evt.msg.payload != 'test1':
+            return False
+
+        pub.publish("$SYS/bar", "test2")
+        evt = sub.recv()
+        if evt is not None:
+            return False
+
+        pub.disconnect(); sub.disconnect()
+        return True
+
+    @catch
+    @desc("[MQTT-4.7.2-1] topic started with '$' match filters explicitely started with '$'")
+    def test_254(self):
+        sub = MqttClient("conformity", connect=4)
+        sub.subscribe("$SYS/bar", qos=0)
+
+        pub = MqttClient("pub", connect=4)
+        pub.publish("foo/bar", "test1")
+
+        evt = sub.recv()
+        if evt is not None:
+            return False
+
+        pub.publish("$SYS/bar", "test2")
+        evt = sub.recv()
+        if not isinstance(evt, EventPublish) or\
+                evt.msg.topic != '$SYS/bar' or\
+                evt.msg.payload != 'test2':
+            return False
+
+        pub.disconnect(); sub.disconnect()
+        return True
+
+    @catch
+    @desc("[MQTT-4.7.3-1] topics and topic filters MUST be 1-character long at least")
+    def test_255(self):
         c = MqttClient("conformity", connect=4)
         c.subscribe("", qos=0)
 

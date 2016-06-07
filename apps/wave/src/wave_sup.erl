@@ -48,6 +48,7 @@ init(Args) ->
         ,?CHILD(mqtt_lastwill_session, worker)
         ,?CHILD(wave_ctlmngr, worker)
         ,?CHILD(wave_auth, worker, maps:get(auth, Args, undefined))
+        ,?CHILD(wave_sys, worker)
 
         ,?CHILD(wave_sessions_sup, supervisor)
         ,?CHILD(wave_msgworkers_sup, supervisor)
