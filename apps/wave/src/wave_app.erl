@@ -50,7 +50,8 @@ start(_StartType, _StartArgs) ->
     syn:init(),
 
     % start master supervisor (starting named servers)
-    {ok, WaveSup} = wave_sup:start_link(),
+    {ok, WaveSup} = wave_sup:start_link(#{
+    }),
 
     % start modules supervisor, add it as master sup child
     supervisor:start_child(WaveSup, {wave_modules_sup,
