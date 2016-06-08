@@ -64,7 +64,7 @@
     deviceid               :: binary(),
     topics     = []        :: list({Topic::binary(), Qos::integer()}), % list of subscribed topics
     transport              :: mqtt_ranch_protocol:transport(),
-    opts                   :: list({Key::atom(), Val::any()}),
+    opts                   :: map(),
     pingid     = undefined :: undefined,
     keepalive              :: integer(),
     %TODO: use maps instead (test performances improvement)
@@ -82,8 +82,7 @@
 -define(CONNECT_TIMEOUT  , 5000). % ms
 -define(DEFAULT_KEEPALIVE, 300).  % secs
 
--spec start_link(mqtt_ranch_protocol:transport(), list({atom(), any()})) -> {ok, pid()} 
-                                                                            | ignore | {error, any()}.
+-spec start_link(mqtt_ranch_protocol:transport(), map()) -> {ok, pid()} | ignore | {error, any()}.
 start_link(Transport, Opts) ->
     gen_fsm:start_link(?MODULE, [Transport, Opts], []).
 
@@ -182,7 +181,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
     end,
 
     {MSecs, Secs, _} = os:timestamp(),
-    Vals             = [{state,connecting},{username,User},{ts, MSecs*1000000+Secs},{clean, Clean} | Opts],
+    Vals             = Opts#{state => connecting, username => User, ts => MSecs*1000000+Secs, clean => Clean},
 
     Res1 = case {Clean, DeviceID} of
         {0, <<>>} ->
@@ -599,7 +598,7 @@ terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, in
     ),
 
     % saving topics if clean unset
-    offline_store(DeviceID, proplists:get_value(clean, Opts, 1), T),
+    offline_store(DeviceID, maps:get(clean, Opts, 1), T),
     send_last_will(StateData),
     terminate.
 

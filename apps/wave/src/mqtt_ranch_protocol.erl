@@ -39,11 +39,9 @@ init(Ref, Socket, Transport, _Opts = []) ->
     ok = ranch:accept_ack(Ref),
 
     {ok, {Ip,Port}} = peername(Transport, Socket),
-    %TODO: use binary fmt instead
-    % ie: tcp:127.0.0.1:55435
-    Addr = string:join([wave_utils:str(Transport:name()), inet_parse:ntoa(Ip), wave_utils:str(Port)], ":"),
+    Addr = #addr{transport=Transport:name(), ip=inet:ntoa(Ip), port=Port},
 
-    {ok, Session} = supervisor:start_child(wave_sessions_sup, [{?MODULE, Transport, Socket}, [{addr, Addr}]]),
+    {ok, Session} = supervisor:start_child(wave_sessions_sup, [{?MODULE, Transport, Socket}, #{addr => Addr}]),
     lager:debug("~p connection on ~p: ~p", [Transport, Socket, Addr]),
     loop(Socket, Transport, Session, <<"">>, 0).
 
