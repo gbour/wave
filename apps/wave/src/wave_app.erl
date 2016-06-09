@@ -51,6 +51,7 @@ start(_StartType, _StartArgs) ->
 
     % start master supervisor (starting named servers)
     {ok, WaveSup} = wave_sup:start_link(#{
+        access_log => env([access_log])
     }),
 
     % start modules supervisor, add it as master sup child
