@@ -4,9 +4,14 @@
 # execution:
 #   docker build -f tools/docker/build/Dockerfile -t gbour/wave-build
 
-FROM msaraiva/erlang
+#NOTE: short-circuiting msaraiva docker to get last alpine(3.4) and erlang (18.3.2) versions
+#FROM msaraiva/erlang
+FROM alpine:3.4
 MAINTAINER Guillaume Bour <guillaume@bour.cc>
 
+RUN apk --update add erlang
+
+#TODO: split lines, so a change in last line do not rebuild everything
 RUN apk update && \
     # needed tools to build release
     apk add bash make git && \

@@ -1,10 +1,12 @@
-FROM msaraiva/erlang
+FROM alpine:3.4
 MAINTAINER Guillaume Bour <guillaume@bour.cc>
 
-RUN apk update && \
-    apk add libstdc++ && \
-    # wave or dependencies required modules
-    apk add erlang-sasl erlang-inets erlang-crypto erlang-ssl erlang-public-key erlang-asn1 erlang-mnesia erlang-syntax-tools
+RUN apk update
+RUN apk add erlang
+RUN apk add libstdc++ 
+# wave or dependencies required modules
+RUN apk add erlang-sasl erlang-inets erlang-crypto erlang-ssl erlang-public-key erlang-asn1 \
+            erlang-mnesia erlang-syntax-tools
 
 #
 # wave is store in /opt/wave
