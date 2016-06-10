@@ -1,3 +1,7 @@
+
+#
+# tar czh . |docker build -f tools/docker/Dockerfile -t gbour/wave - 
+#
 FROM alpine:3.4
 MAINTAINER Guillaume Bour <guillaume@bour.cc>
 

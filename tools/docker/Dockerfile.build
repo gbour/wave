@@ -2,7 +2,7 @@
 
 #
 # execution:
-#   docker build -f tools/docker/build/Dockerfile -t gbour/wave-build
+#   docker build -f tools/docker/Dockerfile.build -t gbour/wave-build .
 
 #NOTE: short-circuiting msaraiva docker to get last alpine(3.4) and erlang (18.3.2) versions
 #FROM msaraiva/erlang
