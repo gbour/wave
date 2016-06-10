@@ -302,8 +302,10 @@ connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _,
     mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
 
     Topic = proplists:get_value(topic, Msg#mqtt_msg.payload),
+    Size  = erlang:byte_size(proplists:get_value(data, Msg#mqtt_msg.payload, <<>>)),
     wave_access_log:log(#{verb => 'PUBLISH', uri => Topic, status_code => 200, ua => DeviceID,
-                           ip => (maps:get(addr, Opts))#addr.ip}),
+                          size => Size, ip => (maps:get(addr, Opts))#addr.ip}),
+
     {reply, undefined, connected, StateData, Ka};
 
 % qos > 0
@@ -328,9 +330,10 @@ connected(Msg=#mqtt_msg{type='PUBLISH', payload=P, dup=Dup}, _,
             {Inflight, 409}
     end,
 
-    Topic     = proplists:get_value(topic, Msg#mqtt_msg.payload),
+    Topic = proplists:get_value(topic, Msg#mqtt_msg.payload),
+    Size  = erlang:byte_size(proplists:get_value(data, Msg#mqtt_msg.payload, <<>>)),
     wave_access_log:log(#{verb => 'PUBLISH', uri => Topic, status_code => StatusCode, ua => DeviceID,
-                           ip => (maps:get(addr, Opts))#addr.ip}),
+                          size => Size, ip => (maps:get(addr, Opts))#addr.ip}),
 
     {reply, undefined, connected, StateData#session{inflight=Inflight2}, Ka};
 

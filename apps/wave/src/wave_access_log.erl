@@ -67,10 +67,12 @@ handle_cast({log, _}, State=#state{enabled=false}) ->
     {noreply, State};
 handle_cast({log, Fields=#{verb := Verb, status_code := Code, ua := Ua}}, State=#state{fh=Fh}) -> 
     Date = qdate:to_string("d/M/Y:H:i:s O", "Europe/Paris", calendar:universal_time()),
-    Uri  = maps:get(uri, Fields, ""),
-    Ip   = maps:get(ip, Fields, "-"),
+    Uri  = maps:get(uri , Fields, ""),
+    Ip   = maps:get(ip  , Fields, "-"),
+    Size = maps:get(size, Fields, "-"),
 
-    io:format(Fh, "~s - - [~s] \"~s ~s\" ~B - \"-\" \"~s\"~n", [Ip, Date, Verb, Uri, Code, Ua]),
+    io:format(Fh, "~s - - [~s] \"~s ~s\" ~B ~s \"-\" \"~s\"~n",
+              [Ip, Date, Verb, Uri, Code, wave_utils:str(Size), Ua]),
 
     {noreply, State};
 

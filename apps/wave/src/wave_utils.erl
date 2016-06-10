@@ -39,6 +39,8 @@ str(X) when is_integer(X) ->
     erlang:integer_to_list(X);
 str(X) when is_binary(X) ->
     erlang:binary_to_list(X);
+str(X) when is_list(X) ->
+    X;
 str(_) ->
     erlang:error(wrongtype).
 
