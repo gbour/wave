@@ -18,5 +18,6 @@ RUN apk add erlang-syntax-tools
 # jiffy NIF build
 RUN apk add g++ libstdc++ erlang-dev
 # wave or dependencies required modules
-RUN apk add erlang-sasl erlang-inets erlang-crypto erlang-ssl erlang-public-key erlang-asn1 erlang-mnesia
+#   erlang-eunit: eredis
+RUN apk add erlang-sasl erlang-inets erlang-crypto erlang-ssl erlang-public-key erlang-asn1 erlang-mnesia erlang-eunit
 
