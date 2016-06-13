@@ -185,8 +185,8 @@ close(Transport, Socket) ->
 
 -spec peername(ranch_ssl|ranch_tcp, inet:socket()) -> {ok, {inet:ipaddress(), inet:port_number()}} 
                                                       | {error, any()}.
-peername(wave_websocket, _) ->
-    {ok, {{0,0,0,0}, 0}};
+peername(wave_websocket, Socket) ->
+    wave_websocket:peername(Socket);
 peername(ranch_ssl, Socket) ->
     ssl:peername(Socket);
 peername(_, Socket) ->

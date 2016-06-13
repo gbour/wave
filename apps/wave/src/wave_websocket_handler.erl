@@ -45,7 +45,7 @@ init(Req, _Opts) ->
         _ ->
             lager:debug("ws subprotocol= ~p", [ServerSubProtocol]),
             % starts bridge ranch transport
-            {ok, Transport} = wave_websocket:start(),
+            {ok, Transport} = wave_websocket:start(cowboy_req:peer(Req)),
 
             Req2 = cowboy_req:set_resp_header(<<"sec-websocket-protocol">>, ServerSubProtocol, Req),
             {cowboy_websocket, Req2, #{transport => Transport}}

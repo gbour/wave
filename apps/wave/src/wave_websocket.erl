@@ -24,7 +24,7 @@
 %%TODO: need to implement missing functions (even if empty)
 %%-behaviour(ranch_transport).
 
--export([start/0, init/1, name/0, recv/3, send/2, close/1]).
+-export([start/1, init/2, name/0, peername/1, recv/3, send/2, close/1]).
 
 -record(state, {
     wsh, % websocket handler (pid)
@@ -39,18 +39,29 @@
 %% PUBLIC API
 %% 
 
-start() ->
+start(Peer) ->
     %TODO: using proc_lib:start_link()
-    Pid = erlang:spawn(?MODULE, init, [#state{wsh=self()}]),
+    Pid = erlang:spawn(?MODULE, init, [#state{wsh=self()}, Peer]),
     {ok, Pid}.
 
-init(State) ->
+init(State, Peer) ->
+    % storing peer infos in process dictionary
+    erlang:put(peer, Peer),
     %                                               ref, socket, transport, opts
     {ok, Protocol} = mqtt_ranch_protocol:start_link(undefined, self(), wave_websocket, []),
     loop(State#state{protocol=Protocol}).
 
 name() ->
     ws.
+
+
+% return peer ip/port
+% NOTE: we currently store it in process dictionary,
+%       could also be stored in state and queried with sys:get_state()
+%       (implementing {system,{<0.4525.0>,#Ref<0.0.3.17176>},get_state} message handler)
+peername(Socket) ->
+    {dictionary, Dict} = erlang:process_info(Socket, dictionary),
+    {ok, proplists:get_value(peer, Dict)}.
 
 recv(Socket, Length, Timeout) ->
     Socket ! {recv, self(), Length},
