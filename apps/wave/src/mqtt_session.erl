@@ -284,40 +284,55 @@ connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=_Ref,keepaliv
     {reply, undefined, connected, StateData#session{pingid=undefined}, Ka};
 
 
-connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _, StateData=#session{deviceid=_DeviceID,keepalive=Ka}) ->
-    % only if retain=1
-    mqtt_retain:store(Msg),
+connected(Msg=#mqtt_msg{type='PUBLISH', qos=0, payload=P}, _,
+          StateData=#session{deviceid=_DeviceID,keepalive=Ka}) ->
 
-    %TODO: save message in DB
-    %      pass MsgID to message_worker
-    {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
-    mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
+    Topic = <<Prefix:1/binary, _/binary>> = proplists:get_value(topic, P),
+    case Prefix of
+        <<"$">> ->
+            lager:notice("~p: publishing to '$' prefixed topic is forbidden", [Topic]),
+            {stop, normal, disconnect, StateData};
 
-    {reply, undefined, connected, StateData, Ka};
+        _       ->
+            % only if retain=1
+            mqtt_retain:store(Msg),
+
+            %TODO: save message in DB
+            %      pass MsgID to message_worker
+            {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
+            mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
+
+            {reply, undefined, connected, StateData, Ka}
+    end;
 
 % qos > 0
 connected(Msg=#mqtt_msg{type='PUBLISH', payload=P, dup=Dup}, _,
           StateData=#session{deviceid=_DeviceID,keepalive=Ka,inflight=Inflight}) ->
 
+    Topic = <<Prefix:1/binary, _/binary>> = proplists:get_value(topic, P),
     %TODO: save message in DB
     MsgID     = proplists:get_value(msgid, P),
-    Inflight2 = case proplists:get_value(MsgID, Inflight) of
-        undefined ->
+    case {Prefix, proplists:get_value(MsgID, Inflight)} of
+        % $... topic
+        {<<"$">>, _}   ->
+            lager:notice("~p: publishing to '$' prefixed topic is forbidden", [Topic]),
+            {stop, normal, disconnect, StateData};
+
+        {_, undefined} ->
             % only if retain=1
             mqtt_retain:store(Msg),
             %      pass MsgID to message_worker
             {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
             mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
             
-            [{MsgID, MsgWorker} | Inflight];
+            {reply, undefined, connected, StateData#session{inflight=[{MsgID, MsgWorker} | Inflight]}, Ka};
 
         % message is already inflight
         _ ->
             lager:notice("message %~p already inflight (dup=~p). Ignored", [MsgID, Dup]),
-            Inflight
-    end,
+            {reply, undefined, connected, StateData, Ka}
+    end;
 
-    {reply, undefined, connected, StateData#session{inflight=Inflight2}, Ka};
 
 %TODO: factorize PUBACK/PUBREC/PUBREL/PUBCOMP code
 connected(Msg=#mqtt_msg{type='PUBACK', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->

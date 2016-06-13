@@ -1053,23 +1053,16 @@ class V311(TestSuite):
     @desc("[MQTT-4.7.2-1] topic started with '$' match filters explicitely started with '$'")
     def test_254(self):
         sub = MqttClient("conformity", connect=4)
-        sub.subscribe("$SYS/bar", qos=0)
+        sub.subscribe("$SYS/broker/uptime", qos=0)
 
-        pub = MqttClient("pub", connect=4)
-        pub.publish("foo/bar", "test1")
-
-        evt = sub.recv()
-        if evt is not None:
-            return False
-
-        pub.publish("$SYS/bar", "test2")
+        # $SYS stats are published each 10 seconds by default
+        time.sleep(12)
         evt = sub.recv()
         if not isinstance(evt, EventPublish) or\
-                evt.msg.topic != '$SYS/bar' or\
-                evt.msg.payload != 'test2':
+                evt.msg.topic != '$SYS/broker/uptime':
             return False
 
-        pub.disconnect(); sub.disconnect()
+        sub.disconnect()
         return True
 
     @catch
@@ -1185,3 +1178,13 @@ class V311(TestSuite):
 
         return True
 
+    @catch
+    @desc("PUBLISH to '$...' topic is forbidden")
+    def test_270(self):
+        pub = MqttClient("luser", connect=4)
+        pub.publish("$foo/bar", "test1")
+
+        if pub.conn_is_alive():
+            return False
+
+        return True
