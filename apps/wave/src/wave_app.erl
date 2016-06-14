@@ -49,8 +49,6 @@ start(_StartType, _StartArgs) ->
     % initialize syn (global process registry)
     syn:init(),
 
-    exometer_init(),
-
     % start master supervisor (starting named servers)
     {ok, WaveSup} = wave_sup:start_link(),
 
@@ -85,6 +83,7 @@ start(_StartType, _StartArgs) ->
 
         ], mqtt_ranch_protocol, [])),
 
+    exometer_init(),
     {ok, WaveSup}.
 
 stop(_State) ->
