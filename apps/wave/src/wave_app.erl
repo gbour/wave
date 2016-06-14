@@ -124,15 +124,17 @@ loglevel(Level) ->
 % automatically subscribe to metrics (sent to statsd)
 %
 exometer_init() ->
-    exometer_init(exometer:get_values(['_'])).
+    {ok, Interval} = application:get_env(exometer,interval),
+    exometer_init(exometer:get_values(['_']), Interval),
+    ok.
 
-exometer_init([]) ->
+exometer_init([], _) ->
     ok;
-exometer_init([{Name, Metrics}|T]) ->
+exometer_init([{Name, Metrics}|T], Interval) ->
     DPs = lists:map(fun({DP,_}) -> DP end, Metrics),
-    exometer_report:subscribe(exometer_report_statsd, Name, DPs, 1000),
+    exometer_report:subscribe(exometer_report_statsd, Name, DPs, Interval),
 
-    exometer_init(T).
+    exometer_init(T, Interval).
 
 
 -ifdef(DEBUG).
