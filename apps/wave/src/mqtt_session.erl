@@ -244,7 +244,6 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
         0 ->
             % remove offline subscriptions, publish stored messages
             mqtt_offline:release(self(), DeviceID, Clean),
-            exometer:update([wave,sessions], 1),
 
             Will = proplists:get_value(will, P),
             {reply, Resp, connected, StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, 
@@ -604,10 +603,6 @@ terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, in
     offline_store(DeviceID, proplists:get_value(clean, Opts, 1), T),
     send_last_will(StateData),
 
-    case StateName of
-        connected -> exometer:update([wave,sessions], -1);
-        _ -> ok
-    end,
     terminate.
 
 code_change(_OldVsn, StateName, StateData, _Extra) ->
