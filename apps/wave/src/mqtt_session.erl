@@ -309,7 +309,8 @@ connected(Msg=#mqtt_msg{type='PUBLISH', payload=P, qos=Qos, dup=Dup}, _,
             %      pass MsgID to message_worker
             {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
             mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
-            
+
+            exometer:update([wave,messages,inflight], 1),
             [{MsgID, MsgWorker} | Inflight];
 
         % message is already inflight
@@ -451,6 +452,7 @@ connected({timeout, _, timeout1}, _StateData) ->
 connected({publish, _, _, {Topic, _}, Content, Qos=0, Retain},
           StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
     lager:debug("send PUBLISH(topic=~p, qos=~p)", [Topic, Qos]),
+    exometer:update([wave,messages,out,0], 1),
 
     Msg   = #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain, payload=[{topic,Topic}, {content, Content}]},
     State = Callback:send(Transport, Socket, Msg),
@@ -465,6 +467,7 @@ connected({publish, _, _, {Topic, _}, Content, Qos=0, Retain},
 connected({publish, MsgID, From, {Topic,_}, Content, Qos, Retain},
           StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka,inflight=Inflight}) ->
     lager:debug("send PUBLISH(topic=~p, msgid=~p, qos=~p)", [Topic, MsgID, Qos]),
+    exometer:update([wave,messages,out,Qos], 1),
 
     Msg   = #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain,
                       payload=[{topic,Topic}, {msgid, MsgID}, {content, Content}]},
@@ -472,7 +475,9 @@ connected({publish, MsgID, From, {Topic,_}, Content, Qos, Retain},
 
     case State of
         {error, _Err} -> {stop, normal};
-        ok            -> {next_state, connected, StateData#session{inflight=[{MsgID, From}|Inflight]}, Ka}
+        ok            -> 
+            exometer:update([wave,messages,inflight], 1),
+            {next_state, connected, StateData#session{inflight=[{MsgID, From}|Inflight]}, Ka}
     end;
 
 %
@@ -527,8 +532,10 @@ connected({ack, MsgID, _Qos=2, _}, StateData=#session{transport={Callback,Transp
 %TODO: what if peer disconnected between ack received and message landed ?
 %      do a pre-check when message received (qos1 = PUBACK, qos2 = PUBCOMP) ? 
 connected({'msg-landed', MsgID}, StateData=#session{keepalive=Ka, inflight=Inflight,
-                                                    deviceid=DeviceID}) ->
+                                                    deviceid=_DeviceID}) ->
     lager:debug("#~p message-id is no more in-flight", [MsgID]),
+    exometer:update([wave,messages,inflight], -1),
+
     {next_state, connected, StateData#session{inflight=proplists:delete(MsgID, Inflight)}, Ka};
 
 % KeepAlive was set and no PINREG (or any other ctrl packet) received in the interval
@@ -585,7 +592,9 @@ terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, in
                 [DeviceID, _Reason, StateName, StateData]),
     
     if 
-        length(Inflight) > 0 -> lager:notice("~p: remaining inflight messages: ~p", [DeviceID, Inflight]);
+        length(Inflight) > 0 -> 
+            exometer:update([wave,messages,inflight], -length(Inflight)),
+            lager:notice("~p: remaining inflight messages: ~p", [DeviceID, Inflight]);
         true                 -> ok
     end,
 

@@ -51,7 +51,13 @@ get(active)   ->
     {ok, proplists:get_value(active, supervisor:count_children(wave_sessions_sup), 0)};
 % offline sessions
 get(offline)  ->
-    wave_db:count(<<"session:*">>).
+    wave_db:count(<<"session:*">>);
+% retained messages (in redis)
+get(retained) ->
+    wave_db:count(<<"retain:*">>);
+% stored messages (in redis)
+get(stored)   ->
+    wave_db:count(<<"msg:*:refcount">>).
 
 %%
 %% INTERNAL CALLBACKS

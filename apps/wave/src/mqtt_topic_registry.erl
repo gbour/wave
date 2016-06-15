@@ -37,7 +37,7 @@
 
 
 %
--export([dump/0, subscribe/3, unsubscribe/1, unsubscribe/2, match/1]).
+-export([count/0, dump/0, subscribe/3, unsubscribe/1, unsubscribe/2, match/1]).
 -ifdef(DEBUG).
     -export([debug_cleanup/0]).
 -endif.
@@ -49,6 +49,7 @@ start_link() ->
     gen_server:start_link({local,?MODULE}, ?MODULE, [], []).
 
 init(_) ->
+    exometer:update([wave,subscriptions], 0),
     {ok, #state{}}.
 
 %%
@@ -79,6 +80,10 @@ match(Name) ->
     gen_server:call(?MODULE, {match, Name}).
 
 
+-spec count() -> integer().
+count() ->
+    {ok, gen_server:call(?MODULE, count)}.
+    
 -spec dump() -> ok.
 dump() ->
     gen_server:call(?MODULE, dump).
@@ -93,12 +98,17 @@ debug_cleanup() ->
 %% PRIVATE API
 %%
 
+handle_call(count, _, State=#state{subscriptions=S}) ->
+    {reply, erlang:length(S), State};    
+
 handle_call(dump, _, State=#state{subscriptions=S}) ->
     priv_dump(S),
     {reply, ok, State};
 
 handle_call(debug_cleanup, _, _State) ->
     lager:warning("clearing registry"),
+    exometer:update([wave,subscriptions], 0),
+
     {reply, ok, #state{}};
 
 handle_call({subscribe, Topic, Qos, Subscriber}, _, State=#state{subscriptions=Subscriptions}) ->
@@ -113,6 +123,7 @@ handle_call({subscribe, Topic, Qos, Subscriber}, _, State=#state{subscriptions=S
 
     {Reply, S2} = case lists:filter(fun({T,F,_,S}) -> {T,F,S} =:= {TopicName,Fields,Subscriber} end, Subscriptions) of
         [] ->
+            exometer:update([wave,subscriptions], length(Subscriptions)+1),
             {ok, Subscriptions ++ [{TopicName,Fields,Qos,Subscriber}]};
 
         _  ->
@@ -124,6 +135,7 @@ handle_call({subscribe, Topic, Qos, Subscriber}, _, State=#state{subscriptions=S
 
 handle_call({unsubscribe, Subscriber}, _, State=#state{subscriptions=S}) ->
     S2 = priv_unsubscribe(Subscriber, S, []),
+    exometer:update([wave,subscriptions], length(S2)),
     {reply, ok, State#state{subscriptions=S2}};
 
 handle_call({unsubscribe, TopicName, Subscriber}, _, State=#state{subscriptions=S}) ->
@@ -134,6 +146,7 @@ handle_call({unsubscribe, TopicName, Subscriber}, _, State=#state{subscriptions=
         end, S
     ),
     
+    exometer:update([wave,subscriptions], length(S2)),
     %lager:debug("unsub2 ~p / ~p", [S, S2]),
     {reply, ok, State#state{subscriptions=S2}};
 
