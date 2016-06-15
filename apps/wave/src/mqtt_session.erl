@@ -285,7 +285,7 @@ connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=_Ref,keepaliv
 
 connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _, StateData=#session{deviceid=_DeviceID,keepalive=Ka}) ->
     % only if retain=1
-    exometer:update([wave,in,publish,0], 1),
+    exometer:update([wave,messages,in,0], 1),
     mqtt_retain:store(Msg),
 
     %TODO: save message in DB
@@ -299,7 +299,7 @@ connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _, StateData=#session{deviceid=_
 connected(Msg=#mqtt_msg{type='PUBLISH', payload=P, qos=Qos, dup=Dup}, _,
           StateData=#session{deviceid=_DeviceID,keepalive=Ka,inflight=Inflight}) ->
 
-    exometer:update([wave,in,publish,Qos], 1),
+    exometer:update([wave,messages,in,Qos], 1),
     %TODO: save message in DB
     MsgID     = proplists:get_value(msgid, P),
     Inflight2 = case proplists:get_value(MsgID, Inflight) of
