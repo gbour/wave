@@ -39,7 +39,7 @@ run: build setup
 	erl -pa `find -L _build/$(env) -name ebin` -name 'wave@127.0.0.1' -setcookie wave -s $(APP) -s sync -config .wave.$(env).config -s observer -init debug +v
 
 test:
-	cd tests && DEBUG=$(DEBUG) PYTHONPATH=./nyamuk:./twotp ./run
+	cd tests && DEBUG=$(DEBUG) PYTHONPATH=./nyamuk:./twotp:./logparser ./run
 
 release: setup
 	./rebar3 as $(env) tar

@@ -27,6 +27,7 @@ install:
     # nyamuk is a python MQTT client used for blackbox tests
     - "git clone -b enhancement https://github.com/gbour/nyamuk.git tests/nyamuk"
     - "git clone https://github.com/gbour/twotp.git tests/twotp"
+    - "git clone https://github.com/gbour/apache-log-parser.git tests/logparser"
     - "git clone https://github.com/gbour/paho.mqtt.testing tests/paho"
 
 before_script:
