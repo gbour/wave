@@ -25,6 +25,10 @@ COPY .wave.alpine.config /opt/wave/wave.config
 COPY tools/docker/entrypoint.sh /usr/local/bin
 
 # MQTT ports
-EXPOSE 1883 8883
+#   . 1883: tcp
+#   . 8883: ssl
+#   . 1884: websocket
+#   . 8884: websocket (ssl)
+EXPOSE 1883 8883 1884 8884
 
 ENTRYPOINT ["entrypoint.sh"]
