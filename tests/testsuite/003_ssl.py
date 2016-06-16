@@ -10,6 +10,7 @@ import os
 import os.path
 
 # TLS > v1 not available on python2.7 except for Debian
+# TLSv1 and lower are disabled in OTP >= 18
 SSL_VERSION = ssl.PROTOCOL_TLSv1_2 if hasattr(ssl, 'PROTOCOL_TLSv1_2') else ssl.PROTOCOL_TLSv1
 
 # no socket.version() with python2.7 ssl
