@@ -80,7 +80,7 @@ match(Name) ->
     gen_server:call(?MODULE, {match, Name}).
 
 
--spec count() -> integer().
+-spec count() -> {ok, integer()}.
 count() ->
     {ok, gen_server:call(?MODULE, count)}.
     
