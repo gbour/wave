@@ -17,7 +17,7 @@ Features
 * [x] WebSockets
 * [ ] $SYS hierarchy
 * [ ] monitoring
-* [ ] access logs
+* [X] access logs
 * [ ] authentication
 * [ ] administration interface
 * [ ] plugins
