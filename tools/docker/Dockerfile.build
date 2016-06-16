@@ -19,5 +19,6 @@ RUN apk add erlang-syntax-tools
 RUN apk add g++ libstdc++ erlang-dev
 # wave or dependencies required modules
 #   erlang-eunit: eredis
-RUN apk add erlang-sasl erlang-inets erlang-crypto erlang-ssl erlang-public-key erlang-asn1 erlang-mnesia erlang-eunit
+RUN apk add erlang-sasl erlang-inets erlang-crypto erlang-ssl erlang-public-key erlang-asn1 erlang-mnesia \
+            erlang-eunit erlang-snmp
 

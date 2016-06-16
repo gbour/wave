@@ -10,7 +10,7 @@ RUN apk add erlang
 RUN apk add libstdc++ 
 # wave or dependencies required modules
 RUN apk add erlang-sasl erlang-inets erlang-crypto erlang-ssl erlang-public-key erlang-asn1 \
-            erlang-mnesia erlang-syntax-tools erlang-eunit
+            erlang-mnesia erlang-syntax-tools erlang-eunit erlang-snmp
 
 #
 # wave is store in /opt/wave
