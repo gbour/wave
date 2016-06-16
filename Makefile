@@ -66,6 +66,30 @@ cert:
 msc:
 	find docs/ -iname *.msc | xargs -I '{}' /opt/mscgenx/bin/msc-gen -T png  '{}'
 
+#
+# build docker image used to compile wave
+docker-init:
+	docker build -f tools/docker/Dockerfile.build -t gbour/wave-build .
+
+# compile wave with previous image
+docker-build:
+	# NIF not automatically rebuilded
+	rm -Rf _build/default/lib/jiffy/{ebin,priv}
+	docker run --rm -ti -v ${PWD}:${PWD} -w ${PWD} -u `id -u`:`id -g` -e HOME=${PWD} wave-build make env=alpine
+
+# build docker target image
+# NOTE: tar is used to solve symlinks in build profile lib/ directory
+docker-pack:
+	tar czh . | docker build -f tools/docker/Dockerfile -t wave -
+
+#
+# NOTE: SSL certificates are not embedded in the images
+#       we use those stored in etc/ directory (-v parameter)
+docker-run:
+	# ignore error is redis already started
+	-docker run --name redis-wave -d redis:alpine
+	docker run --name wave --rm --link=redis-wave -v ${PWD}/.docker-logs:/var/log -v ${PWD}/etc:/opt/wave/etc -p 1883:1883 -p 8883:8883 -p 1884:1884 -p 8884:8884 wave
+
 ## testing freemobile sms module
 ## faking a ssh connection
 test_sms:
