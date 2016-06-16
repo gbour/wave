@@ -26,7 +26,8 @@
 -include("mqtt_msg.hrl").
 
 -type ranch_socket()    :: inet:socket()|ssl:sslsocket().
--type ranch_transport() :: ranch_tcp|ranch_ssl.
+%NOTE: Transport is module name
+-type ranch_transport() :: ranch_tcp|ranch_ssl|wave_websocket.
 -type transport()       :: {Module::module(), RanchTransport::ranch_transport(), RanchSocket::ranch_socket()}.
 
 
@@ -36,7 +37,7 @@ start_link(Ref, Socket, Transport, Opts) ->
 
 -spec init(Ref::ranch:ref(), Socket::ranch_socket(), Transport::ranch_transport(), Opts::any()) -> ok.
 init(Ref, Socket, Transport, _Opts = []) ->
-    ok = ranch:accept_ack(Ref),
+    accept(Transport, Ref),
 
     {ok, {Ip,Port}} = peername(Transport, Socket),
     Addr = #addr{transport=Transport:name(), ip=inet:ntoa(Ip), port=Port},
@@ -182,8 +183,16 @@ close(Transport, Socket) ->
 
 -spec peername(ranch_ssl|ranch_tcp, inet:socket()) -> {ok, {inet:ipaddress(), inet:port_number()}} 
                                                       | {error, any()}.
+peername(wave_websocket, Socket) ->
+    wave_websocket:peername(Socket);
 peername(ranch_ssl, Socket) ->
     ssl:peername(Socket);
 peername(_, Socket) ->
     inet:peername(Socket).
 
+accept(ranch_tcp, Ref) ->
+    ok = ranch:accept_ack(Ref);
+accept(ranch_ssl, Ref) ->
+    ok = ranch:accept_ack(Ref);
+accept(_, _) ->
+    ok.

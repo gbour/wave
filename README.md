@@ -14,7 +14,7 @@ Features
 * [x] MQTT v1.3.1
 * [x] Qos 0, 1 & 2
 * [x] SSL
-* [ ] WebSockets
+* [x] WebSockets
 * [ ] $SYS hierarchy
 * [ ] monitoring
 * [X] access logs
