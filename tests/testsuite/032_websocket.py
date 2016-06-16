@@ -80,4 +80,21 @@ class WebSocket(TestSuite):
 
         cli.disconnect()
         return True
-        
+
+    @catch
+    @desc("discussion btw websocket and standard ssl clients")
+    def test_020(self):
+        ws  = MqttClient("ws", port=1884, websocket=True, connect=4)
+        tcp = MqttClient("tcp", connect=4)
+
+        tcp.subscribe("foo/bar", qos=0)
+        ws.publish("foo/bar", "baz", qos=0)
+
+        evt =  tcp.recv()
+        if not isinstance(evt, EventPublish) or\
+                evt.msg.topic != "foo/bar" or\
+                evt.msg.payload != "baz":
+            return False
+
+        return True
+
