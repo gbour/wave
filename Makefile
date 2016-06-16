@@ -82,7 +82,7 @@ docker-pack:
 docker-run:
 	# ignore error is redis already started
 	-docker run --name redis-wave -d redis:alpine
-	docker run --name wave --rm --link=redis-wave -v ${PWD}/.docker-logs:/var/log -v ${PWD}/etc:/opt/wave/etc -p 1883:1883 -p 8883:8883 wave
+	docker run --name wave --rm --link=redis-wave -v ${PWD}/.docker-logs:/var/log -v ${PWD}/etc:/opt/wave/etc -p 1883:1883 -p 8883:8883 -p 1884:1884 -p 8884:8884 wave
 
 ## testing freemobile sms module
 ## faking a ssh connection
