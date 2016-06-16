@@ -15,6 +15,9 @@ env=prod
 # '/my/file': debug written in '/my/file'
 DEBUG=1
 
+EXOMETER_PACKAGES="(minimal)"
+export EXOMETER_PACKAGES
+
 ##
 ## -*- RULES -*-
 ##

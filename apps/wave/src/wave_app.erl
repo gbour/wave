@@ -114,6 +114,7 @@ start(_StartType, _StartArgs) ->
         ], [{env, [{dispatch, Dispatch}]}]),
 	%websocket_sup:start_link().
 
+    exometer_init(),
     {ok, WaveSup}.
 
 stop(_State) ->
@@ -147,6 +148,23 @@ check_ciphers(Ciphers) ->
 -spec loglevel(integer) -> any().
 loglevel(Level) ->
     lager:set_loglevel(lager_console_backend, Level).
+
+
+%
+% automatically subscribe to metrics (sent to statsd)
+%
+exometer_init() ->
+    {ok, Interval} = application:get_env(exometer,interval),
+    exometer_init(exometer:get_values(['_']), Interval),
+    ok.
+
+exometer_init([], _) ->
+    ok;
+exometer_init([{Name, Metrics}|T], Interval) ->
+    DPs = lists:map(fun({DP,_}) -> DP end, Metrics),
+    exometer_report:subscribe(exometer_report_statsd, Name, DPs, Interval),
+
+    exometer_init(T, Interval).
 
 
 -ifdef(DEBUG).

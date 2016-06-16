@@ -38,6 +38,7 @@ start_link(Ref, Socket, Transport, Opts) ->
 -spec init(Ref::ranch:ref(), Socket::ranch_socket(), Transport::ranch_transport(), Opts::any()) -> ok.
 init(Ref, Socket, Transport, _Opts = []) ->
     accept(Transport, Ref),
+    exometer:update([wave,connections,Transport:name()], 1),
 
     {ok, {Ip,Port}} = peername(Transport, Socket),
     Addr = #addr{transport=Transport:name(), ip=inet:ntoa(Ip), port=Port},
@@ -63,7 +64,7 @@ loop(Socket, Transport, Session, Buffer, Length) ->
 
         {error, timeout} ->
             lager:notice("socket timeout. Sending MQTT PINGREQ"),
-            Transport:send(Socket, mqtt_msg:encode(#mqtt_msg{type='PINGREQ'})),
+            send(Transport, Socket, #mqtt_msg{type='PINGREQ'}),
             loop(Socket, Transport, Session, Buffer, Length);
 
         % socket closed by peer
@@ -102,8 +103,7 @@ route(Socket, Transport, Session, Raw) ->
             % special error case: in case of wrong protocol version, the broker MUST return
             % a CONNACK packet with 0x01 error code
             % we bypass mqtt_session in this case
-            Transport:send(Socket, mqtt_msg:encode(
-                #mqtt_msg{type='CONNACK', payload=[{retcode, 1}]})),
+            send(Transport, Socket, #mqtt_msg{type='CONNACK', payload=[{retcode, 1}]}),
             ?GENFSM_STOP(Session, normal, 50),
             Transport:close(Socket),
             stop;
@@ -116,12 +116,12 @@ route(Socket, Transport, Session, Raw) ->
 
         {ok, Msg, Rest} ->
             lager:debug("IN> ~p", [Msg]),
+            exometer:update([wave,packets,received], 1),
 
             %case answer(Msg) of
             case mqtt_session:handle(Session, Msg) of
                 {ok, Resp=#mqtt_msg{}} ->
-                    Res = Transport:send(Socket, mqtt_msg:encode(Resp)),
-                    lager:debug("OUT[~p], < ~p", [Res, Resp]),
+                    send(Transport, Socket, Resp),
                     route(Socket, Transport, Session, Rest);
 
                 {ok, undefined}  ->
@@ -135,7 +135,7 @@ route(Socket, Transport, Session, Raw) ->
 
                 % send message then close connection
                 {ok, {disconnect, M=#mqtt_msg{}}} ->
-                    Res = Transport:send(Socket, mqtt_msg:encode(M)),
+                    Res = send(Transport, Socket, M),
                     lager:debug("OUT[disconnect: ~p] ~p", [Res, M]),
                     stop
             end;
@@ -160,7 +160,7 @@ route(Socket, Transport, Session, Raw) ->
 -spec ping(ranch_transport(), ranch_socket()) -> ok | {error, term()}.
 ping(Transport, Socket) ->
     Msg = #mqtt_msg{type='PINGREQ'},
-    Transport:send(Socket, mqtt_msg:encode(Msg)).
+    send(Transport, Socket, Msg).
 
 % send kindof TCP keepalive
 %
@@ -172,7 +172,11 @@ crlfping(T, S) ->
 %
 -spec send(ranch_transport(), ranch_socket(), mqtt_msg()) -> ok | {error, term()}.
 send(Transport, Socket, Msg) ->
-    Transport:send(Socket, mqtt_msg:encode(Msg)).
+    Res = Transport:send(Socket, mqtt_msg:encode(Msg)),
+    lager:debug("OUT[~p], < ~p", [Res, Msg]),
+    exometer:update([wave,packets,sent], 1),
+
+    Res.
 
 % close underlying socket
 %

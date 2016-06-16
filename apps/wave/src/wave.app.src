@@ -13,7 +13,8 @@
       sharded_eredis,
       lager,
       jiffy,
-      cowboy
+      cowboy,
+      exometer
   ]},
   {env, []},
   {modules, []},
