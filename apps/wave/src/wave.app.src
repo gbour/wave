@@ -2,7 +2,7 @@
 
 {application, wave, [
   {description, "MQTT broker"},
-  {vsn, "0.3.0"},
+  {vsn, "0.2.0"},
   {registered, []},
   {mod, { wave_app, []}},
   {applications, [

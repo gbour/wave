@@ -4,12 +4,7 @@ deps
 *.beam
 *.plt
 erl_crash.dump
-ebin/
-_build/
+ebin
+rel/example_project
+.concrete/DEV_MODE
 .rebar
-.wave*.config*
-test/
-wiki/
-blog/
-docs/
-etc/wave_*.pem

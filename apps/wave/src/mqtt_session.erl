@@ -263,9 +263,8 @@ initiate({timeout, _, timeout1}, _, _StateData) ->
 	lager:info("initiate timeout"),
 	{stop, disconnect, []}.
 
-initiate(timeout, StateData=#session{transport={Callback,Transport,Sock}}) ->
-    lager:notice("initiate:: timeout ~p", [StateData]),
-    Callback:close(Transport, Sock),
+initiate(timeout, StateData) ->
+    lager:notice("initiate:: timeout"),
     %TODO: disconnect reason is throwing a log error w/ CRASH REPORT
     %      which reason should we use
     {stop, disconnect, StateData}.
