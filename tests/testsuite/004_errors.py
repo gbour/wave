@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: UTF8 -*-
 
+import time
+import random
+import socket
+
 from TestSuite import TestSuite, desc, catch
 from mqttcli import MqttClient
 from nyamuk.event import *
-
-import random
 
 class Errors(TestSuite):
     def __init__(self):
@@ -148,4 +150,24 @@ class Errors(TestSuite):
                 return False
 
         return True
+
+    @catch
+    @desc("empty socket lead to socket closed after timeout")
+    def test_020(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(('127.0.0.1', 1883))
+        s.setblocking(0)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1) 
+
+        time.sleep(6) # connect timeout is 5 secs
+        # close socket triggers a broken pipe (errno 32)
+        try:
+            s.send("foobar")
+            s.recv(0)
+            s.send("foobar")
+        except Exception as (errno, msg):
+            #print "exc", errno, msg
+            return (errno == 32)
+
+        return False
 

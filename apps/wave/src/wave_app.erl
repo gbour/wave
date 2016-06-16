@@ -50,7 +50,9 @@ start(_StartType, _StartArgs) ->
     syn:init(),
 
     % start master supervisor (starting named servers)
-    {ok, WaveSup} = wave_sup:start_link(),
+    {ok, WaveSup} = wave_sup:start_link(#{
+        access_log => env([access_log])
+    }),
 
     % start modules supervisor, add it as master sup child
     supervisor:start_child(WaveSup, {wave_modules_sup,
@@ -82,6 +84,35 @@ start(_StartType, _StartArgs) ->
             {hibernate_after, 1000}
 
         ], mqtt_ranch_protocol, [])),
+    
+    % websocket listener
+	Dispatch = cowboy_router:compile([
+		{'_', [
+			{'_', wave_websocket_handler, []}
+		]}
+	]),
+
+	{ok, _} = cowboy:start_http(ws, 1, [
+            {port, env([websocket, port])}
+        ], [{env, [{dispatch, Dispatch}]}]),
+
+	{ok, _} = cowboy:start_https(wss, 1, [
+            {port, env([websocket, ssl_port])},
+
+            {certfile, env([ssl, certfile])},
+            {keyfile , env([ssl, keyfile])},
+
+            % increase security level
+            {secure_renegotiate, true},
+            {reuse_sessions, false},
+            {honor_cipher_order, true},
+            {versions, env([ssl, versions])},
+            {ciphers , Ciphers},
+            % reduce memory usage
+            {hibernate_after, 1000}
+
+        ], [{env, [{dispatch, Dispatch}]}]),
+	%websocket_sup:start_link().
 
     exometer_init(),
     {ok, WaveSup}.
