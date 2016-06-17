@@ -25,13 +25,14 @@
 -export([init/1]).
 
 %% Helper macro for declaring children of supervisor
--define(CHILD(I, Type), {I, {I, start_link, []}, permanent, 5000, Type, [I]}).
--define(CHILD(I, Type, A), {I, {I, start_link, [A]}, permanent, 5000, Type, [I]}).
+-define(CHILD(I, Type)      , {I, {I, start_link, []}    , permanent, 5000, Type, [I]}).
+-define(CHILD(I, Type, Args), {I, {I, start_link, [Args]}, permanent, 5000, Type, [I]}).
 
 %% ===================================================================
 %% API functions
 %% ===================================================================
 
+-spec start_link(map()) -> {ok, pid()} | {error, {already_started, pid()}}.
 start_link(Args) ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, Args).
 
@@ -39,6 +40,7 @@ start_link(Args) ->
 %% Supervisor callbacks
 %% ===================================================================
 
+-spec init(map()) -> {ok,{supervisor:sup_flags(),[supervisor:child_spec()]}} | ignore.
 init(Args) ->
     {ok, {{one_for_one, 5, 10}, [
         ?CHILD(mqtt_topic_registry, worker)
@@ -48,6 +50,7 @@ init(Args) ->
         ,?CHILD(mqtt_lastwill_session, worker)
         ,?CHILD(wave_ctlmngr, worker)
         ,?CHILD(wave_auth, worker, maps:get(auth, Args, undefined))
+        ,?CHILD(wave_access_log, worker, maps:get(access_log, Args, undefined))
 
         ,?CHILD(wave_sessions_sup, supervisor)
         ,?CHILD(wave_msgworkers_sup, supervisor)

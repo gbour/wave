@@ -1,4 +1,4 @@
-wave [![Build Status](https://secure.travis-ci.org/gbour/wave.png?branch=master)](http://travis-ci.org/gbour/wave) ![release 0.2.0](https://img.shields.io/badge/release-0.2.0-red.svg)
+wave [![Build Status](https://secure.travis-ci.org/gbour/wave.png?branch=master)](http://travis-ci.org/gbour/wave) ![release 0.3.0](https://img.shields.io/badge/release-0.3.0-red.svg)
 ====
 
 Wave is a MQTT Broker, written in Erlang.   
@@ -14,10 +14,10 @@ Features
 * [x] MQTT v1.3.1
 * [x] Qos 0, 1 & 2
 * [x] SSL
-* [ ] WebSockets
+* [x] WebSockets
 * [ ] $SYS hierarchy
 * [ ] monitoring
-* [ ] access logs
+* [X] access logs
 * [ ] authentication
 * [ ] administration interface
 * [ ] plugins
@@ -37,6 +37,9 @@ prerequisites:
 ```
 $> git clone https://github.com/gbour/wave.git wave
 $> cd wave && make
+# 'make cert' generates sample self-signed certificate, required to start wave with default configuration
+# you can alternatively provide your own
+$> make cert
 $> make run
 ```
 
@@ -65,7 +68,7 @@ foo/bar is it working
 Authors
 -------
 
-Main developer: Guillaume Bour <guillaume@bour.cc>
+Main developer: Guillaume Bour &lt;guillaume@bour.cc&gt;
 
 License
 -------
