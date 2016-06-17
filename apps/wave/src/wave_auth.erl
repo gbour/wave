@@ -18,11 +18,22 @@
 -author("Guillaume Bour <guillaume@bour.cc>").
 -behaviour(gen_server).
 
--export([check/4]).
 % gen_server API
 -export([start_link/1, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
+-define(ETS_VISIBILITY      , private).
 -define(DFT_MONITOR_INTERVAL, 60000). % 1 minute
+
+-export([check/4]).
+-ifdef(DEBUG).
+    -undef(ETS_VISIBILITY).
+    -define(ETS_VISIBILITY, public).
+
+    -undef(DFT_MONITOR_INTERVAL).
+    -define(DFT_MONITOR_INTERVAL, 2000).
+
+    -export([switch/1]).
+-endif.
 
 -record(state, {
     filename,
@@ -33,7 +44,7 @@ start_link(Args) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []).
 
 init(Args) ->
-    ets:new(?MODULE, [set, named_table, private]),
+    ets:new(?MODULE, [set, named_table, ?ETS_VISIBILITY]),
     % 1st monitor will trigger file load
     erlang:send_after(50, self(), monitor),
     {ok, #state{filename=proplists:get_value(file, Args)}}.
@@ -59,6 +70,11 @@ check(    _, DeviceID, {User, Pwd}, Settings) ->
     lager:debug("auth check ~p (~p)", [DeviceID, User]),
     gen_server:call(?MODULE, {auth, DeviceID, User, Pwd}).
 
+-ifdef(DEBUG).
+switch(File) ->
+    gen_server:call(?MODULE, {switch, File}).
+-endif.
+
 %%
 %% PRIVATE API
 %%
@@ -80,6 +96,11 @@ handle_call({auth, DeviceID, User, Password}, _, State) ->
     end,
         
     {reply, Match, State};
+
+% load a new password file
+handle_call({switch, File}, _, State) ->
+    reload(File),
+    {reply, ok, State#state{filename=File, last_modified=filelib:last_modified(File)}};
 
 handle_call(E,_,State) ->
     lager:error("call ~p", [E]),
