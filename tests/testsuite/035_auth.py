@@ -35,6 +35,12 @@ class Auth(TestSuite):
     def __init__(self):
         TestSuite.__init__(self, "Authentication")
 
+    @defer.inlineCallbacks
+    def cleanup(self):
+        # set back default values (required = false) so following tests are working :)
+        yield set_env({})
+
+
     @catch
     @desc("anonymous connection: auth optional")
     @defer.inlineCallbacks
