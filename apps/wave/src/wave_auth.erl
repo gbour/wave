@@ -50,10 +50,10 @@ check(false, _,{undefined, _}, _) ->
 
 % no username set
 check( true, _, {undefined, _}, _) ->
-    {error, bad_creds};
+    {error, bad_credentials};
 %NOTE: this situation should never happen (see [MQTT-3.1.2-22])
 check(    _, _, {_, undefined}, _) ->
-    {error, bad_creds};
+    {error, bad_credentials};
 
 check(    _, DeviceID, {User, Pwd}, Settings) ->
     lager:debug("auth check ~p (~p)", [DeviceID, User]),
@@ -69,14 +69,14 @@ handle_call({auth, DeviceID, User, Password}, _, State) ->
             lager:debug("user ~p found", [User]),
             case erlpass:match(Password, Hash) of
                 true -> {ok, match};
-                _    -> {error, bad_creds}
+                _    -> {error, bad_credentials}
             end;
 
         _ -> 
             % make it harder to guess if Username exists or not
             % (as erlpass:match() takes around 600ms to execute)
             erlpass:match(<<"foo">>,<<"$2a$12$6zOUIP0NEwBupO7ATO.Hv..ZQq5WGmyZ0rCYGUoznFrYpFZkr8ppy">>),
-            {error, bad_creds}
+            {error, bad_credentials}
     end,
         
     {reply, Match, State};
