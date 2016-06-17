@@ -1,5 +1,7 @@
 #!/usr/bin/env escript
 %% vim: filetype=erlang
+
+%% NOT ACTIVE
 %%! -env ERL_LIBS  _build/default/lib
 
 %%
@@ -29,8 +31,10 @@
 %%
 
 main([]) ->
+    include_libs(),
     getopt:usage(options_spec_list(), escript:script_name(), "passwordfile username");
 main(Args) ->
+    include_libs(),
     OptsSpecList = options_spec_list(),
     run(getopt:parse(OptsSpecList, Args)).
 
@@ -156,3 +160,9 @@ options_spec_list() ->
         {delete, $D, undefined, undefined, "delete the user"}
     ].
 
+include_libs() ->
+    % TODO: what about release or docker instance ?
+    BaseDir = filename:dirname(escript:script_name()),
+    [ code:add_pathz(BaseDir++"/../_build/default/lib/"++Lib++"/ebin") || Lib <- ["getopt","erlpass","bcrypt"]],
+
+    ok.
