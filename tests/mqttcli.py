@@ -28,8 +28,7 @@ class MqttClient(object):
         self.client_id = client_id if client_id is not None else \
             "test:{0}:{1}".format(prefix, random.randint(0,9999) if rand else 0)
 
-        self._c = nyamuk.Nyamuk(self.client_id, None, None, server=server, log_level=loglevel, log_file=logfile, 
-                                **kwargs)
+        self._c = nyamuk.Nyamuk(self.client_id, server=server, log_level=loglevel, log_file=logfile, **kwargs)
 
         # MQTT connection
         # 

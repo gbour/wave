@@ -19,7 +19,7 @@
 -behaviour(application).
 
 %% Application callbacks
--export([start/0, start/2, stop/1, loglevel/1]).
+-export([start/0, start/2, stop/1, loglevel/1, env/1]).
 
 -define(DEBUGW(X), ok).
 -ifdef(DEBUG).
@@ -50,7 +50,10 @@ start(_StartType, _StartArgs) ->
     syn:init(),
 
     % start master supervisor (starting named servers)
-    {ok, WaveSup} = wave_sup:start_link(),
+    {ok, WaveSup} = wave_sup:start_link(#{
+        auth       => env([auth]),
+        access_log => env([access_log])
+    }),
 
     % start modules supervisor, add it as master sup child
     supervisor:start_child(WaveSup, {wave_modules_sup,
@@ -82,7 +85,37 @@ start(_StartType, _StartArgs) ->
             {hibernate_after, 1000}
 
         ], mqtt_ranch_protocol, [])),
+    
+    % websocket listener
+	Dispatch = cowboy_router:compile([
+		{'_', [
+			{'_', wave_websocket_handler, []}
+		]}
+	]),
 
+	{ok, _} = cowboy:start_http(ws, 1, [
+            {port, env([websocket, port])}
+        ], [{env, [{dispatch, Dispatch}]}]),
+
+	{ok, _} = cowboy:start_https(wss, 1, [
+            {port, env([websocket, ssl_port])},
+
+            {certfile, env([ssl, certfile])},
+            {keyfile , env([ssl, keyfile])},
+
+            % increase security level
+            {secure_renegotiate, true},
+            {reuse_sessions, false},
+            {honor_cipher_order, true},
+            {versions, env([ssl, versions])},
+            {ciphers , Ciphers},
+            % reduce memory usage
+            {hibernate_after, 1000}
+
+        ], [{env, [{dispatch, Dispatch}]}]),
+	%websocket_sup:start_link().
+
+    exometer_init(),
     {ok, WaveSup}.
 
 stop(_State) ->
@@ -116,6 +149,23 @@ check_ciphers(Ciphers) ->
 -spec loglevel(integer) -> any().
 loglevel(Level) ->
     lager:set_loglevel(lager_console_backend, Level).
+
+
+%
+% automatically subscribe to metrics (sent to statsd)
+%
+exometer_init() ->
+    {ok, Interval} = application:get_env(exometer,interval),
+    exometer_init(exometer:get_values(['_']), Interval),
+    ok.
+
+exometer_init([], _) ->
+    ok;
+exometer_init([{Name, Metrics}|T], Interval) ->
+    DPs = lists:map(fun({DP,_}) -> DP end, Metrics),
+    exometer_report:subscribe(exometer_report_statsd, Name, DPs, Interval),
+
+    exometer_init(T, Interval).
 
 
 -ifdef(DEBUG).

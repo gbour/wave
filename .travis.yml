@@ -25,8 +25,11 @@ install:
     # need to enable TLSv1 as python2.7 do not support TLS >= 1.1
     - sed -ie "s/{versions, .*\}/{versions, ['tlsv1', 'tlsv1.1', 'tlsv1.2']}/g" .wave.travis.config
     # nyamuk is a python MQTT client used for blackbox tests
+    - pip install --user websocket-client
     - "git clone -b enhancement https://github.com/gbour/nyamuk.git tests/nyamuk"
     - "git clone https://github.com/gbour/twotp.git tests/twotp"
+    - "git clone https://github.com/gbour/apache-log-parser.git tests/logparser"
+    - pip install --user -r tests/logparser/requirements.txt
     - "git clone https://github.com/gbour/paho.mqtt.testing tests/paho"
 
 before_script:

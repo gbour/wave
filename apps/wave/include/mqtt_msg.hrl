@@ -24,6 +24,12 @@
     payload = []   :: list({atom(), any()})
 }).
 
+-record(addr, {
+    transport,
+    ip,
+    port
+ }).
+
 -type mqtt_msg()  :: #mqtt_msg{}.
 -type mqtt_verb() :: 'CONNECT'|'CONNACK'|'PUBLISH'|'PUBACK'|'PUBREC'|'PUBREL'|'PUBCOMP'|'SUBSCRIBE'|'UNSUBSCRIBE'
                     |'SUBACK'|'UNSUBACK'|'PINGREQ'|'PINGRESP'|'DISCONNECT'.
