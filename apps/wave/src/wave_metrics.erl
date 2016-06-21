@@ -21,25 +21,30 @@
 %%
 -module(wave_metrics).
 -author("Guillaume Bour <guillaume@bour.cc>").
-%-behaviour(gen_server).
+-behaviour(gen_server).
+
+-include("mqtt_msg.hrl").
+-define(DFT_TIMEOUT, 5000).
 
 
 % public API
 -export([get/1]).
 % gen_server internals
-%-export([start_link/0, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+-export([start_link/0, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 % internal funs
 
-%-record(state, {
-% }).
+-record(state, {
+    start
+ }).
 
-%-spec start_link() -> {ok, pid()} | ignore | {error, any()}.
-%start_link() ->
-%    % name = mqtt_offline
-%    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-%
-%init(_) ->
-%    {ok, #state{}}.
+-spec start_link() -> {ok, pid()} | ignore | {error, any()}.
+start_link() ->
+    %NOTE: currently we set ONE global registry service for the current erlang server
+    gen_server:start_link({local,?MODULE}, ?MODULE, [], []).
+
+init(_) ->
+    erlang:send_after(?DFT_TIMEOUT, self(), timeout),
+    {ok, #state{start=?TIME}}.
 
 %%
 %% PUBLIC API
@@ -63,30 +68,62 @@ get(stored)   ->
 %% INTERNAL CALLBACKS
 %%
 
+handle_call(Event,_,State) ->
+    lager:warning("non catched call: ~p", [Event]),
+    {reply, ok, State}.
 
-%handle_call(Event,_,State) ->
-%    lager:warning("non catched call: ~p", [Event]),
-%    {reply, ok, State}.
-%
-%
-%handle_cast(Event, State) ->
-%    lager:warning("non catched cast: ~p", [Event]),
-%    {noreply, State}.
-%
-%
-%handle_info(Info, State) ->
-%    lager:warning("non catched info: ~p", [Info]),
-%    {noreply, State}.
-%
-%terminate(_,_) ->
-%    lager:error("~p terminated", [?MODULE]),
-%    ok.
-%
-%code_change(_, State, _) ->
-%    {ok, State}.
-%
+
+handle_cast(Event, State) ->
+    lager:warning("non catched cast: ~p", [Event]),
+    {noreply, State}.
+
+
+handle_info(timeout, State) ->
+    lager:debug("timeout"),
+    [ publish(metric(T, State)) || T <- [version, uptime] ],
+
+    erlang:send_after(?DFT_TIMEOUT, self(), timeout),
+    {noreply, State};
+
+handle_info(Info, State) ->
+    lager:warning("non catched info: ~p", [Info]),
+    {noreply, State}.
+
+
+terminate(_,_) ->
+    lager:error("~p terminated", [?MODULE]),
+    ok.
+
+
+code_change(_, State, _) ->
+    {ok, State}.
+
 
 %%
 %% INTERNAL FUNS
 %%
+
+
+%TODO: should be computed once at start only (maybe recomputed on code_change)
+metric(version, _) ->
+    [Version] = lists:filtermap(
+        fun({X,_,V}) -> if X =:= wave -> {true, V}; true -> false end end,
+        application:loaded_applications()
+    ),
+
+    {<<"broker/version">>, Version};
+
+metric(uptime, #state{start=Start}) ->
+    Uptime = ?TIME - Start,
+    %NOTE: we use same format as mosquitto (string :: "%d seconds")
+    {<<"broker/uptime">>, <<(wave_utils:bin(Uptime))/binary, " seconds">>}.
+
+    
+publish({Topic, Content}) ->
+    Msg = #mqtt_msg{type='PUBLISH', qos=0, payload=[
+        {topic, <<"$SYS/", Topic/binary>>}, {msgid, 0}, {data, wave_utils:bin(Content)}]
+    },
+
+    {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
+    mqtt_message_worker:publish(MsgWorker, self(), Msg). % async
 
