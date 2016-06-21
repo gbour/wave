@@ -62,11 +62,19 @@ get(retained) ->
     wave_db:count(<<"retain:*">>);
 % stored messages (in redis)
 get(stored)   ->
-    wave_db:count(<<"msg:*:refcount">>).
+    wave_db:count(<<"msg:*:refcount">>);
+% server uptime
+get(uptime)  ->
+    {ok, gen_server:call(?MODULE, uptime)}.
+
 
 %%
 %% INTERNAL CALLBACKS
 %%
+
+handle_call(uptime, _, State=#state{start=Start}) ->
+    Uptime = ?TIME - Start,
+    {reply, Uptime, State};
 
 handle_call(Event,_,State) ->
     lager:warning("non catched call: ~p", [Event]),

@@ -86,6 +86,7 @@ class Metrics(TestSuite):
             'wave.messages'        : ('retained', 'stored'),
             'wave.subscriptions'   : ('ms_since_reset', 'value'),
             'wave.messages.inflight': ('ms_since_reset', 'value'),
+            'wave'                  : ('uptime',),
         }
 
         subscriptions = yield env.remote('exometer_report', 'list_subscriptions',
