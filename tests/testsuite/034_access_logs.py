@@ -20,8 +20,10 @@ parser = apache_log_parser.make_parser(APACHE_COMBINED)
 def _match(f, conds):
     time.sleep(.5)
     try:
-        line = parser(f.readline())
+        rawline = f.readline()
+        line = parser(rawline)
         #pprint(line)
+
         for k, v in conds.iteritems():
             if line[k] != v:
                 print '  {0} not matching {1} (is {2})'.format(k, v, line[k])
@@ -99,3 +101,24 @@ class AccessLog(TestSuite):
 
         return True
 
+    @catch
+    @desc("PUBLISH ($ prefixed - rejected)")
+    def test_004(self):
+        f = open('../log/wave.access.log', 'r')
+        f.seek(0, os.SEEK_END)
+
+        # here we start
+        # NOTE: invalid publish cause disconnection
+        for qos in (0,1,2):
+            c = MqttClient("conformity", connect=4)
+            time.sleep(.5); f.readline() # skip CONNECT
+            c.publish("$SYS/bar", "baz", qos=qos)
+
+            if not _match(f, {'request_method': 'PUBLISH', 'request_url': '$SYS/bar', 'response_bytes_clf': '3',
+                              'status': '403', 'request_header_user_agent': c.client_id}):
+                return False
+
+
+        return True
+
+    #TODO: test PUBLISH already inflight (409)

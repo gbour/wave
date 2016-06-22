@@ -300,7 +300,7 @@ connected(Msg=#mqtt_msg{type='PUBLISH', qos=0, payload=P}, _,
     {StatusCode, Reply} = case Prefix of
         <<"$">> ->
             lager:notice("~p: publishing to '$' prefixed topic is forbidden", [Topic]),
-            {404, {stop, normal, disconnect, StateData}};
+            {403, {stop, normal, disconnect, StateData}};
 
         _       ->
 
@@ -334,7 +334,7 @@ connected(Msg=#mqtt_msg{type='PUBLISH', payload=P, qos=Qos, dup=Dup}, _,
         % $... topic
         {<<"$">>, _}   ->
             lager:notice("~p: publishing to '$' prefixed topic is forbidden", [Topic]),
-            {404, {stop, normal, disconnect, StateData}};
+            {403, {stop, normal, disconnect, StateData}};
 
         {_, undefined} ->
             % only if retain=1
