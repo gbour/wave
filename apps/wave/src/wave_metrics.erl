@@ -88,7 +88,29 @@ handle_cast(Event, State) ->
 
 handle_info(timeout, State) ->
     lager:debug("timeout"),
-    [ publish(metric(T, State)) || T <- [version, uptime] ],
+    [ publish(metric(T, State)) || T <- [version, uptime, sent, received, clients] ],
+
+    ExoMetrics = [
+        {[wave,sessions], [
+            {active , <<"broker/clients/connected">>},
+            {offline, <<"broker/clients/disconnected">>}
+        ]}
+        ,{[wave,packets,received] , [{count, <<"broker/messages/received">>}]}
+        ,{[wave,packets,sent]     , [{count, <<"broker/messages/sent">>}]}
+        ,{[wave,messages,in,0]    , [{count, <<"broker/publish/messages/received/qos 0">>}]}
+        ,{[wave,messages,in,1]    , [{count, <<"broker/publish/messages/received/qos 1">>}]}
+        ,{[wave,messages,in,2]    , [{count, <<"broker/publish/messages/received/qos 2">>}]}
+        ,{[wave,messages,out,0]   , [{count, <<"broker/publish/messages/sent/qos 0">>}]}
+        ,{[wave,messages,out,1]   , [{count, <<"broker/publish/messages/sent/qos 1">>}]}
+        ,{[wave,messages,out,2]   , [{count, <<"broker/publish/messages/sent/qos 2">>}]}
+        ,{[wave,messages,inflight], [{value, <<"broker/messages/inflight">>}]}
+        ,{[wave,messages], [
+            {retained, <<"broker/retained messages/count">>},
+            {stored  , <<"broker/messages/stored">>}
+        ]}
+        ,{[wave,subscriptions]    , [{value, <<"broker/subscriptions/count">>}]}
+    ],
+    exometrics(ExoMetrics),
 
     erlang:send_after(?DFT_TIMEOUT, self(), timeout),
     {noreply, State};
@@ -124,9 +146,53 @@ metric(version, _) ->
 metric(uptime, #state{start=Start}) ->
     Uptime = ?TIME - Start,
     %NOTE: we use same format as mosquitto (string :: "%d seconds")
-    {<<"broker/uptime">>, <<(wave_utils:bin(Uptime))/binary, " seconds">>}.
+    {<<"broker/uptime">>, <<(wave_utils:bin(Uptime))/binary, " seconds">>};
 
-    
+% sent messages: sum of sent messages for each topic
+metric(sent, _) ->
+    Sum = lists:foldl(
+        fun({_, DPs}, Acc) -> proplists:get_value(count, DPs, 0)+Acc end,
+        0, exometer:get_values([wave,messages,out])
+    ),
+    {<<"broker/publish/messages/sent">>, Sum};
+
+% received messages: sum of received messages for each topic
+metric(received, _) ->
+    Sum = lists:foldl(
+        fun({_, DPs}, Acc) -> proplists:get_value(count, DPs, 0)+Acc end,
+        0, exometer:get_values([wave,messages,in])
+    ),
+    {<<"broker/publish/messages/received">>, Sum};
+
+% sum of connected and offline (disconnected) clients
+metric(clients, _) ->
+   {ok, Values} = exometer:get_value([wave,sessions]),
+    Sum = lists:foldl(
+        fun({_, Value}, Acc) -> Value+Acc end,
+        0, Values
+    ),
+    {<<"broker/clients/total">>, Sum}.
+
+
+exometrics([])                      ->
+    ok;
+exometrics([{Name, DPs} | T]) ->
+    case exometer:get_value(Name) of
+        {ok, Values} -> exometrics2(Name, DPs, Values);
+        Err          -> lager:info("Exometer ~p metric not found", [Name])
+    end,
+    exometrics(T).
+
+exometrics2(_, [], _) ->
+    ok;
+exometrics2(Name, [{DP, Topic} | T], Values) ->
+    case proplists:get_value(DP, Values) of
+        undefined -> lager:info("Exometer datapoint ~p not found for ~p metric", [DP, Name]);
+        Value     -> publish({Topic, Value})
+    end,
+    exometrics2(Name, T, Values).
+
+
 publish({Topic, Content}) ->
     Msg = #mqtt_msg{type='PUBLISH', qos=0, payload=[
         {topic, <<"$SYS/", Topic/binary>>}, {msgid, 0}, {data, wave_utils:bin(Content)}]
