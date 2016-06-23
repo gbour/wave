@@ -1,0 +1,5 @@
+anonymous	allow	write	foo/bar
+
+foo	allow	readwrite	acl/foo/rw/#
+foo	allow	read	acl/foo/r/#
+foo	allow	write	acl/foo/w/#
