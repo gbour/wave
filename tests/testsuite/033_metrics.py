@@ -4,7 +4,7 @@
 import time
 import redis
 import socket
-import pprint
+from   pprint import pprint
 
 from lib import env
 from TestSuite import *
@@ -31,6 +31,11 @@ def exo_value(key):
     sessions = yield env.remote('exometer','get_value', key)
     defer.returnValue(dict(twotp.to_python(sessions)[1]))
 
+def sys_value(client, topic, casttype):
+    while True:
+        evt = client.recv()
+        if isinstance(evt, EventPublish) and evt.msg.topic == topic:
+            return casttype(evt.msg.payload)
 
 class Metrics(TestSuite):
     """
@@ -86,11 +91,12 @@ class Metrics(TestSuite):
             'wave.messages'        : ('retained', 'stored'),
             'wave.subscriptions'   : ('ms_since_reset', 'value'),
             'wave.messages.inflight': ('ms_since_reset', 'value'),
+            'wave'                  : ('uptime',),
         }
 
         subscriptions = yield env.remote('exometer_report', 'list_subscriptions',
                                          twotp.Atom('exometer_report_statsd'))
-        #pprint.pprint(twotp.to_python(subscriptions))
+        #pprint(twotp.to_python(subscriptions))
         for (name, datapoints, delay, args) in twotp.to_python(subscriptions):
             name = '.'.join([str(x) for x in name])
 
@@ -190,3 +196,72 @@ class Metrics(TestSuite):
         c.disconnect()
         defer.returnValue(True)
 
+    @catch
+    @desc("$SYS hierarchy: listing metrics")
+    def test_020(self):
+        metrics = [
+            '$SYS/broker/uptime',
+            '$SYS/broker/version',
+            '$SYS/broker/clients/total',
+            '$SYS/broker/clients/connected',
+            '$SYS/broker/clients/disconnected',
+            '$SYS/broker/messages/sent',
+            '$SYS/broker/messages/received',
+            '$SYS/broker/messages/inflight',
+            '$SYS/broker/messages/stored',
+            '$SYS/broker/publish/messages/sent',
+            '$SYS/broker/publish/messages/sent/qos 0',
+            '$SYS/broker/publish/messages/sent/qos 1',
+            '$SYS/broker/publish/messages/sent/qos 2',
+            '$SYS/broker/publish/messages/received',
+            '$SYS/broker/publish/messages/received/qos 0',
+            '$SYS/broker/publish/messages/received/qos 1',
+            '$SYS/broker/publish/messages/received/qos 2',
+            '$SYS/broker/retained messages/count',
+            '$SYS/broker/subscriptions/count',
+        ]
+
+        c = MqttClient("metrics", connect=4)
+        c.subscribe('$SYS/#', qos=0)
+
+        while True:
+            evt = c.recv()
+            if evt is not None: break
+
+        stats = {evt.msg.topic: evt.msg.payload}
+        while True:
+            evt = c.recv()
+            if evt is None: break
+
+            stats[evt.msg.topic] = evt.msg.payload
+
+        #pprint(stats)
+        for topic in metrics:
+            if topic not in stats:
+                print '  {0} metric not in $SYS'.format(topic)
+                return False
+
+            del stats[topic]
+
+        if len(stats) > 0:
+            print 'extra $SYS metrics:', stats
+
+        c.disconnect()
+        return True
+
+    @catch
+    @desc("$SYS hierarchy: PUBLISH received counter")
+    def test_021(self):
+        c = MqttClient("metrics", connect=4)
+        d = MqttClient("duck", connect=3)
+        c.subscribe('$SYS/#', qos=0)
+
+        pubs_start = sys_value(c, "$SYS/broker/publish/messages/received", int)
+        d.publish("foo/bar", "")
+        pubs_end = sys_value(c, "$SYS/broker/publish/messages/received", int)
+
+        if pubs_end != pubs_start+1:
+            return False
+
+        c.disconnect()
+        return True

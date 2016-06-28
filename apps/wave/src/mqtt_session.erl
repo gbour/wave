@@ -291,54 +291,72 @@ connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=_Ref,keepaliv
     {reply, undefined, connected, StateData#session{pingid=undefined}, Ka};
 
 
-connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _,
+connected(Msg=#mqtt_msg{type='PUBLISH', qos=0, payload=P}, _,
           StateData=#session{deviceid=DeviceID,keepalive=Ka,opts=Opts}) ->
-    % only if retain=1
+
     exometer:update([wave,messages,in,0], 1),
-    mqtt_retain:store(Msg),
 
-    %TODO: save message in DB
-    %      pass MsgID to message_worker
-    {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
-    mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
+    Topic = <<Prefix:1/binary, _/binary>> = proplists:get_value(topic, P),
+    {StatusCode, Reply} = case Prefix of
+        <<"$">> ->
+            lager:notice("~p: publishing to '$' prefixed topic is forbidden", [Topic]),
+            {403, {stop, normal, disconnect, StateData}};
 
-    Topic = proplists:get_value(topic, Msg#mqtt_msg.payload),
+        _       ->
+
+            % only if retain=1
+            mqtt_retain:store(Msg),
+
+            %TODO: save message in DB
+            %      pass MsgID to message_worker
+            {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
+            mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
+
+            {200, {reply, undefined, connected, StateData, Ka}}
+    end,
+
     Size  = erlang:byte_size(proplists:get_value(data, Msg#mqtt_msg.payload, <<>>)),
-    wave_access_log:log(#{verb => 'PUBLISH', uri => Topic, status_code => 200, ua => DeviceID,
+    wave_access_log:log(#{verb => 'PUBLISH', uri => Topic, status_code => StatusCode, ua => DeviceID,
                           size => Size, ip => (maps:get(addr, Opts))#addr.ip}),
 
-    {reply, undefined, connected, StateData, Ka};
+    Reply;
 
 % qos > 0
 connected(Msg=#mqtt_msg{type='PUBLISH', payload=P, qos=Qos, dup=Dup}, _,
           StateData=#session{deviceid=DeviceID,keepalive=Ka,inflight=Inflight,opts=Opts}) ->
 
     exometer:update([wave,messages,in,Qos], 1),
+
+    Topic = <<Prefix:1/binary, _/binary>> = proplists:get_value(topic, P),
     %TODO: save message in DB
-    MsgID     = proplists:get_value(msgid, P),
-    {Inflight2, StatusCode} = case proplists:get_value(MsgID, Inflight) of
-        undefined ->
+    MsgID = proplists:get_value(msgid, P),
+    {StatusCode, Reply} = case {Prefix, proplists:get_value(MsgID, Inflight)} of
+        % $... topic
+        {<<"$">>, _}   ->
+            lager:notice("~p: publishing to '$' prefixed topic is forbidden", [Topic]),
+            {403, {stop, normal, disconnect, StateData}};
+
+        {_, undefined} ->
             % only if retain=1
             mqtt_retain:store(Msg),
             %      pass MsgID to message_worker
             {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
             mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
-
+            
             exometer:update([wave,messages,inflight], 1),
-            {[{MsgID, MsgWorker} | Inflight], 200};
+            {200, {reply, undefined, connected, StateData#session{inflight=[{MsgID, MsgWorker} | Inflight]}, Ka}};
 
         % message is already inflight
         _ ->
             lager:notice("message %~p already inflight (dup=~p). Ignored", [MsgID, Dup]),
-            {Inflight, 409}
+            {409, {reply, undefined, connected, StateData, Ka}}
     end,
 
-    Topic = proplists:get_value(topic, Msg#mqtt_msg.payload),
     Size  = erlang:byte_size(proplists:get_value(data, Msg#mqtt_msg.payload, <<>>)),
     wave_access_log:log(#{verb => 'PUBLISH', uri => Topic, status_code => StatusCode, ua => DeviceID,
                           size => Size, ip => (maps:get(addr, Opts))#addr.ip}),
 
-    {reply, undefined, connected, StateData#session{inflight=Inflight2}, Ka};
+    Reply;
 
 %TODO: factorize PUBACK/PUBREC/PUBREL/PUBCOMP code
 connected(Msg=#mqtt_msg{type='PUBACK', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->

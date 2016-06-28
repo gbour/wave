@@ -52,6 +52,8 @@ bin(X) when is_list(X) ->
     erlang:list_to_binary(X);
 bin(X) when is_integer(X) ->
     erlang:integer_to_binary(X);
+bin(X) when is_binary(X)  ->
+    X;
 bin(_) ->
     erlang:error(wrongtype).
 
