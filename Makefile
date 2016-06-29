@@ -35,6 +35,8 @@ setup:
 	./rebar3 as tmpl compile
 	# generate config file for choosed environment
 	./bin/build_dev_env $(TMPL_CFG) config/vars.$(env).config .wave.$(env).config
+	# generate config file for choosed environment
+	./bin/build_dev_env bin/mkpasswd.tmpl config/vars.$(env).config bin/mkpasswd && chmod 755 bin/mkpasswd
 
 run: build setup
 	# run application in choosed environment
