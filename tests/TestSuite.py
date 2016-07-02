@@ -54,6 +54,9 @@ class TestSuite(object):
     def __init__(self, suitename):
         self.suitename = suitename
 
+    def cleanup(self):
+        pass
+
     @defer.inlineCallbacks
     def run(self, testfilter):
         status = True
@@ -83,6 +86,7 @@ class TestSuite(object):
             counters[DISPLAY[ret][1].lower()] += 1
             status &= DISPLAY[ret][-1]
 
+        yield self.cleanup()
         defer.returnValue((status, counters))
 
     def _print(self, (color, text, _ign), funcname, testname):

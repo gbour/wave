@@ -26,7 +26,7 @@
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
 -export([handle/2, publish/7, ack/4, provisional/4, is_alive/1, garbage_collect/1, disconnect/2, landed/2]).
--export([initiate/3, connected/2, connected/3]).
+-export([initiate/3, initiate/2, connected/2, connected/3]).
 %
 % role
 %   store active sessions (== 1 device connection)
@@ -64,7 +64,7 @@
     deviceid               :: binary(),
     topics     = []        :: list({Topic::binary(), Qos::integer()}), % list of subscribed topics
     transport              :: mqtt_ranch_protocol:transport(),
-    opts                   :: list({Key::atom(), Val::any()}),
+    opts                   :: map(),
     pingid     = undefined :: undefined,
     keepalive              :: integer(),
     %TODO: use maps instead (test performances improvement)
@@ -82,8 +82,7 @@
 -define(CONNECT_TIMEOUT  , 5000). % ms
 -define(DEFAULT_KEEPALIVE, 300).  % secs
 
--spec start_link(mqtt_ranch_protocol:transport(), list({atom(), any()})) -> {ok, pid()} 
-                                                                            | ignore | {error, any()}.
+-spec start_link(mqtt_ranch_protocol:transport(), map()) -> {ok, pid()} | ignore | {error, any()}.
 start_link(Transport, Opts) ->
     gen_fsm:start_link(?MODULE, [Transport, Opts], []).
 
@@ -94,12 +93,12 @@ init([Transport, Opts]) ->
     {ok, initiate, #session{transport=Transport, opts=Opts, next_msgid=random:uniform(65535)}, 
          ?CONNECT_TIMEOUT}.
 
-%%
+%
+% process message received on socket
+% TODO: error cases
 -spec handle(pid(), mqtt_msg()) -> {ok, any()}.
 handle(Pid, Msg) ->
 	Resp = gen_fsm:sync_send_event(Pid, Msg),
-	lager:info("return: ~p", [Resp]),
-
 	{ok, Resp}.
 
 -spec landed(pid(), binary()) -> ok.
@@ -161,7 +160,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
 	%gen_fsm:start_timer(5000, timeout1),
 	%lager:info("timeout set"),
     DeviceID = proplists:get_value(clientid, P),
-    lager:info("received CONNECT - deviceid = <<\"~ts\">>", [DeviceID]),
+    %lager:info("received CONNECT - deviceid = <<\"~ts\">>", [DeviceID]),
 
     User     = proplists:get_value(username, P),
     Pwd      = proplists:get_value(password, P),
@@ -174,7 +173,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
     % load device settings from db
     Settings = case wave_redis:device({deviceid, DeviceID}) of
         {error, Err} ->
-            lager:info("~p: failed to get settings (~p)", [DeviceID, Err]),
+            lager:info("~p settings: ~p", [DeviceID, Err]),
             [];
 
         {ok, Setts} ->
@@ -182,7 +181,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
     end,
 
     {MSecs, Secs, _} = os:timestamp(),
-    Vals             = [{state,connecting},{username,User},{ts, MSecs*1000000+Secs},{clean, Clean} | Opts],
+    Vals             = Opts#{state => connecting, username => User, ts => MSecs*1000000+Secs, clean => Clean},
 
     Res1 = case {Clean, DeviceID} of
         {0, <<>>} ->
@@ -215,30 +214,33 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
 
     Res2 = case Res1 of
         ok ->
-            wave_auth:check(application:get_env(wave, auth_required), DeviceID, {User, Pwd}, Settings);
+            wave_auth:check(wave_app:env([auth,required]), DeviceID, {User, Pwd}, Settings);
 
         Err1 -> Err1
     end,
 
-    {Retcode, SessionPresent, Topics} = case Res2 of
+    {Retcode, SessionPresent, Topics, StatusCode} = case Res2 of
         {ok, _} ->
             {Exists, Topics2} = offline_unstore(DeviceID, Clean),
             lager:debug("restored topics: ~p", [Topics2]),
-            {0, Exists, Topics2};
+            {0, Exists, Topics2, 200};
 
         {error, taken}   ->
-            {2, false, []};
+            {2, false, [], 409};
         {error, wrong_id} ->
-            {2, false, []};
+            {2, false, [], 400};
         {error, bad_credentials} ->
-            {4, false, []} % not authorized
+            {4, false, [], 401} % not authorized
     end,
 
     wave_event_router:route(<<"$/mqtt/CONNECT">>, [{deviceid, DeviceID}, {retcode, Retcode}]),
 
     % update device status in redis
-    lager:debug("RES= ~p", [Res2]),
+    lager:debug("~p CONNECT status: ~p", [DeviceID, Res2]),
     Resp = #mqtt_msg{type='CONNACK', payload=[{session, wave_utils:int(SessionPresent)},{retcode, Retcode}]},
+
+    wave_access_log:log(#{verb => 'CONNECT', status_code => StatusCode, ua => DeviceID,
+                           ip => (maps:get(addr, Opts))#addr.ip}),
 
     case Retcode of
         0 ->
@@ -254,19 +256,28 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
             {stop, normal, {disconnect, Resp}, undefined}
     end;
 
-initiate(#mqtt_msg{type=Type}, _, _StateData=#session{transport={Callback,Transport,Sock}}) ->
+initiate(#mqtt_msg{type=Type}, _, _StateData=#session{transport={Callback,Transport,Sock}, opts=Opts}) ->
     lager:info("first packet MUST be CONNECT (is ~p)", [Type]),
+    wave_access_log:log(#{verb => Type, status_code => 405, ua => "", ip => (maps:get(addr, Opts))#addr.ip}),
+
     Callback:close(Transport, Sock),
     {stop, normal, disconnect, undefined};
+% TODO: is it ever executed ?
 initiate({timeout, _, timeout1}, _, _StateData) ->
 	lager:info("initiate timeout"),
 	{stop, disconnect, []}.
 
-initiate(timeout, StateData) ->
-    lager:error("initiate:: timeout"),
+initiate(timeout, StateData=#session{transport={Callback,Transport,Sock}}) ->
+    lager:notice("initiate:: timeout ~p", [StateData]),
+    Callback:close(Transport, Sock),
+    %TODO: disconnect reason is throwing a log error w/ CRASH REPORT
+    %      which reason should we use
     {stop, disconnect, StateData}.
 
-connected(#mqtt_msg{type='DISCONNECT'}, _, StateData) ->
+connected(#mqtt_msg{type='DISCONNECT'}, _, StateData=#session{deviceid=DeviceID, opts=Opts}) ->
+    wave_access_log:log(#{verb => 'DISCONNECT', status_code => 200, ua => DeviceID,
+                           ip => (maps:get(addr, Opts))#addr.ip}),
+
     {stop, normal, disconnect, StateData#session{will=undefined}};
 
 connected(#mqtt_msg{type='PINGREQ'}, _, StateData=#session{keepalive=Ka}) ->
@@ -274,47 +285,80 @@ connected(#mqtt_msg{type='PINGREQ'}, _, StateData=#session{keepalive=Ka}) ->
     {reply, Resp, connected, StateData, Ka};
 
 connected(#mqtt_msg{type='PINGRESP'}, _, StateData=#session{pingid=_Ref,keepalive=Ka}) ->
-    lager:info("received PINGRESP"),
+    %lager:info("received PINGRESP"),
     %BUG? timer never started
     %gen_fsm:cancel_timer(Ref),
     {reply, undefined, connected, StateData#session{pingid=undefined}, Ka};
 
 
-connected(Msg=#mqtt_msg{type='PUBLISH', qos=0}, _, StateData=#session{deviceid=_DeviceID,keepalive=Ka}) ->
-    % only if retain=1
-    mqtt_retain:store(Msg),
+connected(Msg=#mqtt_msg{type='PUBLISH', qos=0, payload=P}, _,
+          StateData=#session{deviceid=DeviceID,keepalive=Ka,opts=Opts}) ->
 
-    %TODO: save message in DB
-    %      pass MsgID to message_worker
-    {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
-    mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
+    exometer:update([wave,messages,in,0], 1),
 
-    {reply, undefined, connected, StateData, Ka};
+    Topic = <<Prefix:1/binary, _/binary>> = proplists:get_value(topic, P),
+    {StatusCode, Reply} = case Prefix of
+        <<"$">> ->
+            lager:notice("~p: publishing to '$' prefixed topic is forbidden", [Topic]),
+            {403, {stop, normal, disconnect, StateData}};
+
+        _       ->
+
+            % only if retain=1
+            mqtt_retain:store(Msg),
+
+            %TODO: save message in DB
+            %      pass MsgID to message_worker
+            {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
+            mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
+
+            {200, {reply, undefined, connected, StateData, Ka}}
+    end,
+
+    Size  = erlang:byte_size(proplists:get_value(data, Msg#mqtt_msg.payload, <<>>)),
+    wave_access_log:log(#{verb => 'PUBLISH', uri => Topic, status_code => StatusCode, ua => DeviceID,
+                          size => Size, ip => (maps:get(addr, Opts))#addr.ip}),
+
+    Reply;
 
 % qos > 0
-connected(Msg=#mqtt_msg{type='PUBLISH', payload=P, dup=Dup}, _,
-          StateData=#session{deviceid=_DeviceID,keepalive=Ka,inflight=Inflight}) ->
+connected(Msg=#mqtt_msg{type='PUBLISH', payload=P, qos=Qos, dup=Dup}, _,
+          StateData=#session{deviceid=DeviceID,keepalive=Ka,inflight=Inflight,opts=Opts}) ->
 
+    exometer:update([wave,messages,in,Qos], 1),
+
+    Topic = <<Prefix:1/binary, _/binary>> = proplists:get_value(topic, P),
     %TODO: save message in DB
-    MsgID     = proplists:get_value(msgid, P),
-    Inflight2 = case proplists:get_value(MsgID, Inflight) of
-        undefined ->
+    MsgID = proplists:get_value(msgid, P),
+    {StatusCode, Reply} = case {Prefix, proplists:get_value(MsgID, Inflight)} of
+        % $... topic
+        {<<"$">>, _}   ->
+            lager:notice("~p: publishing to '$' prefixed topic is forbidden", [Topic]),
+            {403, {stop, normal, disconnect, StateData}};
+
+        {_, undefined} ->
             % only if retain=1
             mqtt_retain:store(Msg),
             %      pass MsgID to message_worker
             {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
             mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
             
-            [{MsgID, MsgWorker} | Inflight];
+            exometer:update([wave,messages,inflight], 1),
+            {200, {reply, undefined, connected, StateData#session{inflight=[{MsgID, MsgWorker} | Inflight]}, Ka}};
 
         % message is already inflight
         _ ->
-            lager:info("message %~p already inflight (dup=~p). Ignored", [MsgID, Dup]),
-            Inflight
+            lager:notice("message %~p already inflight (dup=~p). Ignored", [MsgID, Dup]),
+            {409, {reply, undefined, connected, StateData, Ka}}
     end,
 
-    {reply, undefined, connected, StateData#session{inflight=Inflight2}, Ka};
+    Size  = erlang:byte_size(proplists:get_value(data, Msg#mqtt_msg.payload, <<>>)),
+    wave_access_log:log(#{verb => 'PUBLISH', uri => Topic, status_code => StatusCode, ua => DeviceID,
+                          size => Size, ip => (maps:get(addr, Opts))#addr.ip}),
 
+    Reply;
+
+%TODO: factorize PUBACK/PUBREC/PUBREL/PUBCOMP code
 connected(Msg=#mqtt_msg{type='PUBACK', payload=P}, _, StateData=#session{keepalive=Ka,inflight=Inflight}) ->
     %TODO: find matching
     MsgID  = proplists:get_value(msgid, P),
@@ -322,7 +366,7 @@ connected(Msg=#mqtt_msg{type='PUBACK', payload=P}, _, StateData=#session{keepali
     case proplists:get_value(MsgID, Inflight) of
         % invalid msgid: message ignored
         undefined ->
-            lager:warning("PUBACK: unmatched '~p' MsgID", [MsgID]);
+            lager:notice("PUBACK: inflight '~p' MsgID not found", [MsgID]);
 
         Worker ->
             lager:debug("received PUBACK (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
@@ -337,7 +381,7 @@ connected(Msg=#mqtt_msg{type='PUBREC', payload=P}, _, StateData=#session{keepali
     case proplists:get_value(MsgID, Inflight) of
         % invalid msgid: message ignored
         undefined ->
-            lager:warning("PUBREC: unmatched '~p' MsgID", [MsgID]);
+            lager:notice("PUBREC: inflight '~p' MsgID not found", [MsgID]);
 
         Worker ->
             lager:debug("received PUBREC (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
@@ -352,7 +396,7 @@ connected(Msg=#mqtt_msg{type='PUBREL', payload=P}, _, StateData=#session{keepali
     case proplists:get_value(MsgID, Inflight) of
         % invalid msgid: message ignored
         undefined ->
-            lager:warning("PUBREL: unmatched '~p' MsgID", [MsgID]);
+            lager:notice("PUBREL: inflight '~p' MsgID not found", [MsgID]);
 
         Worker ->
             lager:debug("received PUBREL (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
@@ -367,7 +411,7 @@ connected(Msg=#mqtt_msg{type='PUBCOMP', payload=P}, _, StateData=#session{keepal
     case proplists:get_value(MsgID, Inflight) of
         % invalid msgid: message ignored
         undefined ->
-            lager:warning("PUBCOMP: unmatched '~p' MsgID", [MsgID]);
+            lager:notice("PUBCOMP: inflight '~p' MsgID not found", [MsgID]);
 
         Worker ->
             lager:debug("received PUBCOMP (msgid= ~p): forwarded to ~p message worker", [MsgID, Worker]),
@@ -378,7 +422,7 @@ connected(Msg=#mqtt_msg{type='PUBCOMP', payload=P}, _, StateData=#session{keepal
 
 %TODO: prevent subscribing multiple times to the same topic
 connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, 
-          StateData=#session{deviceid=DeviceID, topics=T, keepalive=Ka}) ->
+          StateData=#session{deviceid=DeviceID, topics=T, keepalive=Ka, opts=Opts}) ->
 	MsgId  = proplists:get_value(msgid, P),
     Topics = proplists:get_value(topics, P),
 
@@ -388,23 +432,27 @@ connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _,
             S = {?MODULE, publish, self(), DeviceID},
             mqtt_retain:publish(S, Topic, TQos),
 
+            wave_access_log:log(#{verb => 'SUBSCRIBE', uri => Topic, status_code => 200, ua => DeviceID,
+                                   ip => (maps:get(addr, Opts))#addr.ip}),
+
             TQos
         end, Topics
     ),
 
     Resp  = #mqtt_msg{type='SUBACK', payload=[{msgid,MsgId},{qos, EQoses}]},
 
-    lager:info("Ka=~p", [Ka]),
     {reply, Resp, connected, StateData#session{topics=Topics++T}, Ka};
 
 connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _, 
-          StateData=#session{deviceid=DeviceID, topics=OldTopics, keepalive=Ka}) ->
+          StateData=#session{deviceid=DeviceID, topics=OldTopics, keepalive=Ka, opts=Opts}) ->
 	MsgId  = proplists:get_value(msgid, P),
     Topics = proplists:get_value(topics, P),
 
     % subscribe to all listed topics (creating it if it don't exists)
     lists:foreach(fun(T) ->
-            mqtt_topic_registry:unsubscribe(T, {?MODULE,publish,self(), DeviceID})
+            mqtt_topic_registry:unsubscribe(T, {?MODULE,publish,self(), DeviceID}),
+            wave_access_log:log(#{verb => 'UNSUBSCRIBE', uri => T, status_code => 200, ua => DeviceID,
+                                   ip => (maps:get(addr, Opts))#addr.ip})
         end,
         Topics
     ),
@@ -412,13 +460,12 @@ connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _,
     NewTopics = lists:subtract(OldTopics, Topics),
 	Resp  = #mqtt_msg{type='UNSUBACK', payload=[{msgid,MsgId}]},
 
-    lager:info("Ka=~p ~p", [Ka, OldTopics]),
     {reply, Resp, connected, StateData#session{topics=NewTopics}, Ka};
 
 
 connected(ping, _, StateData=#session{transport={Callback,Transport,Socket}}) ->
     Ret = Callback:crlfping(Transport, Socket),
-    lager:info("send CRLF ping= ~p", [Ret]),
+    lager:debug("sending CRLF ping= ~p", [Ret]),
     case Ret of
         {error, _Err} ->
             {stop, normal, disconnect, StateData};
@@ -437,7 +484,7 @@ connected(Event, _, State) ->
     {stop, error, disconnect, State}.
 
 connected({timeout, _, timeout1}, _StateData) ->
-	lager:info("timeout after connection"),
+	lager:notice("timeout after connection"),
 	{stop, disconnect, []};
 
 % ASYNC
@@ -446,38 +493,32 @@ connected({timeout, _, timeout1}, _StateData) ->
 % TODO: match DeviceID
 connected({publish, _, _, {Topic, _}, Content, Qos=0, Retain},
           StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
-    lager:debug(">PUBLISH ~p (qos ~p) to subscr", [Topic, Qos]),
+    lager:debug("send PUBLISH(topic=~p, qos=~p)", [Topic, Qos]),
+    exometer:update([wave,messages,out,0], 1),
 
     Msg   = #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain, payload=[{topic,Topic}, {content, Content}]},
     State = Callback:send(Transport, Socket, Msg),
-    lager:info("publish msg status= ~p", [State]),
 
     case State of
-        {error, _Err} ->
-            {stop, normal};
-
-        ok ->
-            lager:debug("OK, continue"),
-            {next_state, connected, StateData, Ka}
+        {error, _Err} -> {stop, normal};
+        ok            -> {next_state, connected, StateData, Ka}
     end;
 
 % QoS 1 or 2
 % NOTE: MsgID as already been impl. in {next_msgid, Qos} handler
 connected({publish, MsgID, From, {Topic,_}, Content, Qos, Retain},
           StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka,inflight=Inflight}) ->
-    lager:debug("send PUBLISH to subscriber (msgid=~p, qos=~p)", [MsgID, Qos]),
+    lager:debug("send PUBLISH(topic=~p, msgid=~p, qos=~p)", [Topic, MsgID, Qos]),
+    exometer:update([wave,messages,out,Qos], 1),
 
     Msg   = #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain,
                       payload=[{topic,Topic}, {msgid, MsgID}, {content, Content}]},
     State = Callback:send(Transport, Socket, Msg),
-    lager:info("publish msg status= ~p", [State]),
 
     case State of
-        {error, _Err} ->
-            {stop, normal};
-
-        ok ->
-            lager:debug("OK, continue"),
+        {error, _Err} -> {stop, normal};
+        ok            -> 
+            exometer:update([wave,messages,inflight], 1),
             {next_state, connected, StateData#session{inflight=[{MsgID, From}|Inflight]}, Ka}
     end;
 
@@ -486,14 +527,12 @@ connected({publish, MsgID, From, {Topic,_}, Content, Qos, Retain},
 % (to publisher)
 %
 connected({provreq, MsgID, _From}, StateData=#session{transport={Clb,Transport,Sock},keepalive=Ka}) ->
-    lager:debug("sending PUBREC"),
+    lager:debug("send PUBREC"),
+
     Msg = #mqtt_msg{type='PUBREC', qos=0, payload=[{msgid, MsgID}]},
     case Clb:send(Transport, Sock, Msg) of
-        {error, _} ->
-            {stop, normal};
-
-        ok ->
-            {next_state, connected, StateData, Ka}
+        {error, _} -> {stop, normal};
+        ok         -> {next_state, connected, StateData, Ka}
     end;
 
 %
@@ -501,51 +540,49 @@ connected({provreq, MsgID, _From}, StateData=#session{transport={Clb,Transport,S
 % (to subscriber)
 %
 connected({provresp, MsgID, _From}, StateData=#session{transport={Clb,Transport,Sock},keepalive=Ka}) ->
-    lager:debug("sending PUBREL"),
+    lager:debug("send PUBREL"),
+
     Msg = #mqtt_msg{type='PUBREL', qos=1, payload=[{msgid, MsgID}]},
     case Clb:send(Transport, Sock, Msg) of
-        {error, _} ->
-            {stop, normal};
-
-        ok ->
-            {next_state, connected, StateData, Ka}
+        {error, _} -> {stop, normal};
+        ok         -> {next_state, connected, StateData, Ka}
     end;
 
 %
 % sending PUBACK acknowledgement (QOS=1)
 %
 connected({ack, MsgID, _Qos=1, _}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
-    lager:debug("sending PUBACK"),
+    lager:debug("send PUBACK"),
+
     Msg = #mqtt_msg{type='PUBACK', qos=0, payload=[{msgid, MsgID}]},
     case Callback:send(Transport, Socket, Msg) of
-        {error, _} ->
-            {stop, normal};
-
-        ok ->
-            {next_state, connected, StateData, Ka}
+        {error, _} -> {stop, normal};
+        ok         -> {next_state, connected, StateData, Ka}
     end;
+
 % PUBCOMP (QOS=2)
 connected({ack, MsgID, _Qos=2, _}, StateData=#session{transport={Callback,Transport,Socket},keepalive=Ka}) ->
-    lager:debug("sending PUBCOMP"),
+    lager:debug("send PUBCOMP"),
+
     Msg = #mqtt_msg{type='PUBCOMP', qos=0, payload=[{msgid, MsgID}]},
     case Callback:send(Transport, Socket, Msg) of
-        {error, _} ->
-            {stop, normal};
-
-        ok ->
-            {next_state, connected, StateData, Ka}
+        {error, _} -> {stop, normal};
+        ok         -> {next_state, connected, StateData, Ka}
     end;
 
 %
 %TODO: what if peer disconnected between ack received and message landed ?
 %      do a pre-check when message received (qos1 = PUBACK, qos2 = PUBCOMP) ? 
-connected({'msg-landed', MsgID}, StateData=#session{keepalive=Ka, inflight=Inflight}) ->
+connected({'msg-landed', MsgID}, StateData=#session{keepalive=Ka, inflight=Inflight,
+                                                    deviceid=_DeviceID}) ->
     lager:debug("#~p message-id is no more in-flight", [MsgID]),
+    exometer:update([wave,messages,inflight], -1),
+
     {next_state, connected, StateData#session{inflight=proplists:delete(MsgID, Inflight)}, Ka};
 
 % KeepAlive was set and no PINREG (or any other ctrl packet) received in the interval
 connected(timeout, StateData=#session{transport={Callback,Transport,Socket}}) ->
-    lager:info("KEEPALIVE timeout expired"),
+    lager:notice("KEEPALIVE timeout expired"),
     % sending ping
     %Callback:ping(Transport, Socket),
     %Ref = gen_fsm:send_event_after(1000, ping_timeout),
@@ -555,14 +592,16 @@ connected(timeout, StateData=#session{transport={Callback,Transport,Socket}}) ->
     %{next_state, connected, StateData#session{pingid=Ref}};
     {stop, normal, StateData};
 
+%TODO: ever executed
 connected(ping_timeout, _StateData=#session{transport={Callback,Transport,Socket}}) ->
+    lager:notice("PING timeout"),
     Callback:close(Transport, Socket),
     {stop, normal, undefined}.
 
 
 
 handle_event({disconnect, Reason}, _StateName, StateData) ->
-    lager:error("session terminated. cause: ~p", [Reason]),
+    lager:notice("session terminated. cause: ~p", [Reason]),
     {stop, normal, StateData};
 
 handle_event(_Event, _StateName, StateData) ->
@@ -590,8 +629,17 @@ terminate(_Reason, _StateName, undefined) ->
     terminate;
 
 %NOTE: process/deviceid automatically unregistered from syn when process terminate
-terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, opts=Opts}) ->
-    lager:info("~n * deviceid : ~p~n * reason   : ~p~n * stateName: ~p~n * stateData: ~p", [DeviceID, _Reason, StateName, StateData]),
+terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, inflight=Inflight, opts=Opts}) ->
+    lager:debug("~n * deviceid : ~p~n * reason   : ~p~n * stateName: ~p~n * stateData: ~p", 
+                [DeviceID, _Reason, StateName, StateData]),
+    
+    if 
+        length(Inflight) > 0 -> 
+            exometer:update([wave,messages,inflight], -length(Inflight)),
+            lager:notice("~p: remaining inflight messages: ~p", [DeviceID, Inflight]);
+        true                 -> ok
+    end,
+
 
     %TODO: if unsubscribe THEN subscribe in offline, there is a small interval of time
     %      where topic is not registered
@@ -603,8 +651,9 @@ terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, op
     ),
 
     % saving topics if clean unset
-    offline_store(DeviceID, proplists:get_value(clean, Opts, 1), T),
+    offline_store(DeviceID, maps:get(clean, Opts, 1), T),
     send_last_will(StateData),
+
     terminate.
 
 code_change(_OldVsn, StateName, StateData, _Extra) ->
@@ -618,6 +667,7 @@ code_change(_OldVsn, StateName, StateData, _Extra) ->
 % return next message id
 % bounded to 2^16 (2 bytes long)
 %
+%TODO: improve algorithm (MsgID =:= 65535)
 -spec next_msgid(integer()) -> integer().
 next_msgid(MsgID) ->
     if

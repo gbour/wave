@@ -19,7 +19,7 @@
 
 -export([get/1, set/2, set/3, del/1]).
 -export([incr/1, decr/1]).
--export([append/2, push/2, pop/1, range/1, del/2, search/1, exists/1]).
+-export([append/2, push/2, pop/1, range/1, del/2, search/1, exists/1, count/1]).
 
 -type return() :: {ok, Value::eredis:return_value()} | {error, Reason::binary()}.
 
@@ -135,6 +135,15 @@ pop(List) ->
 -spec range(binary()) -> return().
 range(List) ->
     sharded_eredis:q(["LRANGE", List, 0, -1]).
+
+-spec count(binary()) -> integer() | return().
+count(Key) ->
+    %NOTE: 'KEYS' is locking
+    case  sharded_eredis:q(["EVAL", <<"return #redis.pcall('KEYS', '",Key/binary,"')">>, 0]) of
+        {ok, Res} ->
+            {ok, wave_utils:int(Res)};
+        Err -> Err
+    end.
 
 
 %%

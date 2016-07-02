@@ -2,7 +2,7 @@
 
 {application, wave, [
   {description, "MQTT broker"},
-  {vsn, "0.2.0"},
+  {vsn, "0.4.0"},
   {registered, []},
   {mod, { wave_app, []}},
   {applications, [
@@ -12,7 +12,10 @@
       ranch,
       sharded_eredis,
       lager,
-      jiffy
+      jiffy,
+      cowboy,
+      exometer,
+      erlpass
   ]},
   {env, []},
   {modules, []},

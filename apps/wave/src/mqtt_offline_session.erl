@@ -54,7 +54,7 @@ run({ack, _MsgID, _Qos, _}, State) ->
     {next_state, run, State};
 
 run({'msg-landed', MsgID}, State) ->
-    lager:error("msg ~p landed", [MsgID]),
+    lager:debug("msg ~p landed", [MsgID]),
     {next_state, run, State}.
 
 handle_event(_Event, _StateName, StateData) ->
@@ -70,7 +70,7 @@ handle_info(_Info, _StateName, StateData) ->
     {stop, error, StateData}.
 
 terminate(_Reason, _StateName, _State) ->
-    lager:info("session terminate with undefined state: ~p", [_Reason]),
+    lager:notice("session terminate with undefined state: ~p", [_Reason]),
     terminate.
 
 code_change(_OldVsn, StateName, StateData, _Extra) ->

@@ -137,7 +137,7 @@ run({ack, _MsgID, _Qos, _Worker}, State) ->
     {next_state, run, State};
 
 run({'msg-landed', MsgID}, State) ->
-    lager:error("msg ~p landed", [MsgID]),
+    lager:debug("msg ~p landed", [MsgID]),
     {next_state, run, State}.
 
 handle_event(_Event, _StateName, StateData) ->

@@ -98,7 +98,7 @@ handle_call({publish, DeviceID, {Topic, TopicF}, Content, Qos, Retain, MsgWorker
     %TODO: store TopicF also ?
     wave_db:push(<<"queue:", DeviceID/binary>>, [Topic, Qos, MsgHash]),
     R3 = wave_db:incr(<<"msg:", MsgHash/binary, ":refcount">>),
-    lager:info("~p", [R3]),
+    %lager:info("~p", [R3]),
 
     % when qos > 0, message must be acknowledged
     priv_ack(Qos, MsgWorker, MsgID),
@@ -138,6 +138,8 @@ handle_cast(Event, State) ->
 %NOTE: need to set msgid to pair ack msg w/ publish
 handle_info({'$gen_event', {provresp, MsgID, MsgWorker}}, State) ->
     mqtt_message_worker:ack(MsgWorker, self(), #mqtt_msg{type='PUBCOMP', payload=[{msgid, MsgID}]}),
+    {noreply, State};
+handle_info({'$gen_event', {'msg-landed', _}}, State) ->
     {noreply, State};
 
 handle_info(Info, State) ->

@@ -37,7 +37,7 @@
 
 
 %
--export([dump/0, subscribe/3, unsubscribe/1, unsubscribe/2, match/1]).
+-export([count/0, dump/0, subscribe/3, unsubscribe/1, unsubscribe/2, match/1]).
 -ifdef(DEBUG).
     -export([debug_cleanup/0]).
 -endif.
@@ -49,6 +49,7 @@ start_link() ->
     gen_server:start_link({local,?MODULE}, ?MODULE, [], []).
 
 init(_) ->
+    exometer:update([wave,subscriptions], 0),
     {ok, #state{}}.
 
 %%
@@ -61,7 +62,6 @@ init(_) ->
 % Name: TopicName | {TopicName, Fields}
 -spec subscribe(Topic :: binary(), Qos :: integer(), Subscriber :: subscriber()) -> ok | duplicate.
 subscribe(Name, Qos, Subscriber) ->
-    lager:debug("~p subscribing to ~p topic (qos ~p)", [Subscriber, Name, Qos]),
     gen_server:call(?MODULE, {subscribe, Name, Qos, Subscriber}).
 
 
@@ -80,6 +80,10 @@ match(Name) ->
     gen_server:call(?MODULE, {match, Name}).
 
 
+-spec count() -> {ok, integer()}.
+count() ->
+    {ok, gen_server:call(?MODULE, count)}.
+    
 -spec dump() -> ok.
 dump() ->
     gen_server:call(?MODULE, dump).
@@ -94,15 +98,22 @@ debug_cleanup() ->
 %% PRIVATE API
 %%
 
+handle_call(count, _, State=#state{subscriptions=S}) ->
+    {reply, erlang:length(S), State};    
+
 handle_call(dump, _, State=#state{subscriptions=S}) ->
     priv_dump(S),
     {reply, ok, State};
 
 handle_call(debug_cleanup, _, _State) ->
     lager:warning("clearing registry"),
+    exometer:update([wave,subscriptions], 0),
+
     {reply, ok, #state{}};
 
 handle_call({subscribe, Topic, Qos, Subscriber}, _, State=#state{subscriptions=Subscriptions}) ->
+    lager:debug("~p: subscribe to '~p' topic w/ qos ~p", [Subscriber, Topic, Qos]),
+
     {TopicName, Fields} = case Topic of
         {T, M} -> 
             {T, M};
@@ -112,10 +123,11 @@ handle_call({subscribe, Topic, Qos, Subscriber}, _, State=#state{subscriptions=S
 
     {Reply, S2} = case lists:filter(fun({T,F,_,S}) -> {T,F,S} =:= {TopicName,Fields,Subscriber} end, Subscriptions) of
         [] ->
+            exometer:update([wave,subscriptions], length(Subscriptions)+1),
             {ok, Subscriptions ++ [{TopicName,Fields,Qos,Subscriber}]};
 
         _  ->
-            lager:error("~p already subscribed to ~p (~p)", [Subscriber, TopicName, Fields]),
+            lager:notice("~p already subscribed to ~p (~p)", [Subscriber, TopicName, Fields]),
             {duplicate, Subscriptions}
     end,
 
@@ -123,15 +135,19 @@ handle_call({subscribe, Topic, Qos, Subscriber}, _, State=#state{subscriptions=S
 
 handle_call({unsubscribe, Subscriber}, _, State=#state{subscriptions=S}) ->
     S2 = priv_unsubscribe(Subscriber, S, []),
+    exometer:update([wave,subscriptions], length(S2)),
     {reply, ok, State#state{subscriptions=S2}};
 
 handle_call({unsubscribe, TopicName, Subscriber}, _, State=#state{subscriptions=S}) ->
     lager:debug("unsubscribe ~p from ~p", [Subscriber, TopicName]),
+
     S2 = lists:filter(fun({T,_,_,Sub}) ->
             {T,Sub} =/= {TopicName, Subscriber}
         end, S
     ),
-    lager:debug("unsub2 ~p / ~p", [S, S2]),
+    
+    exometer:update([wave,subscriptions], length(S2)),
+    %lager:debug("unsub2 ~p / ~p", [S, S2]),
     {reply, ok, State#state{subscriptions=S2}};
 
 handle_call({match, TopicName}, _, State=#state{subscriptions=S}) ->
