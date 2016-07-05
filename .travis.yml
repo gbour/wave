@@ -20,8 +20,8 @@ addons:
 install:
     # get deps, compile code, generates config according to choosed environment
     - DEBUG=1 make env=travis all
-    # create autosigned certificate
-    - make cert
+    # create autosigned certificate (chained w/ CA)
+    - make chain-cert
     # need to enable TLSv1 as python2.7 do not support TLS >= 1.1
     - sed -ie "s/{versions, .*\}/{versions, ['tlsv1', 'tlsv1.1', 'tlsv1.2']}/g" .wave.travis.config
     # nyamuk is a python MQTT client used for blackbox tests
