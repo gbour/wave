@@ -505,7 +505,7 @@ encode_qos(undefined) ->
 encode_qos([]) ->
 	<<>>;
 encode_qos([H|T]) ->
-	<<0:6, H:2/integer, (encode_qos(T))/binary>>.
+	<<H:8/integer, (encode_qos(T))/binary>>.
 
 
 -spec atom2type(mqtt_verb()) -> integer().

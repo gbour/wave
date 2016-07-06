@@ -126,6 +126,8 @@ eat(<<H:1/binary, Rest/binary>>, Acc) ->
 %
 -spec fieldsmap(Matches :: list(binary()), Fields :: list(integer()), Accumulator :: list()) ->
         list(mqtt_topic_registry:match()).
+fieldsmap(_, [], Acc) ->
+    Acc;
 fieldsmap([H|T], [F|Fields], Acc) ->
     fieldsmap(T, Fields, [{F,H}|Acc]);
 fieldsmap([], _, Acc) ->

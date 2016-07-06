@@ -20,9 +20,13 @@
 
 % gen_server API
 -export([start_link/1, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+% acl API
+-export([check/4]).
 
 -define(ETS_VISIBILITY      , private).
 -define(DFT_MONITOR_INTERVAL, 60000). % 1 minute
+
+-type acl_mode() :: read | write.
 
 -export([]).
 -ifdef(DEBUG).
@@ -53,6 +57,12 @@ init(Args) ->
 %% PUBLIC API
 %%
 
+-spec check(boolean()|undefined, binary(), acl_mode(), binary()) -> allow|deny|noacl.
+check(true, Username, Mode, Topic) ->
+    gen_server:call(?MODULE, {check, Username, Mode, Topic});
+check(_, _, _, _) ->
+    noacl.
+
 -ifdef(DEBUG).
 switch(File) ->
     gen_server:call(?MODULE, {switch, File}).
@@ -66,6 +76,11 @@ switch(File) ->
 handle_call({switch, File}, _, State) ->
     reload(File),
     {reply, ok, State#state{filename=File, last_modified=filelib:last_modified(File)}};
+
+% checking operation against loaded ACLs
+handle_call({check, Username, Mode, Topic}, _, State) ->
+    M = match(ets:lookup(?MODULE, Username), Mode, Topic),
+    {reply, M, State};
 
 handle_call(E,_,State) ->
     lager:error("call ~p", [E]),
@@ -106,6 +121,7 @@ code_change(_, State, _) ->
 %% PRIVATE FUNS
 %%
 
+-spec reload(binary()) -> ok.
 reload(File) ->
     % TODO: handle errors
     case file:open(File, [read,binary]) of
@@ -147,3 +163,24 @@ fill_ets(F, {ok, Line}, Count) ->
 anon(<<"anonymous">>) -> undefined;
 anon(User)            -> User.
 
+
+%
+% try matching client operation against ACLs
+% parameters:
+%  - acls list reads from ETS
+%  - operation mode (read|write)
+%  - operation topic (write) or topic filter (read)
+%
+-spec match(list({undefined|binary(), acl_mode(), binary()}), acl_mode(), binary()) -> allow|deny.
+match([], _, _) ->
+    deny;
+% Mode is matching
+match([{_, Mode, TopicF}|T], Mode, Topic) ->
+    case mqtt_topic_match:match(TopicF, {Topic, []}) of
+        {ok, _} ->
+            lager:debug("~p match ~p", [Topic, TopicF]),
+            allow;
+        fail    -> match(T, Mode, Topic)
+    end;
+match([_|T], Mode, Topic) ->
+    match(T, Mode, Topic).
