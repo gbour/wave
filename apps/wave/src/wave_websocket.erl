@@ -25,6 +25,9 @@
 %%-behaviour(ranch_transport).
 
 -export([start/1, init/2, name/0, peername/1, recv/3, send/2, close/1]).
+-ifdef(DEBUG).
+    -export([debug_getstate/1]).
+-endif.
 
 -record(state, {
     wsh, % websocket handler (pid)
@@ -80,9 +83,19 @@ send(Socket, Packet) ->
 close(Socket) ->
     Socket ! shutdown,
     ok.
+
+-ifdef(DEBUG).
+debug_getstate(Pid) ->
+    Pid ! {get_state, self()},
+
+    receive State -> State end.
+-endif.
+
+
 %%
 %%
 %%
+
 
 %%TODO: use a gen_server instead
 loop(State=#state{in=In, reader=Reader, wsh=Wsh}) ->
@@ -116,7 +129,11 @@ loop(State=#state{in=In, reader=Reader, wsh=Wsh}) ->
             % notify websocket handler to stop, then exit
             Wsh ! stop;
 
-        _Err -> 
+        {get_state, Pid} ->
+            Pid ! State,
+            loop(State);
+
+        _Err ->
             lager:notice("invalid cmd: ~p", [_Err]),
             loop(State)
     end.
