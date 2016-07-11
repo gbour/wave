@@ -206,7 +206,7 @@ class WebSocket(TestSuite):
         state = yield env.remote('wave_websocket', 'debug_getstate', processes['websocket'])
         #pprint.pprint(to_python(state))
         processes['ranch'] = state[1]
-        processes['proto'] = state[3]
+        processes['proto'] = state[2]
 
         #pprint.pprint(processes)
         @defer.inlineCallbacks
