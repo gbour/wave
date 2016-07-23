@@ -93,6 +93,8 @@ match(<<"/#">>, <<"">> = _Match, Matches) ->
     {ok, [_Match|Matches]};
 match(<<C:1/binary, Re/binary>>, <<C:1/binary, Rest/binary>>, Matches) ->
     match(Re, Rest, Matches);
+match(<<$+, _/binary>>, <<$#, _/binary>>, _) ->
+    fail;
 match(<<$+, Re/binary>>, Rest, Matches) ->
     {Rest2, Match} = eat(Rest, <<"">>),
     %lager:info("+ match ~p", [Match]),
