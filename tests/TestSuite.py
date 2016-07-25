@@ -54,6 +54,9 @@ class TestSuite(object):
     def __init__(self, suitename):
         self.suitename = suitename
 
+    def init(self):
+        pass
+
     def cleanup(self):
         pass
 
@@ -64,6 +67,8 @@ class TestSuite(object):
 
         fname = inspect.getfile(self.__class__).replace('.','/',).split('/')[-2]
         logging.info("\n\033[1m... {0}: {1} ...\033[0m".format(fname, self.suitename))
+
+        yield self.init()
 
         tests = [(name, meth) for (name, meth) in inspect.getmembers(self, predicate=inspect.ismethod) if name.startswith('test_')]
         for (name, test) in tests:
