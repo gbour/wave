@@ -54,7 +54,16 @@ class TestSuite(object):
     def __init__(self, suitename):
         self.suitename = suitename
 
-    def cleanup(self):
+    def setup_suite(self):
+        pass
+
+    def cleanup_suite(self):
+        pass
+
+    def setup_test(self):
+        yield clean_states()
+
+    def cleanup_test(self):
         pass
 
     @defer.inlineCallbacks
@@ -65,12 +74,14 @@ class TestSuite(object):
         fname = inspect.getfile(self.__class__).replace('.','/',).split('/')[-2]
         logging.info("\n\033[1m... {0}: {1} ...\033[0m".format(fname, self.suitename))
 
+        yield self.setup_suite()
+
         tests = [(name, meth) for (name, meth) in inspect.getmembers(self, predicate=inspect.ismethod) if name.startswith('test_')]
         for (name, test) in tests:
             if testfilter and not testfilter in name:
                 continue
 
-            yield clean_states()
+            yield self.setup_test()
             logging.debug(">> "+name)
             ret = test()
             try:
@@ -86,7 +97,9 @@ class TestSuite(object):
             counters[DISPLAY[ret][1].lower()] += 1
             status &= DISPLAY[ret][-1]
 
-        yield self.cleanup()
+            yield self.cleanup_test()
+
+        yield self.cleanup_suite()
         defer.returnValue((status, counters))
 
     def _print(self, (color, text, _ign), funcname, testname):
