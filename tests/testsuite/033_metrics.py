@@ -175,21 +175,19 @@ class Metrics(TestSuite):
         """
         """
         v = yield exo_value('wave.subscriptions')
-        if v['value'] != 0:
-            print '  . 1:', v
-            defer.returnValue(False)
+        ref_val = v['value']
 
         c = MqttClient("metrics", connect=4)
         c.subscribe('foo/bar', qos=0)
 
         v = yield exo_value('wave.subscriptions')
-        if v['value'] != 1:
+        if v['value'] != ref_val+1:
             print '  . 2:', v
             defer.returnValue(False)
 
         c.unsubscribe('foo/bar')
         v = yield exo_value('wave.subscriptions')
-        if v['value'] != 0:
+        if v['value'] != ref_val:
             print '  . 3:', v
             defer.returnValue(False)
 
