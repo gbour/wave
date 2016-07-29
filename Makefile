@@ -44,7 +44,7 @@ run: build setup
 	erl -pa `find -L _build/$(env) -name ebin` -name 'wave@127.0.0.1' -setcookie wave -s $(APP) -s sync -config .wave.$(env).config -s observer -init debug +v
 
 test:
-	cd tests && DEBUG=$(DEBUG) PYTHONPATH=./nyamuk:./twotp:./logparser ./run
+	cd tests && DEBUG=$(DEBUG) env=$(env) PYTHONPATH=./nyamuk:./twotp:./etf:./logparser ./run
 
 release: setup
 	./rebar3 as $(env) tar
@@ -63,10 +63,19 @@ clean-all:
 	rm -Rf `find _build -name priv`
 
 
+# generate a self-signed certificate
 cert:
 	openssl req -x509 -newkey rsa:2048 -keyout ./etc/wave_key.pem -out ./etc/wave_cert.pem -days 365 \
 		-nodes \
-		-subj '/CN=FR/O=wave/CN=wave.acme.org'
+		-subj '/CN=wave.acme.org'
+
+# generate a self-signed chained certificate (eg with CA)
+chain-cert:
+	openssl req -x509 -newkey rsa:2048 -keyout ./etc/ca.key -out ./etc/ca.pem -days 365 -nodes -subj '/CN=my.own.ca'
+	openssl genrsa -out etc/wave_chained_key.pem 1024
+	openssl req -new -key etc/wave_key.pem -out etc/client.csr -subj '/CN=my.own.client'
+	openssl x509 -req -days 365 -in etc/client.csr -CA etc/ca.pem -CAkey etc/ca.key -set_serial 01 -out etc/client.pem
+	cat etc/client.pem etc/ca.pem > etc/wave_chained_cert.pem
 
 msc:
 	find docs/ -iname *.msc | xargs -I '{}' /opt/mscgenx/bin/msc-gen -T png  '{}'

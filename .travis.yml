@@ -20,14 +20,16 @@ addons:
 install:
     # get deps, compile code, generates config according to choosed environment
     - DEBUG=1 make env=travis all
-    # create autosigned certificate
-    - make cert
+    # create autosigned certificate (single & chained w/ CA)
+    - make cert && make chain-cert
     # need to enable TLSv1 as python2.7 do not support TLS >= 1.1
     - sed -ie "s/{versions, .*\}/{versions, ['tlsv1', 'tlsv1.1', 'tlsv1.2']}/g" .wave.travis.config
     # nyamuk is a python MQTT client used for blackbox tests
     - pip install --user websocket-client
     - "git clone -b enhancement https://github.com/gbour/nyamuk.git tests/nyamuk"
     - "git clone https://github.com/gbour/twotp.git tests/twotp"
+    - "git clone https://github.com/gbour/python_etf.git tests/etf"
+    - pip install --user -r tests/etf/test_requirements.txt
     - "git clone https://github.com/gbour/apache-log-parser.git tests/logparser"
     - pip install --user -r tests/logparser/requirements.txt
     - "git clone https://github.com/gbour/paho.mqtt.testing tests/paho"
@@ -42,8 +44,8 @@ before_script:
 
 script:
     - make dialyze
-    - make DEBUG=/tmp/wave.tests.log WAVELOGS=/tmp/wave.travis.log test
     - python3 tests/paho/interoperability/client_test.py --iterations 3 -z 2> /tmp/wave.paho.log
+    - make DEBUG=/tmp/wave.tests.log WAVELOGS=/tmp/wave.travis.log env=travis test
 
 after_script:
     - kill -HUP $PID
