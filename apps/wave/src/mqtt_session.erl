@@ -61,12 +61,12 @@
 %       on ANY incoming message : reset timeout#1 ; ... ; set timeout #1
 
 -record(session, {
-    deviceid               :: binary(),
+    deviceid   = <<>>      :: binary(),
     topics     = []        :: list({Topic::binary(), Qos::integer()}), % list of subscribed topics
     transport              :: mqtt_ranch_protocol:transport(),
     opts                   :: map(),
     pingid     = undefined :: undefined,
-    keepalive              :: integer(),
+    keepalive  = -1        :: integer(),
     %TODO: use maps instead (test performances improvement)
     %NOTE: not sure msgid is binary
     %       theres a msgid in mqtt_msg() messages
