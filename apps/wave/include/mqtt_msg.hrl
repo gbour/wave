@@ -44,11 +44,19 @@
 %% OTP compatibility macros
 %%
 
--define(SEED, erlang:phash2([node()]), erlang:monotonic_time(), erlang:unique_integer()).
+%NOTE: calling rand:seed() is not required
+%TODO: remove seed call when we'll remove OTP < 18 support
+-define(RAND, rand).
+-define(SEED, exsplus, {erlang:phash2([node()]), erlang:monotonic_time(), erlang:unique_integer()}).
 -define(GENFSM_STOP(Ref, Reason, Timeout), gen_fsm:stop(Ref, Reason, Timeout)).
 -define(TIME, erlang:system_time(seconds)).
 
 -ifdef(OTP_RELEASE_17).
+    % random module, replace by rand in >= 18
+    -undef(RAND).
+    -define(RAND, random).
+
+
     % erlang:monotinic_time() & erlang:unique_integer() are not available on OTP < 18
     %
     -undef(SEED).

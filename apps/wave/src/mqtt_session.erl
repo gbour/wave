@@ -87,10 +87,10 @@ start_link(Transport, Opts) ->
     gen_fsm:start_link(?MODULE, [Transport, Opts], []).
 
 init([Transport, Opts]) ->
-    random:seed(?SEED),
+    ?RAND:seed(?SEED),
 
     % timeout on socket connection: close socket is no CONNECT message received after timeout
-    {ok, initiate, #session{transport=Transport, opts=Opts, next_msgid=random:uniform(65535)}, 
+    {ok, initiate, #session{transport=Transport, opts=Opts, next_msgid=?RAND:uniform(65535)},
          ?CONNECT_TIMEOUT}.
 
 %
