@@ -61,12 +61,12 @@
 %       on ANY incoming message : reset timeout#1 ; ... ; set timeout #1
 
 -record(session, {
-    deviceid               :: binary(),
+    deviceid   = <<>>      :: binary(),
     topics     = []        :: list({Topic::binary(), Qos::integer()}), % list of subscribed topics
     transport              :: mqtt_ranch_protocol:transport(),
     opts                   :: map(),
     pingid     = undefined :: undefined,
-    keepalive              :: integer(),
+    keepalive  = -1        :: integer(),
     %TODO: use maps instead (test performances improvement)
     %NOTE: not sure msgid is binary
     %       theres a msgid in mqtt_msg() messages
@@ -87,10 +87,10 @@ start_link(Transport, Opts) ->
     gen_fsm:start_link(?MODULE, [Transport, Opts], []).
 
 init([Transport, Opts]) ->
-    random:seed(?SEED),
+    ?RAND:seed(?SEED),
 
     % timeout on socket connection: close socket is no CONNECT message received after timeout
-    {ok, initiate, #session{transport=Transport, opts=Opts, next_msgid=random:uniform(65535)}, 
+    {ok, initiate, #session{transport=Transport, opts=Opts, next_msgid=?RAND:uniform(65535)},
          ?CONNECT_TIMEOUT}.
 
 %

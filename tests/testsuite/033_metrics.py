@@ -224,12 +224,14 @@ class Metrics(TestSuite):
 
         while True:
             evt = c.recv()
-            if evt is not None: break
+            if evt is not None and isinstance(evt, EventPublish):
+                break
 
         stats = {evt.msg.topic: evt.msg.payload}
         while True:
             evt = c.recv()
             if evt is None: break
+            if isinstance(evt, EventPingResp): continue
 
             stats[evt.msg.topic] = evt.msg.payload
 
