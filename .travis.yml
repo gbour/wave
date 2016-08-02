@@ -43,7 +43,10 @@ before_script:
 script:
     - make dialyze
     - make DEBUG=/tmp/wave.tests.log WAVELOGS=/tmp/wave.travis.log test
-    - python3 tests/paho/interoperability/client_test.py --iterations 3 -z 2> /tmp/wave.paho.log
+    # set context (auth, acl) for paho tests
+    - PYTHONPATH=tests/twotp tests/paho_setup init
+    - python3 tests/paho/interoperability/client_test.py --iterations 3 -zs 2> /tmp/wave.paho.log
+    - PYTHONPATH=tests/twotp tests/paho_setup cleanup
 
 after_script:
     - kill -HUP $PID
