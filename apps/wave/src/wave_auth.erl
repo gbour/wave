@@ -158,6 +158,10 @@ reload(File) ->
 
 fill_ets(_, eof, Count) ->
     Count;
+fill_ets(F, {ok, <<>>}, Count) ->
+    fill_ets(F, file:read_line(F), Count);
+fill_ets(F, {ok, <<$#, _/binary>>}, Count) ->
+    fill_ets(F, file:read_line(F), Count);
 fill_ets(F, {ok, Line}, Count) ->
     S = size(Line)-1, % Line includes trailing \n
     <<Line2:S/binary, $\n>> = Line,
