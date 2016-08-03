@@ -1,0 +1,13 @@
+# sample acl configuration file
+# when acl enabled, everything is denied by default
+
+# allow anonymous (eg not authentified) users to publish to 'foo/bar' topic
+anonymous	allow	write	foo/bar
+
+# allow jdoe user to:
+#   . publish to 'foo/bar/#' and 'foo/baz' topics
+#   . subscribe to 'foo/bat/+' and 'foo/baz' topics
+jdoe	allow	w	foo/bar/#
+jdoe	allow	r	foo/bat/+
+jdoe	allow	rw	foo/baz
+

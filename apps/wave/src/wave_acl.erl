@@ -14,17 +14,21 @@
 %%    You should have received a copy of the GNU Affero General Public License
 %%    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
--module(wave_auth).
+-module(wave_acl).
 -author("Guillaume Bour <guillaume@bour.cc>").
 -behaviour(gen_server).
 
 % gen_server API
 -export([start_link/1, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+% acl API
+-export([check/4]).
 
 -define(ETS_VISIBILITY      , private).
 -define(DFT_MONITOR_INTERVAL, 60000). % 1 minute
 
--export([check/4]).
+-type acl_mode() :: read | write.
+
+-export([]).
 -ifdef(DEBUG).
     -undef(ETS_VISIBILITY).
     -define(ETS_VISIBILITY, public).
@@ -44,7 +48,7 @@ start_link(Args) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []).
 
 init(Args) ->
-    ets:new(?MODULE, [set, named_table, ?ETS_VISIBILITY]),
+    ets:new(?MODULE, [bag, named_table, ?ETS_VISIBILITY]),
     % 1st monitor will trigger file load
     erlang:send_after(50, self(), monitor),
     {ok, #state{filename=proplists:get_value(file, Args)}}.
@@ -53,22 +57,11 @@ init(Args) ->
 %% PUBLIC API
 %%
 
--spec check(true|false|undefined, DeviceID::binary(), Creds::{binary(), binary()},
-            Setts::list({binary(), binary()})) -> {error, wrong_id|bad_credentials} | {ok, noauth|match}.
-check(false, _,{undefined, _}, _) ->
-    lager:debug("no auth required"),
-    {ok, noauth};
-
-% no username set
-check( true, _, {undefined, _}, _) ->
-    {error, bad_credentials};
-%NOTE: this situation should never happen (see [MQTT-3.1.2-22])
-check(    _, _, {_, undefined}, _) ->
-    {error, bad_credentials};
-
-check(    _, DeviceID, {User, Pwd}, Settings) ->
-    lager:debug("auth check ~p (~p)", [DeviceID, User]),
-    gen_server:call(?MODULE, {auth, DeviceID, User, Pwd}).
+-spec check(boolean()|undefined, binary(), acl_mode(), binary()) -> allow|deny|noacl.
+check(true, Username, Mode, Topic) ->
+    gen_server:call(?MODULE, {check, Username, Mode, Topic});
+check(_, _, _, _) ->
+    noacl.
 
 -ifdef(DEBUG).
 switch(File) ->
@@ -79,28 +72,15 @@ switch(File) ->
 %% PRIVATE API
 %%
 
-handle_call({auth, DeviceID, User, Password}, _, State) ->
-    Match = case ets:lookup(?MODULE, User) of
-        [{User, Hash}] ->
-            lager:debug("user ~p found", [User]),
-            case erlpass:match(Password, Hash) of
-                true -> {ok, match};
-                _    -> {error, bad_credentials}
-            end;
-
-        _ -> 
-            % make it harder to guess if Username exists or not
-            % (as erlpass:match() takes around 600ms to execute)
-            erlpass:match(<<"foo">>,<<"$2a$12$6zOUIP0NEwBupO7ATO.Hv..ZQq5WGmyZ0rCYGUoznFrYpFZkr8ppy">>),
-            {error, bad_credentials}
-    end,
-        
-    {reply, Match, State};
-
-% load a new password file
+% load a new acl file
 handle_call({switch, File}, _, State) ->
     reload(File),
     {reply, ok, State#state{filename=File, last_modified=filelib:last_modified(File)}};
+
+% checking operation against loaded ACLs
+handle_call({check, Username, Mode, Topic}, _, State) ->
+    M = match(ets:lookup(?MODULE, Username), Mode, Topic),
+    {reply, M, State};
 
 handle_call(E,_,State) ->
     lager:error("call ~p", [E]),
@@ -111,7 +91,8 @@ handle_cast(E, State) ->
     lager:error("cast ~p", [E]),
     {noreply, State}.
 
-% monitor password file changes
+
+% monitor acl file changes
 handle_info(monitor, State=#state{filename=File, last_modified=LastMod}) ->
     LastMod2 = filelib:last_modified(File),
     if LastMod2 =/= LastMod -> reload(File); true -> ok end,
@@ -140,6 +121,7 @@ code_change(_, State, _) ->
 %% PRIVATE FUNS
 %%
 
+-spec reload(binary()) -> ok.
 reload(File) ->
     % TODO: handle errors
     case file:open(File, [read,binary]) of
@@ -150,24 +132,55 @@ reload(File) ->
             Count = fill_ets(F, file:read_line(F), 0),
             file:close(F),
 
-            lager:debug("password file reloaded (~p lines found)", [Count]);
+            lager:debug("acl file reloaded (~p lines found)", [Count]);
 
         Err ->
-            lager:error("failed to (re)load password file ~p: ~p", [File, Err])
+            lager:error("failed to (re)load acl file ~p: ~p", [File, Err])
     end.
 
 fill_ets(_, eof, Count) ->
     Count;
-fill_ets(F, {ok, <<>>}, Count) ->
-    fill_ets(F, file:read_line(F), Count);
-fill_ets(F, {ok, <<$#, _/binary>>}, Count) ->
-    fill_ets(F, file:read_line(F), Count);
 fill_ets(F, {ok, Line}, Count) ->
     S = size(Line)-1, % Line includes trailing \n
-    <<Line2:S/binary, $\n>> = Line,
+    <<Line2:S/binary, $\n>> = Line ,
 
-    [User, Pwd] = binary:split(Line2, <<$:>>),
-    ets:insert(?MODULE, {User, Pwd}),
+    case binary:split(Line2, <<$\t>>, [global]) of
+        [User, <<"allow">>, Mode= <<"r">>, Topic] -> ets:insert(?MODULE, {anon(User), read, Topic});
+        [User, <<"allow">>, Mode= <<"w">>, Topic] -> ets:insert(?MODULE, {anon(User), write, Topic});
+
+        [User, <<"allow">>, <<"rw">>, Topic]  ->
+            User2 = anon(User),
+
+            ets:insert(?MODULE, {User2, read, Topic}),
+            ets:insert(?MODULE, {User2, write, Topic});
+
+        Err ->
+            lager:warning("invalid acl entry at line ~B: ~p", [Count, Line2])
+    end,
 
     fill_ets(F, file:read_line(F), Count+1).
 
+anon(<<"anonymous">>) -> undefined;
+anon(User)            -> User.
+
+
+%
+% try matching client operation against ACLs
+% parameters:
+%  - acls list reads from ETS
+%  - operation mode (read|write)
+%  - operation topic (write) or topic filter (read)
+%
+-spec match(list({undefined|binary(), acl_mode(), binary()}), acl_mode(), binary()) -> allow|deny.
+match([], _, _) ->
+    deny;
+% Mode is matching
+match([{_, Mode, TopicF}|T], Mode, Topic) ->
+    case mqtt_topic_match:match(TopicF, {Topic, []}) of
+        {ok, _} ->
+            lager:debug("~p match ~p", [Topic, TopicF]),
+            allow;
+        fail    -> match(T, Mode, Topic)
+    end;
+match([_|T], Mode, Topic) ->
+    match(T, Mode, Topic).

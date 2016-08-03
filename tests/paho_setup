@@ -1,0 +1,58 @@
+#!/usr/bin/python
+# -*- coding: utf8 -*-
+
+import os, sys
+import tempfile
+
+from lib import env
+from twisted.internet import defer, reactor
+from twotp import Atom, to_python, Tuple, Process
+
+
+@defer.inlineCallbacks
+def init():
+    print "paho init"
+    yield env.remote('application', 'set_env', Atom('wave'), Atom('auth'),
+          [Tuple([Atom('required'), Atom('false')]), Tuple([Atom('file'), '/tmp/wave.passwd'])])
+
+    (fd, acl_file) = tempfile.mkstemp(prefix='wave-acl-'); os.close(fd)
+    print "acl file:", acl_file
+
+    with open(acl_file, 'w') as f:
+        f.write("""
+# paho acl file
+# basically we must allow everything but 'nosubscribe' read topic
+anonymous\tallow\tw\t#
+
+anonymous\tallow\tr\t/#
+anonymous\tallow\tr\t+/+/#
+anonymous\tallow\tr\tTopic/#
+anonymous\tallow\tr\tTopicA/#
+""")
+
+    yield env.remote('application', 'set_env', Atom('wave'), Atom('acl'),
+          [Tuple([Atom('enabled'), Atom('true')]), Tuple([Atom('file'), acl_file])])
+    yield env.remote('wave_acl', 'switch', acl_file)
+
+    reactor.stop()
+
+@defer.inlineCallbacks
+def cleanup():
+    print "paho cleanup"
+    yield env.remote('application', 'set_env', Atom('wave'), Atom('auth'),
+          [Tuple([Atom('required'), Atom('false')]), Tuple([Atom('file'), '/tmp/wave.passwd'])])
+
+    yield env.remote('application', 'set_env', Atom('wave'), Atom('acl'),
+          [Tuple([Atom('enabled'), Atom('false')]), Tuple([Atom('file'), '/tmp/wave.acl'])])
+
+    reactor.stop()
+
+
+if __name__ == '__main__':
+    if len(sys.argv) != 2 or sys.argv[1] not in ('init', 'cleanup'):
+        print "Usage: paho init|cleanup"; sys.exit(1)
+
+    env.twotp = Process('wave_tests@127.0.0.1', 'wave')
+
+    reactor.callWhenRunning(eval(sys.argv[1]))
+    reactor.run()

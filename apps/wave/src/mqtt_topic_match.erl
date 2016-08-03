@@ -101,6 +101,8 @@ match(<<"/#">>, <<"">> = _Match, Matches) ->
     {ok, [_Match|Matches]};
 match(<<C:1/binary, Re/binary>>, <<C:1/binary, Rest/binary>>, Matches) ->
     match(Re, Rest, Matches);
+match(<<$+, _/binary>>, <<$#, _/binary>>, _) ->
+    fail;
 match(<<$+, Re/binary>>, Rest, Matches) ->
     {Rest2, Match} = eat(Rest, <<"">>),
     %lager:info("+ match ~p", [Match]),
@@ -134,6 +136,8 @@ eat(<<H:1/binary, Rest/binary>>, Acc) ->
 %
 -spec fieldsmap(Matches :: list(binary()), Fields :: list(integer()), Accumulator :: list()) ->
         list(mqtt_topic_registry:match()).
+fieldsmap(_, [], Acc) ->
+    Acc;
 fieldsmap([H|T], [F|Fields], Acc) ->
     fieldsmap(T, Fields, [{F,H}|Acc]);
 fieldsmap([], _, Acc) ->

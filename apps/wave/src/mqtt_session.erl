@@ -296,23 +296,31 @@ connected(Msg=#mqtt_msg{type='PUBLISH', qos=0, payload=P}, _,
 
     exometer:update([wave,messages,in,0], 1),
 
-    Topic = <<Prefix:1/binary, _/binary>> = proplists:get_value(topic, P),
+    Topic               = <<Prefix:1/binary, _/binary>> = proplists:get_value(topic, P), 
     {StatusCode, Reply} = case Prefix of
         <<"$">> ->
             lager:notice("~p: publishing to '$' prefixed topic is forbidden", [Topic]),
             {403, {stop, normal, disconnect, StateData}};
 
-        _       ->
+        _       ->  
+            Username = maps:get(username, Opts),
+            Status   = case wave_acl:check(wave_app:env([acl, enabled]), Username, write, Topic) of
+                deny -> 403;
 
-            % only if retain=1
-            mqtt_retain:store(Msg),
+                % 'allow' or 'noacl'
+                _    ->  
+                    % only if retain=1
+                    mqtt_retain:store(Msg),
 
-            %TODO: save message in DB
-            %      pass MsgID to message_worker
-            {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
-            mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
+                    %TODO: save message in DB
+                    %      pass MsgID to message_worker
+                    {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
+                    mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
 
-            {200, {reply, undefined, connected, StateData, Ka}}
+                    200 
+            end,
+
+            {Status, {reply, undefined, connected, StateData, Ka}}
     end,
 
     Size  = erlang:byte_size(proplists:get_value(data, Msg#mqtt_msg.payload, <<>>)),
@@ -337,14 +345,31 @@ connected(Msg=#mqtt_msg{type='PUBLISH', payload=P, qos=Qos, dup=Dup}, _,
             {403, {stop, normal, disconnect, StateData}};
 
         {_, undefined} ->
-            % only if retain=1
-            mqtt_retain:store(Msg),
-            %      pass MsgID to message_worker
-            {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
-            mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
-            
-            exometer:update([wave,messages,inflight], 1),
-            {200, {reply, undefined, connected, StateData#session{inflight=[{MsgID, MsgWorker} | Inflight]}, Ka}};
+            Username = maps:get(username, Opts),
+
+            %TODO: save message in DB
+            {Status, Worker} = case wave_acl:check(wave_app:env([acl,enabled]), Username, write, Topic) of
+                deny ->
+                    %NOTE: we create a message worker with no targets, but we need that currently to handle ack flow
+                    %TODO: optimize (fake worker ?)
+                    {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
+                    mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}, []),
+
+                    exometer:update([wave,messages,inflight], 1),
+                    {403, MsgWorker};
+
+                % 'allow' or 'noacl'
+                _ ->
+                    % only if retain=1
+                    mqtt_retain:store(Msg),
+                    %      pass MsgID to message_worker
+                    {ok, MsgWorker2} = supervisor:start_child(wave_msgworkers_sup, []),
+                    mqtt_message_worker:publish(MsgWorker2, self(), Msg#mqtt_msg{retain=0}), % async
+
+                    exometer:update([wave,messages,inflight], 1),
+                    {200, MsgWorker2}
+            end,
+            {Status, {reply, undefined, connected, StateData#session{inflight=[{MsgID, Worker}|Inflight]}, Ka}};
 
         % message is already inflight
         _ ->
@@ -421,21 +446,33 @@ connected(Msg=#mqtt_msg{type='PUBCOMP', payload=P}, _, StateData=#session{keepal
     {reply, undefined, connected, StateData, Ka};
 
 %TODO: prevent subscribing multiple times to the same topic
-connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _, 
+connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _,
           StateData=#session{deviceid=DeviceID, topics=T, keepalive=Ka, opts=Opts}) ->
 	MsgId  = proplists:get_value(msgid, P),
     Topics = proplists:get_value(topics, P),
 
+    Username = maps:get(username, Opts),
+
     % subscribe to all listed topics (creating it if it don't exists)
     EQoses = lists:map(fun({Topic, TQos}) ->
-            mqtt_topic_registry:subscribe(Topic, TQos, {?MODULE, publish, self(), DeviceID}),
-            S = {?MODULE, publish, self(), DeviceID},
-            mqtt_retain:publish(S, Topic, TQos),
 
-            wave_access_log:log(#{verb => 'SUBSCRIBE', uri => Topic, status_code => 200, ua => DeviceID,
-                                   ip => (maps:get(addr, Opts))#addr.ip}),
+            case wave_acl:check(wave_app:env([acl,enabled]), Username, read, Topic) of
+                deny  ->
+                    wave_access_log:log(#{verb => 'SUBSCRIBE', uri => Topic, status_code => 403,
+                                          ua => DeviceID, ip => (maps:get(addr, Opts))#addr.ip}),
+                    16#80;
 
-            TQos
+                % 'allow' or 'noacl'
+                _ ->
+                    mqtt_topic_registry:subscribe(Topic, TQos, {?MODULE, publish, self(), DeviceID}),
+                    S = {?MODULE, publish, self(), DeviceID},
+                    mqtt_retain:publish(S, Topic, TQos),
+
+                    wave_access_log:log(#{verb => 'SUBSCRIBE', uri => Topic, status_code => 200,
+                                          ua => DeviceID, ip => (maps:get(addr, Opts))#addr.ip}),
+
+                    TQos
+            end
         end, Topics
     ),
 

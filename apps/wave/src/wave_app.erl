@@ -52,6 +52,7 @@ start(_StartType, _StartArgs) ->
     % start master supervisor (starting named servers)
     {ok, WaveSup} = wave_sup:start_link(#{
         auth       => env([auth]),
+        acl        => env([acl]),
         access_log => env([access_log])
     }),
 
