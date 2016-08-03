@@ -32,10 +32,10 @@
 -type subscriber() :: {EffectiveQos::integer(),published, Receiver::pid(),mqtt_topic_registry:match_result()}.
 
 -record(state, {
-    publisher    :: pid(),
-    message      :: mqtt_msg(),
-    subscribers  :: list(mqtt_topic_registry:match_result()),
-    inflight     :: [subscriber()]
+    publisher        :: pid() | undefined,
+    message          :: mqtt_msg() | undefined,
+    subscribers      :: list(mqtt_topic_registry:match_result()) | undefined,
+    inflight    = [] :: [subscriber()]
 }).
 -type state() :: #state{}.
 

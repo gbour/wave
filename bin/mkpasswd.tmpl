@@ -58,7 +58,7 @@ readpass() ->
 do([create], File, User) ->
     {ok, F} = open(File, [write]),
     Hash    = readpass(),
-        
+
     file:write(F, [User, $:, Hash, $\n]),
     file:close(F);
 
@@ -79,7 +79,7 @@ do([delete], File, User) ->
 
             file:rename([File,".tmp"], File);
 
-        Err -> 
+        Err ->
             io:format("> ~p~n", [Err])
     end,
     file:close(F);
@@ -140,14 +140,14 @@ match(F, {ok, Line}, User, Acc) ->
 
         {match, Acc}
     catch
-        _:_ -> 
+        _:_ ->
             % no match, we continue
             match(F, file:read_line(F), User, [Line | Acc])
     end.
 
 copy(F1, F2) ->
     case file:read(F1, 1000) of
-        {ok, Data} -> 
+        {ok, Data} ->
             file:write(F2, Data),
             copy(F1, F2);
 
@@ -163,6 +163,6 @@ options_spec_list() ->
 include_libs() ->
     % TODO: what about release or docker instance ?
     BaseDir = filename:dirname(escript:script_name()),
-    [ code:add_pathz(BaseDir++"/../_build/default/lib/"++Lib++"/ebin") || Lib <- ["getopt","erlpass","bcrypt"]],
+    [ code:add_pathz(Path) || Path <- filelib:wildcard(BaseDir++"/{{mkpasswd_libs_path}}/*/ebin") ],
 
     ok.

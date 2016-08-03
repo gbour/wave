@@ -19,8 +19,9 @@ RUN apk add erlang-sasl erlang-inets erlang-crypto erlang-ssl erlang-public-key 
 
 #   entrypoint.sh is the startuo script (stored in /usr/local/bin)
 #
-RUN mkdir -p /opt/wave
-COPY _build/alpine /opt/wave/
+RUN mkdir -p /opt/wave/bin /opt/wave/lib /opt/wave/etc
+COPY _build/alpine/lib /opt/wave/lib
+COPY bin/mkpasswd /opt/wave/bin/
 COPY .wave.alpine.config /opt/wave/wave.config
 COPY tools/docker/entrypoint.sh /usr/local/bin
 

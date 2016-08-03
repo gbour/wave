@@ -19,7 +19,7 @@ class Acl(TestSuite):
         TestSuite.__init__(self, "Acl")
 
     @defer.inlineCallbacks
-    def init(self):
+    def setup_suite(self):
         ## configuring auth
         (fd, auth_file) = tempfile.mkstemp(prefix='wave-auth-'); os.close(fd)
         print "auth file:", auth_file

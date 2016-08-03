@@ -43,12 +43,13 @@ start_link(Args) ->
 -spec init(map()) -> {ok,{supervisor:sup_flags(),[supervisor:child_spec()]}} | ignore.
 init(Args) ->
     {ok, {{one_for_one, 5, 10}, [
-        ?CHILD(mqtt_topic_registry, worker)
+         ?CHILD(mqtt_topic_registry, worker)
         ,?CHILD(mqtt_retain, worker)
         ,?CHILD(mqtt_offline, worker)
         ,?CHILD(mqtt_offline_session, worker)
         ,?CHILD(mqtt_lastwill_session, worker)
         ,?CHILD(wave_ctlmngr, worker)
+        ,?CHILD(wave_metrics, worker)
         ,?CHILD(wave_auth, worker, maps:get(auth, Args, undefined))
         ,?CHILD(wave_acl , worker, maps:get(acl, Args, undefined))
         ,?CHILD(wave_access_log, worker, maps:get(access_log, Args, undefined))

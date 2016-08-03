@@ -47,12 +47,20 @@ fields(<<_:1/binary, Rest/binary>>, C) ->
 % tries to match a message topic with a subscribed topic regex
 % if match, also extract values matching wildcards
 %
+% NOTE: topic started with '$' (ie $SYS tree) are excluded from '#' and '+/...' topic filters matches
+%
 %NOTE: BUG OR NOT ?? 
 %   11> mqtt_topic_match:match(<<"foo/ba+">>, {<<"foo/bar">>,[0]}).
 %   {ok,[{0,<<"r">>}]}
 %
 -spec match(Re :: binary(), {Topic :: binary(), Fields :: list(integer())}) -> 
         fail | {ok, list(mqtt_topic_registry:match())}.
+match(Re= <<$#>>          , {Topic= <<$\$, _/binary>>, _}) ->
+    lager:debug("~p excluded from ~p match", [Topic, Re]),
+    fail;
+match(Re= <<$+, _/binary>>, {Topic= <<$\$, _/binary>>, _}) ->
+    lager:debug("~p excluded from ~p match", [Topic, Re]),
+    fail;
 match(Re, {Topic, Fields}) ->
     case match(Re, Topic, []) of
         {ok, []} ->

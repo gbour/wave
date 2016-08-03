@@ -74,6 +74,7 @@ start(_StartType, _StartArgs) ->
             {port    , env([ssl, port])},
             {keepalive, true},
             {certfile, env([ssl, certfile])},
+            {cacertfile, env([ssl, cacertfile])},
             {keyfile , env([ssl, keyfile])},
 
             % increase security level
@@ -102,6 +103,7 @@ start(_StartType, _StartArgs) ->
             {port, env([websocket, ssl_port])},
 
             {certfile, env([ssl, certfile])},
+            {cacertfile, env([ssl, cacertfile])},
             {keyfile , env([ssl, keyfile])},
 
             % increase security level
