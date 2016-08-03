@@ -22,12 +22,12 @@ def init():
         f.write("""
 # paho acl file
 # basically we must allow everything but 'nosubscribe' read topic
-anonymous\tallow\twrite\t#
+anonymous\tallow\tw\t#
 
-anonymous\tallow\tread\t/#
-anonymous\tallow\tread\t+/+/#
-anonymous\tallow\tread\tTopic/#
-anonymous\tallow\tread\tTopicA/#
+anonymous\tallow\tr\t/#
+anonymous\tallow\tr\t+/+/#
+anonymous\tallow\tr\tTopic/#
+anonymous\tallow\tr\tTopicA/#
 """)
 
     yield env.remote('application', 'set_env', Atom('wave'), Atom('acl'),

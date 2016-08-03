@@ -37,17 +37,17 @@ foo:$2a$12$EwUNtApVj6j2z9VQlMf98O8Xc.650HdRFK6Rr4sVG6bc/tdjjgXOW
         with open(acl_file, 'w') as f:
             f.write("""
 # testsuite acl file
-ctrl\tallow\tread\ttest/#
+ctrl\tallow\tr\ttest/#
 
-anonymous\tallow\tread\ttest/anonymous/sub/1
-anonymous\tallow\tread\ttest/anonymous/sub/2/+
-anonymous\tallow\twrite\ttest/anonymous/pub/1
-anonymous\tallow\twrite\ttest/anonymous/pub/2/#
+anonymous\tallow\tr\ttest/anonymous/sub/1
+anonymous\tallow\tr\ttest/anonymous/sub/2/+
+anonymous\tallow\tw\ttest/anonymous/pub/1
+anonymous\tallow\tw\ttest/anonymous/pub/2/#
 
-foo\tallow\tread\ttest/foo/sub/1
-foo\tallow\tread\ttest/foo/sub/2/+
-foo\tallow\twrite\ttest/foo/pub/1
-foo\tallow\twrite\ttest/foo/pub/2/#
+foo\tallow\tr\ttest/foo/sub/1
+foo\tallow\tr\ttest/foo/sub/2/+
+foo\tallow\tw\ttest/foo/pub/1
+foo\tallow\tw\ttest/foo/pub/2/#
 """)
 
         users = {

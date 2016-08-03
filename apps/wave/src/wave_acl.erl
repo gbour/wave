@@ -145,10 +145,10 @@ fill_ets(F, {ok, Line}, Count) ->
     <<Line2:S/binary, $\n>> = Line ,
 
     case binary:split(Line2, <<$\t>>, [global]) of
-        [User, <<"allow">>, Mode= <<"read">>, Topic]  -> ets:insert(?MODULE, {anon(User), read, Topic});
-        [User, <<"allow">>, Mode= <<"write">>, Topic] -> ets:insert(?MODULE, {anon(User), write, Topic});
+        [User, <<"allow">>, Mode= <<"r">>, Topic] -> ets:insert(?MODULE, {anon(User), read, Topic});
+        [User, <<"allow">>, Mode= <<"w">>, Topic] -> ets:insert(?MODULE, {anon(User), write, Topic});
 
-        [User, <<"allow">>, <<"readwrite">>, Topic]  ->
+        [User, <<"allow">>, <<"rw">>, Topic]  ->
             User2 = anon(User),
 
             ets:insert(?MODULE, {User2, read, Topic}),
