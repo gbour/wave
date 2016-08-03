@@ -67,6 +67,9 @@ anonymous\tallow\tw\tfoo/bat
         #print to_python(ret)
         yield env.remote('wave_acl', 'switch', dft['file'])
 
+    def setup_test(self):
+        # be sure log is flushed
+        time.sleep(.5)
 
     @catch
     @desc("CONNECT, DISCONNECT")
