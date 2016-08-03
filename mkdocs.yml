@@ -1,0 +1,7 @@
+site_name: wave
+docs_dir: doc
+
+pages:
+- Home: index.md
+
+theme: readthedocs

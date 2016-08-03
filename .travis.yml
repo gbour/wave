@@ -8,6 +8,10 @@ otp_release:
     - 17.5
     - 18.2.1
 
+branches:
+    except:
+        - documentation
+
 services:
     - redis-server
 
