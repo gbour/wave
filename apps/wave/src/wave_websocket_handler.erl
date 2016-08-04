@@ -82,9 +82,9 @@ websocket_info(stop, Req, State) ->
 % timeout
 websocket_info({timeout, _Ref, _Msg}, Req, State) ->
     lager:debug("timeout"),
-	{ok, Req, State};
+    {ok, Req, State};
 
 % unhandleded message
 websocket_info(_Info, Req, State) ->
-	lager:error("info: ~p", [_Info]),
-	{ok, Req, State}.
+    lager:error("info: ~p", [_Info]),
+    {ok, Req, State}.

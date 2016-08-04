@@ -65,7 +65,7 @@ handle_call(_,_,State) ->
 
 handle_cast({log, _}, State=#state{enabled=false}) ->
     {noreply, State};
-handle_cast({log, Fields=#{verb := Verb, status_code := Code, ua := Ua}}, State=#state{fh=Fh}) -> 
+handle_cast({log, Fields=#{verb := Verb, status_code := Code, ua := Ua}}, State=#state{fh=Fh}) ->
     Date = qdate:to_string("d/M/Y:H:i:s O", "Europe/Paris", calendar:universal_time()),
     Uri  = maps:get(uri , Fields, ""),
     Ip   = maps:get(ip  , Fields, "-"),

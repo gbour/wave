@@ -98,8 +98,8 @@ init([Transport, Opts]) ->
 % TODO: error cases
 -spec handle(pid(), mqtt_msg()) -> {ok, any()}.
 handle(Pid, Msg) ->
-	Resp = gen_fsm:sync_send_event(Pid, Msg),
-	{ok, Resp}.
+    Resp = gen_fsm:sync_send_event(Pid, Msg),
+    {ok, Resp}.
 
 -spec landed(pid(), binary()) -> ok.
 landed(Pid, MsgID) ->
@@ -136,7 +136,7 @@ garbage_collect(_Pid) ->
 %
 % a message is published for me
 %
--spec publish(pid(), pid(), mqtt_clientid(), {Topic::binary(), TopicF::binary()}, 
+-spec publish(pid(), pid(), mqtt_clientid(), {Topic::binary(), TopicF::binary()},
               binary(), mqtt_qos(), mqtt_retain()) -> integer().
 publish(Pid, From, _DeviceID, Topic, Content, Qos, Retain) ->
     MsgID = gen_fsm:sync_send_event(Pid, {next_msgid, Qos}),
@@ -157,8 +157,8 @@ ack(Pid, MsgID, Qos, From) ->
 %% STATES
 
 initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts}) ->
-	%gen_fsm:start_timer(5000, timeout1),
-	%lager:info("timeout set"),
+    %gen_fsm:start_timer(5000, timeout1),
+    %lager:info("timeout set"),
     DeviceID = proplists:get_value(clientid, P),
     %lager:info("received CONNECT - deviceid = <<\"~ts\">>", [DeviceID]),
 
@@ -248,7 +248,7 @@ initiate(#mqtt_msg{type='CONNECT', payload=P}, _, StateData=#session{opts=Opts})
             mqtt_offline:release(self(), DeviceID, Clean),
 
             Will = proplists:get_value(will, P),
-            {reply, Resp, connected, StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals, 
+            {reply, Resp, connected, StateData#session{deviceid=DeviceID, keepalive=Ka, opts=Vals,
                                                        topics=Topics, will=Will}, Ka};
 
         _ ->
@@ -264,8 +264,8 @@ initiate(#mqtt_msg{type=Type}, _, _StateData=#session{transport={Callback,Transp
     {stop, normal, disconnect, undefined};
 % TODO: is it ever executed ?
 initiate({timeout, _, timeout1}, _, _StateData) ->
-	lager:info("initiate timeout"),
-	{stop, disconnect, []}.
+    lager:info("initiate timeout"),
+    {stop, disconnect, []}.
 
 initiate(timeout, StateData=#session{transport={Callback,Transport,Sock}}) ->
     lager:notice("initiate:: timeout ~p", [StateData]),
@@ -296,19 +296,19 @@ connected(Msg=#mqtt_msg{type='PUBLISH', qos=0, payload=P}, _,
 
     exometer:update([wave,messages,in,0], 1),
 
-    Topic               = <<Prefix:1/binary, _/binary>> = proplists:get_value(topic, P), 
+    Topic               = <<Prefix:1/binary, _/binary>> = proplists:get_value(topic, P),
     {StatusCode, Reply} = case Prefix of
         <<"$">> ->
             lager:notice("~p: publishing to '$' prefixed topic is forbidden", [Topic]),
             {403, {stop, normal, disconnect, StateData}};
 
-        _       ->  
+        _       ->
             Username = maps:get(username, Opts),
             Status   = case wave_acl:check(wave_app:env([acl, enabled]), Username, write, Topic) of
                 deny -> 403;
 
                 % 'allow' or 'noacl'
-                _    ->  
+                _    ->
                     % only if retain=1
                     mqtt_retain:store(Msg),
 
@@ -317,7 +317,7 @@ connected(Msg=#mqtt_msg{type='PUBLISH', qos=0, payload=P}, _,
                     {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
                     mqtt_message_worker:publish(MsgWorker, self(), Msg#mqtt_msg{retain=0}), % async
 
-                    200 
+                    200
             end,
 
             {Status, {reply, undefined, connected, StateData, Ka}}
@@ -448,7 +448,7 @@ connected(Msg=#mqtt_msg{type='PUBCOMP', payload=P}, _, StateData=#session{keepal
 %TODO: prevent subscribing multiple times to the same topic
 connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _,
           StateData=#session{deviceid=DeviceID, topics=T, keepalive=Ka, opts=Opts}) ->
-	MsgId  = proplists:get_value(msgid, P),
+    MsgId  = proplists:get_value(msgid, P),
     Topics = proplists:get_value(topics, P),
 
     Username = maps:get(username, Opts),
@@ -480,9 +480,9 @@ connected(#mqtt_msg{type='SUBSCRIBE', payload=P}, _,
 
     {reply, Resp, connected, StateData#session{topics=Topics++T}, Ka};
 
-connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _, 
+connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _,
           StateData=#session{deviceid=DeviceID, topics=OldTopics, keepalive=Ka, opts=Opts}) ->
-	MsgId  = proplists:get_value(msgid, P),
+    MsgId  = proplists:get_value(msgid, P),
     Topics = proplists:get_value(topics, P),
 
     % subscribe to all listed topics (creating it if it don't exists)
@@ -495,7 +495,7 @@ connected(#mqtt_msg{type='UNSUBSCRIBE', payload=P}, _,
     ),
 
     NewTopics = lists:subtract(OldTopics, Topics),
-	Resp  = #mqtt_msg{type='UNSUBACK', payload=[{msgid,MsgId}]},
+    Resp  = #mqtt_msg{type='UNSUBACK', payload=[{msgid,MsgId}]},
 
     {reply, Resp, connected, StateData#session{topics=NewTopics}, Ka};
 
@@ -521,8 +521,8 @@ connected(Event, _, State) ->
     {stop, error, disconnect, State}.
 
 connected({timeout, _, timeout1}, _StateData) ->
-	lager:notice("timeout after connection"),
-	{stop, disconnect, []};
+    lager:notice("timeout after connection"),
+    {stop, disconnect, []};
 
 % ASYNC
 
@@ -554,7 +554,7 @@ connected({publish, MsgID, From, {Topic,_}, Content, Qos, Retain},
 
     case State of
         {error, _Err} -> {stop, normal};
-        ok            -> 
+        ok            ->
             exometer:update([wave,messages,inflight], 1),
             {next_state, connected, StateData#session{inflight=[{MsgID, From}|Inflight]}, Ka}
     end;
@@ -609,7 +609,7 @@ connected({ack, MsgID, _Qos=2, _}, StateData=#session{transport={Callback,Transp
 
 %
 %TODO: what if peer disconnected between ack received and message landed ?
-%      do a pre-check when message received (qos1 = PUBACK, qos2 = PUBCOMP) ? 
+%      do a pre-check when message received (qos1 = PUBACK, qos2 = PUBCOMP) ?
 connected({'msg-landed', MsgID}, StateData=#session{keepalive=Ka, inflight=Inflight,
                                                     deviceid=_DeviceID}) ->
     lager:debug("#~p message-id is no more in-flight", [MsgID]),
@@ -642,16 +642,16 @@ handle_event({disconnect, Reason}, _StateName, StateData) ->
     {stop, normal, StateData};
 
 handle_event(_Event, _StateName, StateData) ->
-	lager:error("event ~p", [_StateName]),
+    lager:error("event ~p", [_StateName]),
     {stop, error, StateData}.
 
 
 handle_sync_event(_Event, _From, _StateName, StateData) ->
-	lager:error("syncevent ~p", [_StateName]),
+    lager:error("syncevent ~p", [_StateName]),
     {stop, error, error, StateData}.
 
 handle_info(_Info, _StateName, StateData) ->
-	lager:error("info ~p", [_StateName]),
+    lager:error("info ~p", [_StateName]),
     {stop, error, StateData}.
 
 %
@@ -667,11 +667,11 @@ terminate(_Reason, _StateName, undefined) ->
 
 %NOTE: process/deviceid automatically unregistered from syn when process terminate
 terminate(_Reason, StateName, StateData=#session{deviceid=DeviceID, topics=T, inflight=Inflight, opts=Opts}) ->
-    lager:debug("~n * deviceid : ~p~n * reason   : ~p~n * stateName: ~p~n * stateData: ~p", 
+    lager:debug("~n * deviceid : ~p~n * reason   : ~p~n * stateName: ~p~n * stateData: ~p",
                 [DeviceID, _Reason, StateName, StateData]),
-    
-    if 
-        length(Inflight) > 0 -> 
+
+    if
+        length(Inflight) > 0 ->
             exometer:update([wave,messages,inflight], -length(Inflight)),
             lager:notice("~p: remaining inflight messages: ~p", [DeviceID, Inflight]);
         true                 -> ok
@@ -760,7 +760,7 @@ offline_unstore(DeviceID, 1) ->
 offline_unstore(DeviceID, 0) ->
     Exists = case wave_db:exists(<<"session:", DeviceID/binary>>) of
         {ok, <<"0">>} -> false;
-        {ok, <<"1">>} -> 
+        {ok, <<"1">>} ->
             wave_db:del(<<"session:", DeviceID/binary>>),
             true
     end,
@@ -769,7 +769,7 @@ offline_unstore(DeviceID, 0) ->
 
 offline_unstore2(false, _) ->
     [];
-offline_unstore2(true , DeviceID) -> 
+offline_unstore2(true , DeviceID) ->
     {ok, FlatTopics} = wave_db:range(<<"topics:", DeviceID/binary>>),
     wave_db:del(<<"topics:", DeviceID/binary>>),
 

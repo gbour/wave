@@ -70,7 +70,7 @@ display(Msg) ->
     Img = filename:join([filename:dirname(code:which(wave_app)), "..", "wave.jpg"]),
     Cmd = ["notify-send", " -i \"", Img, "\" \"", "Wave", "\" \"", erlang:binary_to_list(Msg), "\" --expire-time=2000"],
     os:cmd(lists:flatten(Cmd)),
-        
+
     ok.
 
 

@@ -83,7 +83,7 @@ match(Name) ->
 -spec count() -> {ok, integer()}.
 count() ->
     {ok, gen_server:call(?MODULE, count)}.
-    
+
 -spec dump() -> ok.
 dump() ->
     gen_server:call(?MODULE, dump).
@@ -99,7 +99,7 @@ debug_cleanup() ->
 %%
 
 handle_call(count, _, State=#state{subscriptions=S}) ->
-    {reply, erlang:length(S), State};    
+    {reply, erlang:length(S), State};
 
 handle_call(dump, _, State=#state{subscriptions=S}) ->
     priv_dump(S),
@@ -115,9 +115,9 @@ handle_call({subscribe, Topic, Qos, Subscriber}, _, State=#state{subscriptions=S
     lager:debug("~p: subscribe to '~p' topic w/ qos ~p", [Subscriber, Topic, Qos]),
 
     {TopicName, Fields} = case Topic of
-        {T, M} -> 
+        {T, M} ->
             {T, M};
-        Topic  -> 
+        Topic  ->
             {Topic, mqtt_topic_match:fields(Topic)}
     end,
 
@@ -145,7 +145,7 @@ handle_call({unsubscribe, TopicName, Subscriber}, _, State=#state{subscriptions=
             {T,Sub} =/= {TopicName, Subscriber}
         end, S
     ),
-    
+
     exometer:update([wave,subscriptions], length(S2)),
     %lager:debug("unsub2 ~p / ~p", [S, S2]),
     {reply, ok, State#state{subscriptions=S2}};
@@ -190,7 +190,7 @@ priv_dump([]) ->
 
 % remove a subscriber from subscription list
 %
--spec priv_unsubscribe(Subscriber :: subscription(), Subscribers :: list(subscription()), 
+-spec priv_unsubscribe(Subscriber :: subscription(), Subscribers :: list(subscription()),
                        Acc :: list(subscription)) -> list(subscription()).
 priv_unsubscribe(_, [], S2) ->
     S2;

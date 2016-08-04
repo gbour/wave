@@ -1,7 +1,7 @@
 #!/usr/bin/env escript
 
 %% -*- erlang -*-
-%%! -smp enable -sname import-deviceids 
+%%! -smp enable -sname import-deviceids
 -mode(compile).
 
 -include_lib("wave/include/mqtt_msg.hrl").
@@ -50,7 +50,7 @@ main(_) ->
 
 connect(ClientID, Username, Password) ->
     {ok, Sock} = gen_tcp:connect({127,0,0,1}, 1883, [binary,{active,false}]),
-    
+
     Msg = #mqtt_msg{type='CONNECT', payload=[{clientid,ClientID},{username,Username},{password,Password}]},
     case send(Sock, Msg) of
         {ok, #mqtt_msg{type='CONNACK', payload=P}} ->
@@ -75,7 +75,7 @@ send(Sock, Msg) ->
                 Err2          -> Err2
             end;
 
-        Err -> 
+        Err ->
             Err
     end.
 
@@ -87,7 +87,7 @@ recv(Sock) ->
                 Err2          -> Err2
             end;
 
-        Err -> 
+        Err ->
             Err
     end.
 

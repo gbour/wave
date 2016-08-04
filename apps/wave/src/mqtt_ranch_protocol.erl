@@ -185,7 +185,7 @@ close(Transport, Socket) ->
     lager:debug("~p: closing ~p TCP sock", [Transport, Socket]),
     Transport:close(Socket).
 
--spec peername(ranch_ssl|ranch_tcp, inet:socket()) -> {ok, {inet:ipaddress(), inet:port_number()}} 
+-spec peername(ranch_ssl|ranch_tcp, inet:socket()) -> {ok, {inet:ipaddress(), inet:port_number()}}
                                                       | {error, any()}.
 peername(wave_websocket, Socket) ->
     wave_websocket:peername(Socket);

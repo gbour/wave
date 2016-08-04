@@ -63,7 +63,7 @@ init(_) ->
 publish(Pid, From, Msg) ->
     gen_fsm:send_event(Pid, {publish, From, Msg, undefined}).
 
--spec publish(Worker::pid(), Emitter::pid()|'retain_session'|'offline_session', Msg::mqtt_msg(), 
+-spec publish(Worker::pid(), Emitter::pid()|'retain_session'|'offline_session', Msg::mqtt_msg(),
               list(mqtt_topic_registry:match_result())) -> ok.
 publish(Pid, From, Msg, Subscribers) ->
     gen_fsm:send_event(Pid, {publish, From, Msg, Subscribers}).
@@ -114,7 +114,7 @@ start({publish, From, Msg=#mqtt_msg{type='PUBLISH', qos=Qos, payload=P}, Subscri
 
 % qos=2
 % TODO: From should be equal to Pub, to test
-provisional({provresp, From, Msg=#mqtt_msg{type='PUBREL', payload=P}}, 
+provisional({provresp, From, Msg=#mqtt_msg{type='PUBREL', payload=P}},
             State=#state{publisher=Pub, message=PubMsg, subscribers=Subscribers}) ->
     lager:debug("provisional state: received provisional response from ~p: ~p", [From, Msg]),
 
@@ -143,7 +143,7 @@ provisional(timeout, State=#state{publisher=From, message=#mqtt_msg{qos=Qos}}) -
         true -> {next_state, provisional, State, 5000};
 
         % publisher dead, stopping worker
-        _    -> 
+        _    ->
             lager:notice("publisher ~p is dead: canceling message delivery (qos ~p, no PUBREL received)", [From, Qos]),
             {stop, normal, State}
     end.
@@ -162,7 +162,7 @@ waitacks({provreq, From, Msg=#mqtt_msg{payload=P}}, State=#state{inflight=Inflig
     MsgID         = proplists:get_value(msgid, P),
     {Match, Rest} = lists:partition(fun({_,_,Pid,ID,_}) -> Pid =:= From andalso ID =:= MsgID end, Inflight),
 
-    case {Match, Rest} of 
+    case {Match, Rest} of
         {[], _} ->
             lager:notice("~p not found in message subscribers", [From]),
             {next_state, waitacks, State, 5000};
@@ -216,7 +216,7 @@ waitacks({Event, From, Msg}, State) ->
 waitacks(timeout, State=#state{inflight=Inflight}) ->
     {Inflight2, Dead} = lists:partition(fun({_,_,Pid,_,_}) -> is_process_alive(Pid) end, Inflight),
     lager:debug("dead subscribers: ~p", [Dead]),
-    
+
     case Inflight2 of
         [] ->
             lager:notice("no more alive subscribers: canceling message delivery"),
@@ -246,7 +246,7 @@ handle_info(_Info, _StateName, StateData) ->
 
 terminate(normal, StateName, #state{publisher=Pub, message=#mqtt_msg{payload=P}}) ->
     lager:debug("normal terminaison (state ~p)", [StateName]),
-    
+
     MsgID = proplists:get_value(msgid, P),
     mqtt_session:landed(Pub, MsgID), % message no more in in-flight mode
 
@@ -269,7 +269,7 @@ code_change(_OldVsn, StateName, StateData, _Extra) ->
 %
 %TODO: check return status (if sender died => stop message delivery) when possible
 %      (when is async, result is always 'ok')
--spec send(publish, Receiver::mqtt_topic_registry:subscriber(), {Topic::binary(), TFilter::binary()}, 
+-spec send(publish, Receiver::mqtt_topic_registry:subscriber(), {Topic::binary(), TFilter::binary()},
            Payload::binary(), Qos::integer(), Retain::mqtt_retain()) -> integer().
 send(publish, {Mod,Fun,Pid,DeviceID}, Topic, Payload, Qos, Retain) ->
     Mod:Fun(Pid, self(), DeviceID, Topic, Payload, Qos, Retain).
@@ -292,7 +292,7 @@ send(ack, Publisher, MsgID, Qos) ->
 
 % Forward published message to all subscribers
 %
--spec publish_to_subscribers(Emitter::pid(), Msg::mqtt_msg(), 
+-spec publish_to_subscribers(Emitter::pid(), Msg::mqtt_msg(),
                              Subscribers::list(mqtt_topic_registry:match_result()))  -> list(subscriber()).
 publish_to_subscribers(From, Msg=#mqtt_msg{payload=P}, undefined) ->
     Topic = proplists:get_value(topic, P),
@@ -336,14 +336,14 @@ publish_to_subscribers(_From, #mqtt_msg{type='PUBLISH', qos=Qos, retain=Retain, 
 % Send ACKNOWLEDGEMENT to emitter
 %
 %
--spec checkack(AckType::'PUBACK'|'PUBCOMP', Subscribers::[subscriber()], Rest::[subscriber()], state()) -> 
+-spec checkack(AckType::'PUBACK'|'PUBCOMP', Subscribers::[subscriber()], Rest::[subscriber()], state()) ->
         pass|stop|acked.
 checkack(_, _Match=[], _, _) ->
     lager:notice("~p not found in message subscribers", ["Subscriber"]),
     pass;
 
 % qos 1
-% no remaining subscribers waiting for acknowledgement 
+% no remaining subscribers waiting for acknowledgement
 % we send acknowledgement back to publisher
 checkack('PUBACK', [{_EQos=1, _,_,_,_}], [], #state{publisher=Pub, message=#mqtt_msg{qos=Qos, payload=P}}) ->
     lager:debug("message delivery acknowledged by all subscribers: sending ack to publisher"),
@@ -356,9 +356,9 @@ checkack('PUBACK', [{_EQos=1, _,_,_,_}], Rest, _) ->
     acked;
 
 % qos 2
-% no remaining subscribers 
+% no remaining subscribers
 % we send
-checkack('PUBCOMP', [{_EQos=2, Status, _,_,_}], [], 
+checkack('PUBCOMP', [{_EQos=2, Status, _,_,_}], [],
          #state{publisher=Pub, message=#mqtt_msg{qos=Qos, payload=P}}) ->
     case Status of
         published ->

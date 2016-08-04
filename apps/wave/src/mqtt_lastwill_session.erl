@@ -58,15 +58,15 @@ run({'msg-landed', MsgID}, State) ->
     {next_state, run, State}.
 
 handle_event(_Event, _StateName, StateData) ->
-	lager:debug("event ~p", [_StateName]),
+    lager:debug("event ~p", [_StateName]),
     {stop, error, StateData}.
 
 handle_sync_event(_Event, _From, _StateName, StateData) ->
-	lager:debug("syncevent ~p", [_StateName]),
+    lager:debug("syncevent ~p", [_StateName]),
     {stop, error, error, StateData}.
 
 handle_info(_Info, _StateName, StateData) ->
-	lager:debug("info ~p", [_StateName]),
+    lager:debug("info ~p", [_StateName]),
     {stop, error, StateData}.
 
 terminate(_Reason, _StateName, _State) ->

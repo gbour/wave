@@ -52,7 +52,7 @@ init(_) ->
 process(Pid, Topic, Content) ->
     P = jiffy:decode(Content, [return_maps]),
     lager:debug("process wavectl request: ~p > ~p", [Topic, P]),
-    case maps:find(<<"request">>, P) of 
+    case maps:find(<<"request">>, P) of
         error ->
             lager:info("request not found in payload");
 
@@ -92,7 +92,7 @@ code_change(_, State, _) ->
     {ok, State}.
 
 
-%% 
+%%
 %% PRIVATE functions
 %%
 -spec publish(binary(), map()) -> ok.

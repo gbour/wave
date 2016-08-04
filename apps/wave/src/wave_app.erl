@@ -43,7 +43,7 @@ start() ->
     ok.
 
 start(_StartType, _StartArgs) ->
-	lager:debug("starting wave app"),
+    lager:debug("starting wave app"),
     ?DEBUGW("DEBUG MODE ACTIVATED"),
 
     % initialize syn (global process registry)
@@ -58,11 +58,11 @@ start(_StartType, _StartArgs) ->
 
     % start modules supervisor, add it as master sup child
     supervisor:start_child(WaveSup, {wave_modules_sup,
-        {wave_modules_sup, start_link, []}, 
+        {wave_modules_sup, start_link, []},
         permanent, 5000, supervisor, [wave_modules_sup]}
     ),
 
-	% start mqtt listeners
+    % start mqtt listeners
     supervisor:start_child(WaveSup, ranch:child_spec(wave_tcp, 1, ranch_tcp, [
             {port, env([plain, port])}
             ,{keepalive, true}
@@ -87,19 +87,19 @@ start(_StartType, _StartArgs) ->
             {hibernate_after, 1000}
 
         ], mqtt_ranch_protocol, [])),
-    
-    % websocket listener
-	Dispatch = cowboy_router:compile([
-		{'_', [
-			{'_', wave_websocket_handler, []}
-		]}
-	]),
 
-	{ok, _} = cowboy:start_http(ws, 1, [
+    % websocket listener
+    Dispatch = cowboy_router:compile([
+        {'_', [
+            {'_', wave_websocket_handler, []}
+        ]}
+    ]),
+
+    {ok, _} = cowboy:start_http(ws, 1, [
             {port, env([websocket, port])}
         ], [{env, [{dispatch, Dispatch}]}]),
 
-	{ok, _} = cowboy:start_https(wss, 1, [
+    {ok, _} = cowboy:start_https(wss, 1, [
             {port, env([websocket, ssl_port])},
 
             {certfile, env([ssl, certfile])},
@@ -116,7 +116,7 @@ start(_StartType, _StartArgs) ->
             {hibernate_after, 1000}
 
         ], [{env, [{dispatch, Dispatch}]}]),
-	%websocket_sup:start_link().
+    %websocket_sup:start_link().
 
     exometer_init(),
     {ok, WaveSup}.

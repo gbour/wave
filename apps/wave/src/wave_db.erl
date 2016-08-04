@@ -69,7 +69,7 @@ set({h, Key, Field}, Value) ->
 -spec set({s|h, binary()}, any(), list()) -> return().
 set(Key, Value, []) ->
     set(Key, Value);
-set(Key={_,K}, Value, [{expiration,Expiration}|Opts]) -> 
+set(Key={_,K}, Value, [{expiration,Expiration}|Opts]) ->
     lager:debug("set db expiration: ~p", [Expiration]),
 
     case set(Key, Value, Opts) of

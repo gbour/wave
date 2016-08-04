@@ -20,7 +20,7 @@
 -export([device/1]).
 
 -spec device({deviceid, binary()}) -> {error, notfound} 
-                                        | {error, binary()|[binary()]} 
+                                        | {error, binary()|[binary()]}
                                         | {ok, jiffy:json_value()}.
 device({deviceid, DeviceID}) ->
     device2({id, eget(<<"d:", DeviceID/binary, ":id">>)}).

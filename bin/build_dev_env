@@ -35,7 +35,7 @@ main([_Tmpl, _Vars, Out]) ->
     Tmpl = bbmustache:parse_file(erlang:list_to_binary(_Tmpl)),
     Vars = case file:consult(_Vars) of
         {ok, Terms} -> atom2string(Terms);
-        _Err        -> 
+        _Err        ->
             io:format("~p", [_Err]),
             halt(2)
     end,

@@ -57,7 +57,7 @@ module_init([], _, ChildSpecs) ->
 module_init([Modname|Rest], Opts, ChildSpecs) ->
     lager:info("starting module: ~p", [Modname]),
     Mod  = (wave_utils:atom("wave_mod_" ++ wave_utils:str(Modname))),
-    Args = proplists:get_value(Modname, Opts, []),   
+    Args = proplists:get_value(Modname, Opts, []),
 
     % webservice entries
 %    case erlang:function_exported(M, ws, 0) of

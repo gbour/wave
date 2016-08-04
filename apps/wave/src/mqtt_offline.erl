@@ -62,7 +62,7 @@ release(Session, DeviceID, Clean) ->
 %
 %NOTE: msg_worker, calling publish(), needs to know the MsgID assigned to
 %      MQTT PUBLISH msg sent to peer client, in order to match responses (provreq and/or ack)
--spec publish(pid(), pid(), mqtt_clientid(), {Topic::binary(), TopicF::binary()}, 
+-spec publish(pid(), pid(), mqtt_clientid(), {Topic::binary(), TopicF::binary()},
               binary(), mqtt_qos(), mqtt_retain()) -> integer().
 publish(Pid, From, DeviceID, Topic, Content, Qos, Retain) ->
     gen_server:call(?MODULE, {publish, DeviceID, Topic, Content, Qos, Retain, From}).
@@ -88,7 +88,7 @@ handle_call({register, DeviceID, TopicFs}, _, State=#state{subscriptions=Subs}) 
 %
 %NOTE: Qos here is min(publish qos, subscribe qos), so don't need to store original subscribed qos
 %
-handle_call({publish, DeviceID, {Topic, TopicF}, Content, Qos, Retain, MsgWorker}, _, 
+handle_call({publish, DeviceID, {Topic, TopicF}, Content, Qos, Retain, MsgWorker}, _,
             State=#state{next_msgid=MsgID}) ->
     %TODO: optimisation: for messages shorted than len(HMAC),
     %      store directly the message in the queue
@@ -103,7 +103,7 @@ handle_call({publish, DeviceID, {Topic, TopicF}, Content, Qos, Retain, MsgWorker
     % when qos > 0, message must be acknowledged
     priv_ack(Qos, MsgWorker, MsgID),
     {reply, MsgID, State#state{next_msgid=next_msgid(MsgID)}};
- 
+
 
 handle_call(Event,_,State) ->
     lager:warning("non catched call: ~p", [Event]),
@@ -113,7 +113,7 @@ handle_call(Event,_,State) ->
 %TODO: operations should be atomic
 handle_cast({release, Session, DeviceID, Clean}, State=#state{subscriptions=Subs}) ->
     lager:debug("release: ~p :: ~p", [DeviceID, maps:get(DeviceID, Subs, undefined)]),
-   
+
     % unregistering from topic registry
     lists:foreach(fun({TopicF, Qos}) ->
             mqtt_topic_registry:unsubscribe(TopicF, {?MODULE, publish, self(), DeviceID})
@@ -193,7 +193,7 @@ priv_release2(0, Session, DeviceID, [Topic, Qos, MsgID |T]) ->
     Subscription = {undefined, wave_utils:int(Qos), {mqtt_session, publish, Session, DeviceID}, []},
     {ok, MsgWorker} = supervisor:start_child(wave_msgworkers_sup, []),
     mqtt_message_worker:publish(MsgWorker, offline_session, Msg, [Subscription]),
-    
+
     priv_release2(0, Session, DeviceID, T).
 
 -spec priv_clean_msg(integer(), binary()) -> ok.
@@ -212,7 +212,7 @@ priv_clean_msg(  _,     _)              ->
 priv_ack(1, MsgWorker, MsgID) ->
     mqtt_message_worker:ack(MsgWorker, self(), #mqtt_msg{type='PUBACK', payload=[{msgid, MsgID}]});
 priv_ack(2, MsgWorker, MsgID) ->
-    mqtt_message_worker:provisional(request, MsgWorker, self(), 
+    mqtt_message_worker:provisional(request, MsgWorker, self(),
                                     #mqtt_msg{type='PUBREC', payload=[{msgid, MsgID}]});
 priv_ack(_, _, _) ->
     ok.

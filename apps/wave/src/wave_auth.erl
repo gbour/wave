@@ -88,13 +88,13 @@ handle_call({auth, DeviceID, User, Password}, _, State) ->
                 _    -> {error, bad_credentials}
             end;
 
-        _ -> 
+        _ ->
             % make it harder to guess if Username exists or not
             % (as erlpass:match() takes around 600ms to execute)
             erlpass:match(<<"foo">>,<<"$2a$12$6zOUIP0NEwBupO7ATO.Hv..ZQq5WGmyZ0rCYGUoznFrYpFZkr8ppy">>),
             {error, bad_credentials}
     end,
-        
+
     {reply, Match, State};
 
 % load a new password file

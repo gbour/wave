@@ -22,7 +22,7 @@
 
 -record(state, {
     username,
-    password    
+    password
 }).
 
 % wave_module API
@@ -58,7 +58,7 @@ init([Conf]) ->
     [
         %lager:info("topic= ~p", [Topic]),
         mqtt_topic_registry:subscribe(wave_utils:bin(Topic), 0, {?MODULE,trigger,self(),undefined})
-        
+
         || Topic <- proplists:get_value(topics, Conf)
     ],
     {ok, #state{username=Username, password=Password}}.
@@ -72,7 +72,7 @@ trigger(Pid, _, _DeviceID, _Topic, Payload, _Qos, _Retain) ->
     P = jiffy:decode(Payload, [return_maps]),
     lager:info("trigger ~p", [P]),
 
-    case maps:find(<<"action">>, P) of 
+    case maps:find(<<"action">>, P) of
         {ok, Action} ->
             gen_server:cast(Pid, {Action, P});
 
@@ -125,12 +125,12 @@ send_sms({Username, Password}, User, Srv, From, Date) ->
     lager:info("send_sms: ~p ~p ~p ~p", [User, Srv, From, Date]),
 
     % [SEC] albator: *jdoe* connected successfully from _1.2.3.4_ at 2014/10/22 11:22:33
-    Msg = <<"[SEC] ",Srv/binary,":: *",User/binary, 
+    Msg = <<"[SEC] ",Srv/binary,":: *",User/binary,
         "* successfully connected from _",From/binary,"_ at ",Date/binary>>,
 
     lager:debug("message sent: ~p", [Msg]),
     {ok, Conn} = shotgun:open("smsapi.free-mobile.fr", 443, https),
-    R = shotgun:get(Conn, "/sendmsg?user="++Username++"&pass="++Password++"&msg="++ 
+    R = shotgun:get(Conn, "/sendmsg?user="++Username++"&pass="++Password++"&msg="++
         http_uri:encode(erlang:binary_to_list(Msg))),
     lager:info("~p", [R]),
     shotgun:close(Conn),

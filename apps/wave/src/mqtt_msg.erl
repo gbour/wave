@@ -44,7 +44,7 @@
 %  - SUBACK      (min 3)
 %  - UNSUBSCRIBE (min 3)
 %
--spec decode(binary()) -> {ok, mqtt_msg(), binary()} 
+-spec decode(binary()) -> {ok, mqtt_msg(), binary()}
                           | {error, size, integer()}
                           | {error, overflow|{type, integer()}}
                           | {error, disconnect|conformity|protocol_version, binary()}.
@@ -141,9 +141,9 @@ decode_payload('SUBSCRIBE', _, {_Len, <<MsgID:16, Payload/binary>>}) ->
         _ -> pass
     end,
 
-	Topics = get_topics(Payload, [], true),
-	%lager:debug("topics= ~p", [Topics]),
-	{ok, [{msgid, MsgID},{topics, Topics}]};
+    Topics = get_topics(Payload, [], true),
+    %lager:debug("topics= ~p", [Topics]),
+    {ok, [{msgid, MsgID},{topics, Topics}]};
 
 decode_payload('UNSUBSCRIBE', _, {_Len, <<MsgID:16, Payload/binary>>}) ->
     %lager:debug("UNSUBSCRIBE: ~p", [Payload]),
@@ -202,7 +202,7 @@ decode_payload(Cmd, Flags, Args) ->
 
 % match wrong protocol versions
 % VALID
--spec decode_connect(binary(), byte(), 0|1, {bitstring(), char(), binary()}) -> 
+-spec decode_connect(binary(), byte(), 0|1, {bitstring(), char(), binary()}) ->
         {error, conformity|protocol_version} | {ok, list({atom(), any()})}.
 decode_connect(<<"MQIsdp">>, Vers=3, 0, Payload) ->
     decode_connect2(Vers, Payload);
@@ -283,7 +283,7 @@ decode_connect2(Version,
     ]}.
 
 
--spec get_topics(Data :: binary(), Acc :: list(any()), Subscription :: true|false) -> 
+-spec get_topics(Data :: binary(), Acc :: list(any()), Subscription :: true|false) ->
         Topics::list(Topic::binary()|{Topic::binary(), Qos::integer()}).
 get_topics(<<>>, [], true) ->
     erlang:throw({'SUBSCRIBE'  , "MQTT-3.8.3-1" , "no topic filter/qos"});
@@ -327,7 +327,7 @@ decode_subscribe_qos(<<_:6, Qos:2/integer, Rest/binary>>) ->
     {Qos, Rest}.
 
 
--spec decode_rlength(binary(), integer(), integer()) -> {error, overflow} 
+-spec decode_rlength(binary(), integer(), integer()) -> {error, overflow}
                                                         | {error, size, integer()}
                                                         | {Size::integer(), RestSize::integer(), Rest::binary()}.
 decode_rlength(_Pkt, PktSize, MinLen) when PktSize < MinLen ->
@@ -369,7 +369,7 @@ encode(#mqtt_msg{retain=Retain, qos=Qos, dup=Dup, type=Type, payload=Payload}) -
     P = encode_payload(Type, Qos, Payload),
     %lager:info("~p ~p", [P, is_binary(P)]),
 
-	<<
+    <<
         % fixed headers
         (atom2type(Type)):4, Dup:1, Qos:2, Retain:1,
         % remaining length
@@ -483,12 +483,12 @@ encode_payload('SUBACK', _Qos, Opts) ->
     >>;
 
 encode_payload('UNSUBACK', _Qos, [{msgid, MsgID}]) ->
-	<<MsgID:16>>;
+    <<MsgID:16>>;
 
 encode_payload('PINGREQ', _Qos, _) ->
     <<>>;
 encode_payload('PINGRESP', _Qos, _) ->
-	<<>>.
+    <<>>.
 
 -spec encode_string(undefined|string()) -> binary().
 encode_string(undefined) ->
@@ -501,11 +501,11 @@ encode_string(Str) ->
 
 -spec encode_qos(undefined|list(integer())) -> binary().
 encode_qos(undefined) ->
-	<<>>;
+    <<>>;
 encode_qos([]) ->
-	<<>>;
+    <<>>;
 encode_qos([H|T]) ->
-	<<H:8/integer, (encode_qos(T))/binary>>.
+    <<H:8/integer, (encode_qos(T))/binary>>.
 
 
 -spec atom2type(mqtt_verb()) -> integer().
