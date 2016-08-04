@@ -118,14 +118,12 @@ init(ParentPid, Peer) ->
 
 -spec loop(undefined|#state{}) -> ok.
 loop(undefined) ->
-    lager:error("end loop"),
     ok;
 loop(State=#state{parent=Parent, child=Child, child_state=CState, in_buf=InBuf}) ->
-            lager:error("loop"),
     State2 = receive
         % incoming packet from network
         {feed, Pkt} ->
-            lager:error("feed"),
+            %lager:debug("feed"),
             case CState of
                 await   -> Child ! {ok, Pkt}, State#state{child_state=undefined};
                 _       -> State#state{in_buf= <<InBuf/binary, Pkt/binary>>}
