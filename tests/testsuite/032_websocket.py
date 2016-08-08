@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf8 -*-
 
 import ssl
@@ -7,6 +6,7 @@ import pprint
 import websocket
 
 from lib import env
+from lib.env import debug
 from TestSuite import *
 from mqttcli import MqttClient
 from nyamuk import *
@@ -34,16 +34,18 @@ class WebSocket(TestSuite):
         nyamuk_ws.SUBPROTOCOLS[4] = subproto
 
         if status != NC.ERR_SUCCESS:
+            debug(status)
             return True
 
         return False
-        
+
     @catch
     @desc("[MQTT-6.0.0-3,MQTT-6.0.0-4] Server accepts 'mqtt' websocket subprotocol")
     def test_002(self):
         try:
             c = MqttClient("ws", port=1884, websocket=True, connect=4)
-        except Exception:
+        except Exception, e:
+            debug(e)
             return False
 
         c.disconnect()
@@ -54,7 +56,8 @@ class WebSocket(TestSuite):
     def test_003(self):
         try:
             c = MqttClient("ws", port=1884, websocket=True, connect=3)
-        except Exception:
+        except Exception, e:
+            debug(e)
             return False
 
         c.disconnect()
@@ -70,6 +73,7 @@ class WebSocket(TestSuite):
         ws.send('foobar')
         ws.recv()
         if ws.connected:
+            debug("ws connected")
             return False
 
         ws.close()
@@ -80,8 +84,8 @@ class WebSocket(TestSuite):
     def test_010(self):
         cli = MqttClient("ws", port=8884, websocket=True, ssl=True, ssl_opts={'ssl_version': SSL_VERSION})
         evt = cli.connect(version=4)
-        print evt
         if not isinstance(evt, EventConnack):
+            debug(evt)
             return False
 
         cli.disconnect()
@@ -100,6 +104,7 @@ class WebSocket(TestSuite):
         if not isinstance(evt, EventPublish) or\
                 evt.msg.topic != "foo/bar" or\
                 evt.msg.payload != "baz":
+            debug(evt)
             return False
 
         ws.disconnect(); tcp.disconnect()
@@ -169,7 +174,7 @@ class WebSocket(TestSuite):
         workers = yield env.remote('supervisor','which_children', Atom('wave_sessions_sup'))
         #workers = ["<0.{0}.{1}>".format(pid.nodeId, pid.serial) for (a, pid, b, c) in workers]
         for (a, pid, b, c) in workers:
-            env.debug("(pre:cleanup) killing {0} session worker".format(to_python(pid)))
+            debug("(pre:cleanup) killing {0} session worker".format(to_python(pid)))
             yield env.remote('erlang', 'exit', pid, Atom('kill'))
 
 
@@ -180,7 +185,7 @@ class WebSocket(TestSuite):
         workers = [pid for (a, pid, b, c) in workers]
         #pprint.pprint(workers)
         if len(workers) != 1:
-            env.debug("more than 1 mqtt_sessions workers running")
+            debug("more than 1 mqtt_sessions workers running")
             defer.returnValue(False)
         processes = {'session': workers[0]}
 
@@ -217,7 +222,7 @@ class WebSocket(TestSuite):
         #print (yield check_running(processes))
         rprocs = yield check_running(processes)
         if len(rprocs) != len(processes):
-            env.debug("not all processes are alive before disconnect: {0}".format(rprocs))
+            debug("not all processes are alive before disconnect: {0}".format(rprocs))
             defer.returnValue(False)
 
 
@@ -226,7 +231,7 @@ class WebSocket(TestSuite):
         rprocs = yield check_running(processes)
         #print rprocsi
         if len(rprocs) != 0:
-            env.debug("{0} proc(s) still running after disconnect".format(rprocs))
+            debug("{0} proc(s) still running after disconnect".format(rprocs))
             defer.returnValue(False)
 
         defer.returnValue(True)

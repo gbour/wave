@@ -1,9 +1,9 @@
-#!/usr/bin/env python
 # -*- coding: utf8 -*-
 
 import time
 
 from lib import env
+from lib.env import debug
 from TestSuite import *
 from mqttcli import MqttClient
 
@@ -15,7 +15,7 @@ import twotp
     When a message delivery cannot be completed
 
     1) qos 2 message publisher die/disconnects after PUBLISH: never send back PUBREL
-    2) subscriber die/disconnects after receiving PUBLISH 
+    2) subscriber die/disconnects after receiving PUBLISH
             qos 1: do not send back PUBACK
             qos 2: do not send back PUBREC or PUBCOMP
 """
@@ -56,12 +56,15 @@ class PartialDelivery(TestSuite):
         # PUBREL not sent
         pub.destroy(); del pub
 
-        if (yield self.msgworkers_count()) != 1:
+        cnt = yield self.msgworkers_count()
+        if cnt != 1:
+            debug("wrong msgworkers count: {0}".format(cnt))
             defer.returnValue(False)
 
         # msg worker is destroyed after 5 secs
         time.sleep(6)
         if (yield self.msgworkers_count()) != 0:
+            debug("wrong msgworkers count")
             defer.returnValue(False)
 
         defer.returnValue(True)
@@ -78,17 +81,20 @@ class PartialDelivery(TestSuite):
 
         evt = sub.recv()
         if not isinstance(evt, EventPublish):
+            debug(evt)
             defer.returnValue(False)
 
         # PUBACK not send
         sub.destroy(); del sub
 
         if (yield self.msgworkers_count()) != 1:
+            debug("wrong msgworkers count")
             defer.returnValue(False)
 
         # msg worker is destroyed after 5 secs
         time.sleep(6)
         if (yield self.msgworkers_count()) != 0:
+            debug("wrong msgworkers count")
             defer.returnValue(False)
 
         pub.disconnect()
@@ -112,21 +118,25 @@ class PartialDelivery(TestSuite):
         sub.destroy(); del sub
 
         if (yield self.msgworkers_count()) != 1:
+            debug("wrong msgworkers count")
             defer.returnValue(False)
 
         # sub removed, sub2 still alive
         time.sleep(6)
         if (yield self.msgworkers_count()) != 1:
+            debug("wrong msgworkers count")
             defer.returnValue(False)
 
         # sub2 still alive
         time.sleep(6)
         if (yield self.msgworkers_count()) != 1:
+            debug("wrong msgworkers count")
             defer.returnValue(False)
 
         # msg worker is destroyed after 5 secs
         sub2.puback(evt2.msg.mid)
         if (yield self.msgworkers_count()) != 0:
+            debug("wrong msgworkers count")
             defer.returnValue(False)
 
         pub.disconnect()
@@ -145,17 +155,20 @@ class PartialDelivery(TestSuite):
 
         evt = sub.recv()
         if not isinstance(evt, EventPublish):
+            debug(evt)
             defer.returnValue(False)
 
         # PUBREC not send
         sub.destroy(); del sub
 
         if (yield self.msgworkers_count()) != 1:
+            debug("wrong msgworkers count")
             defer.returnValue(False)
 
         # msg worker is destroyed after 5 secs
         time.sleep(6)
         if (yield self.msgworkers_count()) != 0:
+            debug("wrong msgworkers count")
             defer.returnValue(False)
 
         pub.disconnect()
@@ -174,6 +187,7 @@ class PartialDelivery(TestSuite):
 
         evt = sub.recv()
         if not isinstance(evt, EventPublish):
+            debug(evt)
             defer.returnValue(False)
         sub.pubrec(evt.msg.mid)
 
@@ -181,11 +195,13 @@ class PartialDelivery(TestSuite):
         sub.destroy(); del sub
 
         if (yield self.msgworkers_count()) != 1:
+            debug("wrong msgworkers count")
             defer.returnValue(False)
 
         # msg worker is destroyed after 5 secs
         time.sleep(6)
         if (yield self.msgworkers_count()) != 0:
+            debug("wrong msgworkers count")
             defer.returnValue(False)
 
         pub.disconnect()
@@ -200,6 +216,7 @@ class PartialDelivery(TestSuite):
         sub.disconnect()
 
         if (yield self.msgworkers_count()) != 0:
+            debug("wrong msgworkers count")
             defer.returnValue(False)
 
         pub = MqttClient("pub", connect=4)
@@ -207,10 +224,12 @@ class PartialDelivery(TestSuite):
         ack = pub.pubrel(rec.mid)
         print ack
         if not isinstance(ack, EventPubcomp):
+            debug(ack)
             defer.returnValue(False)
 
         # msg is published to offline storage, msg worker should exit immediately
         if (yield self.msgworkers_count()) != 0:
+            debug("wrong msgworkers count")
             defer.returnValue(False)
 
         defer.returnValue(True)

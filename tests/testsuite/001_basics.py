@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: UTF8 -*-
 
 from TestSuite import TestSuite, desc, catch
@@ -9,17 +8,12 @@ class Basic(TestSuite):
     def __init__(self):
         TestSuite.__init__(self, "basic tests")
 
-    def newclient(self, name="req"):
-        c = MqttClient(name)
-        c.do("connect")
-
-        return c
 
     @catch
     @desc("CONNECT")
-    def test_01(self):
+    def test_001(self):
         c = MqttClient("reg")
-        evt = c.do("connect")
+        evt = c.connect()
 
         # [MQTT-3.1.4-4]: CONNACK retcode MUST be 0
         # [MQTT-3.2.2-3]: CONNACK session_present IS 0
@@ -34,8 +28,8 @@ class Basic(TestSuite):
     #      then we check server has closed the socket
     @catch
     @desc("DISCONNECT")
-    def test_02(self):
-        c = self.newclient()
+    def test_002(self):
+        c = MqttClient("reg", connect=4)
         #evt = c._c.disconnect()
         c.disconnect()
 
@@ -43,11 +37,10 @@ class Basic(TestSuite):
 
     @catch
     @desc("SUBSCRIBE/UNSUBSCRIBE")
-    def test_10(self):
-        c = MqttClient("reg")
-        c.do("connect")
+    def test_010(self):
+        c = MqttClient("reg", connect=4)
 
-        evt = c.do("subscribe", "/foo/bar", 0)
+        evt = c.subscribe("/foo/bar", qos=0)
         # validating [MQTT-2.3.1-7]
         if not isinstance(evt, EventSuback) or evt.mid != c.get_last_mid():
             return False
@@ -62,21 +55,18 @@ class Basic(TestSuite):
 
     @catch
     @desc("PUBLISH (qos=0). no response")
-    def test_11(self):
-        c = self.newclient()
+    def test_011(self):
+        c = MqttClient("reg", connect=4)
         e = c.publish("/foo/bar", "plop")
         # QOS = 0 : no response indented
-        if e is not None:
-            c.disconnect()
-            return False
-
         c.disconnect()
-        return True
+
+        return (e is None)
 
     @catch
     @desc("PING REQ/RESP")
-    def test_20(self):
-        c = self.newclient()
+    def test_020(self):
+        c = MqttClient("reg", connect=4)
         e = c.send_pingreq()
         c.disconnect()
 

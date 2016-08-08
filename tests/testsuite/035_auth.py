@@ -1,17 +1,17 @@
-#!/usr/bin/env python
 # -*- coding: UTF8 -*-
-
-from lib import env
-from TestSuite import *
-from mqttcli import MqttClient
-from nyamuk.event import *
-from nyamuk.mqtt_pkt import MqttPkt
 
 import os
 import time
 import socket
 import tempfile
 import subprocess
+
+from lib import env
+from lib.env import debug
+from TestSuite import *
+from mqttcli import MqttClient
+from nyamuk.event import *
+from nyamuk.mqtt_pkt import MqttPkt
 
 from twisted.internet import defer
 from twotp import Atom, to_python, Tuple
@@ -25,7 +25,7 @@ def set_env(values):
     }
 
     dft.update(values)
-    
+
     ret = yield env.remote('application', 'set_env', Atom('wave'), Atom('auth'),
                       [Tuple([Atom(k), types[k](v)]) for k,v in dft.iteritems()])
     defer.returnValue(to_python(ret))
@@ -50,8 +50,9 @@ class Auth(TestSuite):
         c = MqttClient("auth", connect=False)
         ret = c.connect(version=4)
         if not isinstance(ret, EventConnack) or\
-            ret.ret_code != 0:
-                defer.returnValue(False)
+                ret.ret_code != 0:
+            debug(ret)
+            defer.returnValue(False)
 
         defer.returnValue(True)
 
@@ -66,6 +67,7 @@ class Auth(TestSuite):
         if isinstance(ret, EventConnack) and ret.ret_code == 4:
             defer.returnValue(True)
 
+        debug(ret)
         defer.returnValue(False)
 
     @catch
@@ -80,6 +82,7 @@ class Auth(TestSuite):
         if isinstance(ret, EventConnack) and ret.ret_code == 4:
             defer.returnValue(True)
 
+        debug(ret)
         defer.returnValue(False)
 
     @catch
@@ -87,7 +90,7 @@ class Auth(TestSuite):
     @defer.inlineCallbacks
     def test_004(self):
         tmp = tempfile.mktemp(suffix='wave-testsuite')
-        subprocess.Popen("echo \"bar\"|../bin/mkpasswd -c {0} foo".format(tmp), 
+        subprocess.Popen("echo \"bar\"|../bin/mkpasswd -c {0} foo".format(tmp),
                          shell=True, stdout=subprocess.PIPE).wait()
         yield set_env({'required': 'true', 'file': tmp})
         yield env.remote('wave_auth', 'switch', tmp)
@@ -98,6 +101,7 @@ class Auth(TestSuite):
         if isinstance(ret, EventConnack) and ret.ret_code == 4:
             defer.returnValue(True)
 
+        debug(ret)
         defer.returnValue(False)
 
     @catch
@@ -105,7 +109,7 @@ class Auth(TestSuite):
     @defer.inlineCallbacks
     def test_005(self):
         tmp = tempfile.mktemp(suffix='wave-testsuite')
-        subprocess.Popen("echo \"bar\"|../bin/mkpasswd -c {0} foo".format(tmp), 
+        subprocess.Popen("echo \"bar\"|../bin/mkpasswd -c {0} foo".format(tmp),
                          shell=True, stdout=subprocess.PIPE).wait()
         yield set_env({'required': 'true', 'file': tmp})
         yield env.remote('wave_auth', 'switch', tmp)
@@ -116,6 +120,7 @@ class Auth(TestSuite):
         if isinstance(ret, EventConnack) and ret.ret_code == 4:
             defer.returnValue(True)
 
+        debug(ret)
         defer.returnValue(False)
 
     @catch
@@ -123,7 +128,7 @@ class Auth(TestSuite):
     @defer.inlineCallbacks
     def test_006(self):
         tmp = tempfile.mktemp(suffix='wave-testsuite')
-        subprocess.Popen("echo \"bar\"|../bin/mkpasswd -c {0} foo".format(tmp), 
+        subprocess.Popen("echo \"bar\"|../bin/mkpasswd -c {0} foo".format(tmp),
                          shell=True, stdout=subprocess.PIPE).wait()
         yield set_env({'required': 'true', 'file': tmp})
         yield env.remote('wave_auth', 'switch', tmp)
@@ -134,6 +139,7 @@ class Auth(TestSuite):
         if isinstance(ret, EventConnack) and ret.ret_code == 0:
             defer.returnValue(True)
 
+        debug(ret)
         defer.returnValue(False)
 
     @catch
@@ -141,7 +147,7 @@ class Auth(TestSuite):
     @defer.inlineCallbacks
     def test_007(self):
         tmp = tempfile.mktemp(suffix='wave-testsuite')
-        subprocess.Popen("echo \"bar\"|../bin/mkpasswd -c {0} foo".format(tmp), 
+        subprocess.Popen("echo \"bar\"|../bin/mkpasswd -c {0} foo".format(tmp),
                          shell=True, stdout=subprocess.PIPE).wait()
         yield set_env({'required': 'true', 'file': tmp})
         yield env.remote('wave_auth', 'switch', tmp)
@@ -150,10 +156,11 @@ class Auth(TestSuite):
         ret = c.connect(version=4)
         # auth rejected
         if not isinstance(ret, EventConnack) or ret.ret_code == 0:
+            debug(ret)
             defer.returnValue(False)
 
         # updating password
-        subprocess.Popen("echo \"baz\"|../bin/mkpasswd {0} foo".format(tmp), 
+        subprocess.Popen("echo \"baz\"|../bin/mkpasswd {0} foo".format(tmp),
                          shell=True, stdout=subprocess.PIPE).wait()
         # file is monitored each 2 secs in debug context
         time.sleep(3)
@@ -161,6 +168,7 @@ class Auth(TestSuite):
         ret = c.connect(version=4)
         # auth accepted
         if not isinstance(ret, EventConnack) or ret.ret_code != 0:
+            debug(ret)
             defer.returnValue(False)
 
         defer.returnValue(True)
@@ -170,7 +178,7 @@ class Auth(TestSuite):
     @defer.inlineCallbacks
     def test_008(self):
         tmp = tempfile.mktemp(suffix='wave-testsuite')
-        subprocess.Popen("echo \"bar\"|../bin/mkpasswd -c {0} foo".format(tmp), 
+        subprocess.Popen("echo \"bar\"|../bin/mkpasswd -c {0} foo".format(tmp),
                          shell=True, stdout=subprocess.PIPE).wait()
         yield set_env({'required': 'true', 'file': tmp})
         yield env.remote('wave_auth', 'switch', tmp)
@@ -179,10 +187,11 @@ class Auth(TestSuite):
         ret = c.connect(version=4)
         # auth rejected
         if not isinstance(ret, EventConnack) or ret.ret_code != 0:
+            debug(ret)
             defer.returnValue(False)
 
         # deleting password
-        subprocess.Popen("../bin/mkpasswd -D {0} foo".format(tmp), 
+        subprocess.Popen("../bin/mkpasswd -D {0} foo".format(tmp),
                          shell=True, stdout=subprocess.PIPE).wait()
         # file is monitored each 2 secs in debug context
         time.sleep(3)
@@ -190,6 +199,7 @@ class Auth(TestSuite):
         ret = c.connect(version=4)
         # auth accepted
         if not isinstance(ret, EventConnack) or ret.ret_code != 4:
+            debug(ret)
             defer.returnValue(False)
 
         defer.returnValue(True)

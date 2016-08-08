@@ -1,14 +1,9 @@
-#!/usr/bin/env python
 # -*- coding: UTF8 -*-
 
 """
     NOTE: as this test module is stopping/starting broker server, it is important
           to be executed at the end so it does not disturb other tests
 """
-from TestSuite import TestSuite, desc, catch
-from mqttcli import MqttClient
-from nyamuk.event import *
-
 import os, re
 import ssl
 import time
@@ -17,12 +12,17 @@ import os.path
 import tempfile
 import subprocess
 
+from TestSuite import TestSuite, desc, catch
+from mqttcli import MqttClient
+from nyamuk.event import *
+
 import twotp
 from twisted.internet import reactor, defer
 
 import erl_terms as eterms
 
 from lib import env as ctx
+from lib.env import debug
 from lib.broker_ctrl import BrokerCtrl
 
 
@@ -44,11 +44,11 @@ class SSL2(TestSuite):
                 cmdline = f.read()
 
             if 'wave_app' in cmdline:
-                print 'killing wave server (pid {0})'.format(pid)
+                debug('killing wave server (pid {0})'.format(pid))
                 try:
                     os.kill(int(pid), signal.SIGTERM)
                 except Exception,e:
-                    print e
+                    debug(e)
 
     def start_wave(self, config):
         env = os.environ.get('env', 'travis')
@@ -71,7 +71,7 @@ class SSL2(TestSuite):
         conf.wave.ssl.keyfile    = keyfile
 
         (fh, outfile) = tempfile.mkstemp(prefix='wave-', suffix='.config')
-        print "config saved to", outfile
+        debug("config saved to {0}".format(outfile))
         eterms.to_file([conf], outfile)
 
         return outfile
@@ -101,11 +101,10 @@ class SSL2(TestSuite):
         conf = self.update_config('./etc/wave_cert.pem', './etc/wave_key.pem')
         brok = self.start_wave(conf)
 
-        print 'check cert'
         ret = True
         (errno, msg) = self.check_certificate()
         if int(errno) != 18:
-            print 'msg:', errno, msg
+            debug("{0}: {1}".format(errno, msg))
             ret = False
 
         time.sleep(2) # to be sure file buffers are flushed
@@ -123,7 +122,7 @@ class SSL2(TestSuite):
         ret = True
         (errno, msg) = self.check_certificate()
         if int(errno) != 19:
-            print 'msg:', errno, msg
+            debug("{0}: {1}".format(errno, msg))
             ret = False
 
         time.sleep(2) # to be sure file buffers are flushed

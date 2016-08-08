@@ -1,14 +1,14 @@
-#!/usr/bin/env python
 # -*- coding: UTF8 -*-
 
+import time
+import socket
+
 from lib import env
+from lib.env import debug
 from TestSuite import *
 from mqttcli import MqttClient
 from nyamuk.event import *
 from nyamuk.mqtt_pkt import MqttPkt
-
-import time
-import socket
 
 
 class Retain(TestSuite):
@@ -26,6 +26,7 @@ class Retain(TestSuite):
         # checking message as been store in db
         store = env.db.hgetall('retain:/foo/bar/0')
         if not (store.get('data') == 'plop' and store.get('qos') == '0'):
+            debug(store)
             return False
 
         return True
@@ -40,6 +41,7 @@ class Retain(TestSuite):
         # checking message as been store in db
         store = env.db.hgetall('retain:/foo/bar/1')
         if store.get('data') != 'plop' or store.get('qos') != '1':
+            debug(store)
             return False
 
         return True
@@ -54,6 +56,7 @@ class Retain(TestSuite):
         # checking message as been store in db
         store = env.db.hgetall('retain:/foo/bar/2')
         if store.get('data') != 'plop' or store.get('qos') != '2':
+            debug(store)
             return False
 
         return True
@@ -67,12 +70,15 @@ class Retain(TestSuite):
         c.publish("/retain/delete", 'waze', qos=0, retain=True)
 
         store = env.db.hgetall("retain:/retain/delete")
-        if store != {'data': 'waze', 'qos': '0'}: 
+        if store != {'data': 'waze', 'qos': '0'}:
+            debug(store)
             return False
 
         # deleting message
         c.publish("/retain/delete", '', retain=True)
-        if env.db.keys('retain:/retain/delete') != []:
+        retain = env.db.keys('retain:/retain/delete')
+        if retain != []:
+            debug("retain= {0}".format(retain))
             return False
 
         c.disconnect()
@@ -86,17 +92,20 @@ class Retain(TestSuite):
         # initial state
         c.publish("/retain/no/2", 'waze', retain=True)
         if env.db.keys('retain:/retain/no/*') != ['retain:/retain/no/2']:
+            debug(env.db.keys('retain:/retain/no/*'))
             return False
 
         # not stored
         c.publish('/retain/no/1', 'whaa', retain=False)
         if env.db.keys('retain:/retain/no/*') != ['retain:/retain/no/2']:
+            debug(env.db.keys('retain:/retain/no/*'))
             return False
 
         # no replace or remove
         c.publish('/retain/no/2', 'whaa', retain=False)
         store = env.db.hgetall("retain:/retain/no/2")
-        if store != {'data': 'waze', 'qos': '0'}: 
+        if store != {'data': 'waze', 'qos': '0'}:
+            debug(store)
             return False
 
         c.disconnect()
@@ -115,6 +124,7 @@ class Retain(TestSuite):
                 msg.msg.topic != '/retain/delivered' or \
                 msg.msg.payload != 'waze' or\
                 msg.msg.retain:
+            debug(msg)
             return False
 
         # same with empty payload
@@ -124,6 +134,7 @@ class Retain(TestSuite):
                 msg.msg.topic != '/retain/empty' or \
                 msg.msg.payload != None or\
                 msg.msg.retain:
+            debug(msg)
             return False
 
         pub.disconnect(); sub.disconnect()
@@ -143,18 +154,20 @@ class Retain(TestSuite):
                 msg.msg.payload != 'hurry' or\
                 msg.msg.qos != 1 or\
                 msg.msg.retain:
+            debug(msg)
             return False
 
         # same with empty payload
         pub.publish("/test/022/013/t2", 'up', retain=True, qos=2)
         pub.pubrel(pub.get_last_mid())
-        
+
         msg = sub.recv()
         if not isinstance(msg, EventPublish) or \
                 msg.msg.topic != '/test/022/013/t2' or \
                 msg.msg.payload != "up" or\
                 msg.msg.qos != 2 or\
                 msg.msg.retain:
+            debug(msg)
             return False
 
         return True
@@ -185,8 +198,10 @@ class Retain(TestSuite):
             break
 
         if not acked:
+            debug("not acked")
             return False
         if pubevt is None:
+            debug("message not received")
             return False
 
         return True
@@ -219,17 +234,20 @@ class Retain(TestSuite):
             break
 
         if not acked:
+            debug("not acked")
             return False
         if pubevt is None:
+            debug("message not received")
             return False
 
         # MUST NOT match
         topic = "/scri/b/b/le"; msg = "hundrerd dollar bill"
         retain.publish(topic, msg, retain=True)
+
         sub.subscribe("/scri/*/le", qos=0)
         evt = sub.recv()
-        print evt
         if evt is not None:
+            debug(evt)
             return False
 
         return True
@@ -261,8 +279,10 @@ class Retain(TestSuite):
             break
 
         if not acked:
+            debug("not acked")
             return False
         if pubevt is None:
+            debug("message not received")
             return False
 
         retain.disconnect(); sub.disconnect()
@@ -278,12 +298,12 @@ class Retain(TestSuite):
         rs = {
             # match
             "dead/bea/t k/id/s": {
-                'topic' : "dead/bea/t k/id/s", 
+                'topic' : "dead/bea/t k/id/s",
                 'payload': "children that just aren't worth supporting",
                 'retain' : True},
             # match
             "dead/abe/t k/id/s": {
-                'topic'  : "dead/abe/t k/id/s", 
+                'topic'  : "dead/abe/t k/id/s",
                 'payload': "just children that aren't supporting worth",
                 'retain' : True},
             }
@@ -309,13 +329,15 @@ class Retain(TestSuite):
             if not isinstance(evt, EventPublish) or\
                     not evt.msg.retain or\
                     evt.msg.topic not in rs:
+                debug(evt)
                 return False
 
             count += 1
 
         if count != len(rs):
+            debug("not received enough messages")
             return False
-          
+
         retain.disconnect(); sub.disconnect()
         return True
 
@@ -343,8 +365,9 @@ class Retain(TestSuite):
                 pubevt = evt; continue
 
             break
-           
+
         if pubevt is None:
+            debug("message not received")
             return False
         sub.puback(mid=pubevt.msg.mid)
 

@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf8 -*-
 
 import time
@@ -7,6 +6,7 @@ import socket
 from   pprint import pprint
 
 from lib import env
+from lib.env import debug
 from TestSuite import *
 from mqttcli import MqttClient
 from nyamuk.event import *
@@ -57,7 +57,8 @@ class Metrics(TestSuite):
         try:
             if twotp.to_python(reporters[0][0]) != 'exometer_report_statsd':
                 defer.returnValue(False)
-        except Exception:
+        except Exception, e:
+            debug(e)
             defer.returnValue(False)
 
         defer.returnValue(True)
@@ -103,15 +104,15 @@ class Metrics(TestSuite):
             #print name, list(metrics.get(name, [])) == sorted(datapoints)
             if name in metrics:
                 if list(metrics[name]) != sorted(datapoints):
-                    print '  . not matching:', name, datapoints
+                    debug("not matching: {0}, {1}".format(name, datapoints))
                     defer.returnValue(False)
 
                 del metrics[name]
             else:
-                print "  . extra metric:", name, datapoints
+                debug("extra metric: {0}, {1}".format(name, datapoints))
 
         if len(metrics) > 0:
-            print "  . missing metrics:", metrics
+            debug("missing metrics: {0}".format(metrics))
             defer.returnValue(False)
 
         defer.returnValue(True)
@@ -129,14 +130,14 @@ class Metrics(TestSuite):
         c = MqttClient("metrics", connect=4, clean_session=0)
         v = yield exo_value('wave.sessions')
         if v['active'] != v_start['active']+1 or v['offline'] != v_start['offline']:
-            print '  . 1:', v
+            debug("{0}, {1}".format(v, v_start))
             defer.returnValue(False)
 
         c.disconnect()
         time.sleep(.5)
         v = yield exo_value('wave.sessions')
         if v['active'] != v_start['active'] or v['offline'] != v_start['offline']+1:
-            print '  . 2:', v
+            debug("{0}, {1}".format(v, v_start))
             defer.returnValue(False)
 
         defer.returnValue(True)
@@ -157,7 +158,7 @@ class Metrics(TestSuite):
 
             v_end = yield exo_value('wave.messages.in.'+str(qos))
             if v_end['count'] - v_start['count'] != 1:
-                print '  . qos=',qos,'start:', v_start, ', end:', v_end
+                debug("{0}, {1}".format(v_end, v_start))
                 defer.returnValue(False)
 
             defer.returnValue(True)
@@ -182,13 +183,13 @@ class Metrics(TestSuite):
 
         v = yield exo_value('wave.subscriptions')
         if v['value'] != ref_val+1:
-            print '  . 2:', v
+            debug("{0}, {1}".format(v, ref_val))
             defer.returnValue(False)
 
         c.unsubscribe('foo/bar')
         v = yield exo_value('wave.subscriptions')
         if v['value'] != ref_val:
-            print '  . 3:', v
+            debug("{0}, {1}".format(v, ref_val))
             defer.returnValue(False)
 
         c.disconnect()
@@ -238,13 +239,13 @@ class Metrics(TestSuite):
         #pprint(stats)
         for topic in metrics:
             if topic not in stats:
-                print '  {0} metric not in $SYS'.format(topic)
+                debug("{0} metric not in $SYS".format(topic))
                 return False
 
             del stats[topic]
 
         if len(stats) > 0:
-            print 'extra $SYS metrics:', stats
+            debug("extra $SYS metrics: {0}".format(stats))
 
         c.disconnect()
         return True
@@ -261,6 +262,7 @@ class Metrics(TestSuite):
         pubs_end = sys_value(c, "$SYS/broker/publish/messages/received", int)
 
         if pubs_end != pubs_start+1:
+            debug("{0}, {1}".format(pubs_start, pubs_end))
             return False
 
         c.disconnect()

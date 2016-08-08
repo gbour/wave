@@ -1,33 +1,29 @@
-#!/usr/bin/env python
 # -*- coding: UTF8 -*-
+
+import time
+import socket
 
 from TestSuite import *
 from mqttcli import MqttClient
 from nyamuk.event import *
 from nyamuk.mqtt_pkt import MqttPkt
-
-import time
-import socket
+from lib.env import debug
 
 
 class V311(TestSuite):
     def __init__(self):
         TestSuite.__init__(self, "MQTT version 3.1.1")
 
-    def newclient(self, name="req", *args, **kwargs):
-        c = MqttClient(name)
-        c.connect(version = 4)
-
-        return c
 
     @catch
     @desc("CONNECT")
     def test_01(self):
-        c = MqttClient("reg")
+        c = MqttClient("v311")
         evt = c.connect(version=4)
 
         if not isinstance(evt, EventConnack) or \
-            evt.ret_code:
+                evt.ret_code:
+            debug(evt)
             return False
 
         return True
@@ -37,7 +33,7 @@ class V311(TestSuite):
     @catch
     @desc("DISCONNECT")
     def test_02(self):
-        c = self.newclient()
+        c = MqttClient("v311", connect=4)
         #evt = c._c.disconnect()
         c.disconnect()
 
@@ -46,12 +42,12 @@ class V311(TestSuite):
     @catch
     @desc("SUBSCRIBE")
     def test_10(self):
-        c = MqttClient("reg")
-        c.do("connect")
+        c = MqttClient("v311", connect=4)
 
-        evt = c.do("subscribe", "/foo/bar", 0)
+        evt = c.subscribe("/foo/bar", qos=0)
         c.disconnect()
         if not isinstance(evt, EventSuback):
+            debug(evt)
             return False
 
         return True
@@ -59,10 +55,11 @@ class V311(TestSuite):
     @catch
     @desc("PUBLISH (qos=0). no response")
     def test_11(self):
-        c = self.newclient()
-        e = c.publish("/foo/bar", "plop")
+        c = MqttClient("v311", connect=4)
+        e = c.publish("/foo/bar", payload="plop")
         # QOS = 0 : no response indented
         if e is not None:
+            debug(e)
             c.disconnect()
             return False
 
@@ -72,7 +69,7 @@ class V311(TestSuite):
     @catch
     @desc("PING REQ/RESP")
     def test_20(self):
-        c = self.newclient()
+        c = MqttClient("v311", connect=4)
         e = c.send_pingreq()
         c.disconnect()
 
@@ -95,11 +92,13 @@ class V311(TestSuite):
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             sock.setblocking(0)
         except Exception as e:
+            debug(e)
             return False
 
         c._c.sock = sock
-        e = c.subscribe("foo/bar", 0)
+        e = c.subscribe("foo/bar", qos=0)
         if e is not None:
+            debug(e)
             return False
 
         # socket MUST be disconnected
@@ -107,9 +106,9 @@ class V311(TestSuite):
             e = c.publish("foo", "bar")
             sock.getpeername()
         except socket.error as e:
-            #print e
             return True
 
+        debug("connection still alive")
         return False
 
     @catch
@@ -119,7 +118,8 @@ class V311(TestSuite):
         evt = c.connect(version=4)
 
         if not isinstance(evt, EventConnack) or \
-            evt.ret_code:
+                evt.ret_code:
+            debug(e)
             return False
 
         # 2d connect pkt
@@ -135,6 +135,7 @@ class V311(TestSuite):
         except socket.error as e:
             return True
 
+        debug("connection still alive")
         return False
 
     @catch
@@ -147,6 +148,7 @@ class V311(TestSuite):
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             sock.setblocking(0)
         except Exception as e:
+            debug(e)
             return False
 
         c._c.sock = sock
@@ -170,6 +172,7 @@ class V311(TestSuite):
         except socket.error as e:
             return True
 
+        debug("connection still alive")
         return False
 
     @catch
@@ -182,6 +185,7 @@ class V311(TestSuite):
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             sock.setblocking(0)
         except Exception as e:
+            debug(e)
             return False
 
         c._c.sock = sock
@@ -203,10 +207,12 @@ class V311(TestSuite):
         evt = c._c.pop_event()
 
         if not isinstance(evt, EventConnack) or evt.ret_code != 1:
+            debug(evt)
             return False
 
         ret = c._c.loop()
         if ret != NC.ERR_CONN_LOST:
+            debug("invalid error code: {0}".format(ret))
             return False
 
         return True
@@ -221,6 +227,7 @@ class V311(TestSuite):
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             sock.setblocking(0)
         except Exception as e:
+            debug(e)
             return False
 
         c._c.sock = sock
@@ -241,6 +248,7 @@ class V311(TestSuite):
 
         ret = c._c.loop()
         if ret != NC.ERR_CONN_LOST:
+            debug("invalid error code: {0}".format(ret))
             return False
 
         return True
@@ -255,6 +263,7 @@ class V311(TestSuite):
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             sock.setblocking(0)
         except Exception as e:
+            debug(e)
             return False
 
         c._c.sock = sock
@@ -275,6 +284,7 @@ class V311(TestSuite):
 
         ret = c._c.loop()
         if ret != NC.ERR_CONN_LOST:
+            debug("invalid error code: {0}".format(ret))
             return False
 
         return True
@@ -289,6 +299,7 @@ class V311(TestSuite):
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             sock.setblocking(0)
         except Exception as e:
+            debug(e)
             return False
 
         c._c.sock = sock
@@ -310,11 +321,13 @@ class V311(TestSuite):
         evt = c._c.pop_event()
 
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
+            debug(evt)
             return False
 
         time.sleep(15.5)
         ret = c._c.loop()
         if ret != NC.ERR_CONN_LOST:
+            debug("invalid error code: {0}".format(ret))
             return False
 
         return True
@@ -329,6 +342,7 @@ class V311(TestSuite):
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             sock.setblocking(0)
         except Exception as e:
+            debug(e)
             return False
 
         c._c.sock = sock
@@ -350,16 +364,19 @@ class V311(TestSuite):
         evt = c._c.pop_event()
 
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
+            debug(evt)
             return False
 
         time.sleep(2)
-        evt = c.publish("foo", "bar", 1)
+        evt = c.publish("foo", "bar", qos=1)
         if not isinstance(evt, EventPuback):
+            debug(evt)
             return False
 
         time.sleep(15.5)
         ret = c._c.loop()
         if ret != NC.ERR_CONN_LOST:
+            debug("invalid error code: {0}".format(ret))
             return False
 
         return True
@@ -374,6 +391,7 @@ class V311(TestSuite):
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             sock.setblocking(0)
         except Exception as e:
+            debug(e)
             return False
 
         c._c.sock = sock
@@ -395,6 +413,7 @@ class V311(TestSuite):
         evt = c._c.pop_event()
 
         if not isinstance(evt, EventConnack) or evt.ret_code != 2:
+            debug(evt)
             return False
 
         return True
@@ -410,6 +429,7 @@ class V311(TestSuite):
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             sock.setblocking(0)
         except Exception as e:
+            debug(e)
             return False
 
         c._c.sock = sock
@@ -430,6 +450,7 @@ class V311(TestSuite):
         c._c.loop()
 
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
@@ -445,6 +466,7 @@ class V311(TestSuite):
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             sock.setblocking(0)
         except Exception as e:
+            debug(e)
             return False
 
         c._c.sock = sock
@@ -454,7 +476,7 @@ class V311(TestSuite):
 
         pkt = MqttPkt()
         pkt.command = NC.CMD_CONNECT
-        pkt.remaining_length = 12 + len(clientid) # client_id 
+        pkt.remaining_length = 12 + len(clientid) # client_id
         pkt.alloc()
 
         pkt.write_string("MQTT")
@@ -468,6 +490,7 @@ class V311(TestSuite):
         c._c.loop()
 
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
@@ -482,6 +505,7 @@ class V311(TestSuite):
         # flags shoud be 0
         c.forge(NC.CMD_PINGREQ, 4, [], send=True)
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         ## SUBSCRIBE
@@ -495,6 +519,7 @@ class V311(TestSuite):
             ('byte'  , 0)           # qos
         ], send=True)
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
@@ -511,6 +536,7 @@ class V311(TestSuite):
             ('byte'  , 0)           # qos
         ], send=True)
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
@@ -527,6 +553,7 @@ class V311(TestSuite):
             ('byte'  , 0)           # qos
         ], send=True)
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
@@ -542,6 +569,7 @@ class V311(TestSuite):
             ('string', '/foo/bar'), # topic filter
         ], send=True)
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
@@ -554,10 +582,11 @@ class V311(TestSuite):
 
         # qos 1
         c.forge(NC.CMD_PUBLISH, 2, [
-            ('string', '/foo/bar'), # topic 
+            ('string', '/foo/bar'), # topic
             ('uint16', 0),         # identifier
         ], send=True)
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
@@ -582,6 +611,7 @@ class V311(TestSuite):
         evt = pub.recv()
         # PUBACK from server is never received
         if evt is not None:
+            debug(evt)
             return False
 
         pub.disconnect(); sub.disconnect()
@@ -611,11 +641,13 @@ class V311(TestSuite):
         evt = pub.recv()
         # PUBCOMP from server is never received
         if evt is not None:
+            debug(evt)
             return False
 
         evt = sub.recv()
         # PUBREL not received
         if evt is not None:
+            debug(evt)
             return False
 
         pub.disconnect(); sub.disconnect()
@@ -640,11 +672,13 @@ class V311(TestSuite):
         # subscriber: PUBLISH never received
         evt = sub.recv()
         if evt is not None:
+            debug(evt)
             return False
 
         evt = pub.recv()
         # publisher: PUBCOMP never received
         if evt is not None:
+            debug(evt)
             return False
 
         pub.disconnect(); sub.disconnect()
@@ -679,6 +713,7 @@ class V311(TestSuite):
         evt = pub.recv()
         # publisher: PUBCOMP never received
         if evt is not None:
+            debug(evt)
             return False
 
         pub.disconnect(); sub.disconnect()
@@ -712,6 +747,7 @@ class V311(TestSuite):
             ('uint16', 0),          # identifier
         ], send=True)
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
@@ -728,6 +764,7 @@ class V311(TestSuite):
 #            ('uint16', 0),          # identifier
 #        ], send=True)
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
@@ -738,11 +775,13 @@ class V311(TestSuite):
         c = MqttClient("conformity", connect=4)
         c.publish("foo/+/bar", "", qos=0)
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         c = MqttClient("conformity", connect=4)
         c.publish("foo/#/bar", "", qos=0)
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
@@ -757,6 +796,7 @@ class V311(TestSuite):
             # NOT TOPIC FILTER/QOS
         ], send=True)
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
@@ -771,6 +811,7 @@ class V311(TestSuite):
             ('byte'  , 3)           # qos
         ], send=True)
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
@@ -788,6 +829,7 @@ class V311(TestSuite):
         ])
 
         if not isinstance(ack, EventSuback) or ack.mid != sub.get_last_mid():
+            debug(ack)
             return False
 
         # checking granted qos
@@ -795,6 +837,7 @@ class V311(TestSuite):
                 ack.granted_qos[0] != 2 or \
                 ack.granted_qos[1] != 0 or \
                 ack.granted_qos[2] != 1:
+            debug(ack)
             return False
 
         return True
@@ -809,6 +852,7 @@ class V311(TestSuite):
             # NOT TOPIC FILTER/QOS
         ], send=True)
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
@@ -819,6 +863,7 @@ class V311(TestSuite):
         c = MqttClient("conformity", connect=4)
         ack = c.unsubscribe("foo/bar")
         if not isinstance(ack, EventUnsuback):
+            debug(ack)
             return False
 
         return True
@@ -830,6 +875,7 @@ class V311(TestSuite):
         ack = sub.unsubscribe_multi(["foo/bar", "bar/baz", "paper/+/scissor"])
 
         if not isinstance(ack, EventUnsuback) or ack.mid != sub.get_last_mid():
+            debug(ack)
             return False
 
         sub.disconnect()
@@ -842,6 +888,7 @@ class V311(TestSuite):
         c.disconnect()
 
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
@@ -857,6 +904,7 @@ class V311(TestSuite):
 
         evt = sub.recv()
         if not isinstance(evt, EventPublish) or evt.msg.payload != "grrr":
+            debug(evt)
             return False
 
         sub.unsubscribe("foo/bar")
@@ -864,6 +912,7 @@ class V311(TestSuite):
 
         evt = sub.recv()
         if evt is not None:
+            debug(evt)
             return False
 
         pub.disconnect(); sub.disconnect()
@@ -880,15 +929,18 @@ class V311(TestSuite):
 
         evt = sub.recv()
         if not isinstance(evt, EventPublish) or evt.msg.payload != "grrr":
+            debug(evt)
             return False
 
         ack = sub.unsubscribe("foo/bar")
         if not isinstance(ack, EventUnsuback):
+            debug(ack)
             return False
 
         sub.puback(evt.msg.mid)
         ack2 = pub.recv()
         if not isinstance(ack2, EventPuback):
+            debug(ack2)
             return False
 
         pub.disconnect(); sub.disconnect()
@@ -906,19 +958,23 @@ class V311(TestSuite):
 
         evt = sub.recv()
         if not isinstance(evt, EventPublish) or evt.msg.payload != "grrr":
+            debug(evt)
             return False
 
         ack = sub.unsubscribe("foo/bar")
         if not isinstance(ack, EventUnsuback):
+            debug(ack)
             return False
 
         rel = sub.pubrec(evt.msg.mid)
         if not isinstance(rel, EventPubrel):
+            debug(rel)
             return False
 
         sub.pubcomp(evt.msg.mid)
         comp = pub.recv()
         if not isinstance(comp, EventPubcomp):
+            debug(comp)
             return False
 
         pub.disconnect(); sub.disconnect()
@@ -934,10 +990,12 @@ class V311(TestSuite):
 
         evt = pub.recv()
         if not isinstance(evt, EventPubrec) or evt.mid != mid1:
+            debug(evt)
             return False
 
         evt = pub.recv()
         if not isinstance(evt, EventPubrec) or evt.mid != mid2:
+            debug(evt)
             return False
 
         pub.disconnect()
@@ -963,6 +1021,7 @@ class V311(TestSuite):
 
             if (isvalid and not isinstance(ack, EventSuback)) or \
                     (not isvalid and (ack is not None or sub.conn_is_alive())):
+                debug("{0}: {1} ({2})".format(tf, ack, sub.conn_is_alive()))
                 return False
 
             sub.disconnect()
@@ -997,6 +1056,7 @@ class V311(TestSuite):
 
             if (isvalid and not isinstance(ack, EventSuback)) or \
                     (not isvalid and (ack is not None or sub.conn_is_alive())):
+                debug("{0}: {1} ({2})".format(tf, ack, sub.conn_is_alive()))
                 return False
 
             sub.disconnect()
@@ -1016,11 +1076,13 @@ class V311(TestSuite):
         if not isinstance(evt, EventPublish) or\
                 evt.msg.topic != 'foo/bar' or\
                 evt.msg.payload != 'test1':
+            debug(evt)
             return False
 
         pub.publish("$SYS/foo/bar", "test2")
         evt = sub.recv()
         if evt is not None:
+            debug(evt)
             return False
 
         pub.disconnect(); sub.disconnect()
@@ -1039,11 +1101,13 @@ class V311(TestSuite):
         if not isinstance(evt, EventPublish) or\
                 evt.msg.topic != 'foo/bar' or\
                 evt.msg.payload != 'test1':
+            debug(evt)
             return False
 
         pub.publish("$SYS/bar", "test2")
         evt = sub.recv()
         if evt is not None:
+            debug(evt)
             return False
 
         pub.disconnect(); sub.disconnect()
@@ -1060,6 +1124,7 @@ class V311(TestSuite):
         evt = sub.recv()
         if not isinstance(evt, EventPublish) or\
                 evt.msg.topic != '$SYS/broker/uptime':
+            debug(evt)
             return False
 
         sub.disconnect()
@@ -1072,18 +1137,21 @@ class V311(TestSuite):
         c.subscribe("", qos=0)
 
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         c = MqttClient("conformity", connect=4)
         c.unsubscribe("")
 
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         c = MqttClient("conformity", connect=4)
         c.publish("", "", qos=0)
 
         if c.conn_is_alive():
+            debug("connection stil alive")
             return False
 
         return True
@@ -1098,6 +1166,7 @@ class V311(TestSuite):
             ('uint16', 10),         # identifier
         ], send=True)
         if c.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
@@ -1116,11 +1185,13 @@ class V311(TestSuite):
 
         ack = pub.recv()
         if not isinstance(ack, EventPuback):
+            debug(ack)
             return False
 
         # ensure message has been delivered
         evt = sub.recv()
         if not isinstance(evt, EventPublish) or evt.msg.topic != '/foo/bar':
+            debug(evt)
             return False
 
         # sending again same packet (same id) with dup=1
@@ -1131,11 +1202,13 @@ class V311(TestSuite):
 
         ack = pub.recv()
         if not isinstance(ack, EventPuback):
+            debug(ack)
             return False
 
         # ensure message has been delivered
         evt = sub.recv()
         if not isinstance(evt, EventPublish) or evt.msg.topic != '/foo/bar':
+            debug(evt)
             return False
 
         return True
@@ -1154,12 +1227,14 @@ class V311(TestSuite):
 
         ack = pub.recv()
         if ack is not None:
+            debug(ack)
             return False
 
         evt = sub.recv()
         if not isinstance(evt, EventPublish) or evt.msg.topic != '/foo/bar':
+            debug(evt)
             return False
-        
+
         ## reemit message with dup=1 (same msgid)
         ## message must be discarded as previous on is still inflight
         pub.forge(NC.CMD_PUBLISH, 2, [
@@ -1169,11 +1244,12 @@ class V311(TestSuite):
 
         ack = pub.recv()
         if ack is not None:
+            debug(ack)
             return False
 
         evt = sub.recv()
-        print evt
         if evt is not None:
+            debug(evt)
             return False
 
         return True
@@ -1185,6 +1261,8 @@ class V311(TestSuite):
         pub.publish("$foo/bar", "test1")
 
         if pub.conn_is_alive():
+            debug("connection still alive")
             return False
 
         return True
+

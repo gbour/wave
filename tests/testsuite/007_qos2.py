@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: UTF8 -*-
 
 import types
@@ -6,37 +5,35 @@ import types
 from TestSuite import TestSuite, desc, catch
 from mqttcli import MqttClient
 from nyamuk.event import *
+from lib.env import gen_msg, debug
 
 class Qos1(TestSuite):
     def __init__(self):
         TestSuite.__init__(self, "qos 2 delivery")
 
-    def newclient(self, name="req"):
-        c = MqttClient(name)
-        c.do("connect")
-
-        return c
 
     @catch
     @desc("SUBSCRIBE/SUBACK")
     def test_001(self):
-        sub = self.newclient("sub")
+        sub = MqttClient("sub", connect=4)
         suback_evt = sub.subscribe('foo/bar', 2)
         if not isinstance(suback_evt, EventSuback) or \
-            suback_evt.mid != sub.get_last_mid() or \
-            suback_evt.granted_qos[0] != 2:
-                return False
+                suback_evt.mid != sub.get_last_mid() or \
+                suback_evt.granted_qos[0] != 2:
+            debug(suback_evt)
+            return False
 
         return True
 
     @catch
     @desc("downgraded delivery to qos 0")
     def test_002(self):
-        sub = self.newclient('sub')
+        sub = MqttClient('sub', connect=4)
         sub.subscribe('a/b', 2)
 
-        pub = self.newclient('pub')
-        pub.publish('a/b', "foobar", qos=0)
+        pub = MqttClient('pub', connect=4)
+        msg = gen_msg()
+        pub.publish('a/b', payload=msg, qos=0)
         pub.disconnect()
 
         e = sub.recv()
@@ -44,8 +41,9 @@ class Qos1(TestSuite):
         sub.disconnect()
 
         if not isinstance(e, EventPublish) or \
-           e.msg.payload != "foobar" or \
-           e.msg.qos     != 0:
+                e.msg.payload != msg or \
+                e.msg.qos     != 0:
+            debug(e)
             return False
 
         return True
@@ -53,17 +51,18 @@ class Qos1(TestSuite):
     @catch
     @desc("downgraded delivery to qos 1")
     def test_003(self):
-        sub = self.newclient('sub')
-        sub.subscribe('a/b', 2)
+        sub = MqttClient('sub', connect=4)
+        sub.subscribe('a/b', qos=2)
 
-        pub = self.newclient('pub')
-        pub.publish('a/b', "foobar2", qos=1)
+        pub = MqttClient('pub', connect=4)
+        msg = gen_msg()
+        pub.publish('a/b', payload=msg, qos=1)
 
         e = sub.recv()
-
         if not isinstance(e, EventPublish) or \
-           e.msg.payload != "foobar2" or \
-           e.msg.qos     != 1:
+                e.msg.payload != msg or \
+                e.msg.qos     != 1:
+            debug('received event (supposely publish): {0}'.format(e))
             return False
 
         # send PUBACK
@@ -72,22 +71,23 @@ class Qos1(TestSuite):
         e2 = pub.recv()
         if not isinstance(e2, EventPuback) or \
                 e2.mid != pub.get_last_mid():
+            debug('received event (supposely puback): {0}'.format(e2))
             return False
 
         sub.unsubscribe('a/b')
-        sub.disconnect()
-        pub.disconnect()
+        sub.disconnect(); pub.disconnect()
 
         return True
 
     @catch
     @desc("qos 2 delivery")
     def test_004(self):
-        sub = self.newclient('sub')
+        sub = MqttClient('sub', connect=4)
         sub.subscribe('a/b', 2)
 
-        pub = self.newclient('pub')
-        pub.publish('a/b', "foobar2", qos=2, read_response=False)
+        pub = MqttClient('pub', connect=4)
+        msg = gen_msg()
+        pub.publish('a/b', payload=msg, qos=2, read_response=False)
 
         msgid = pub.get_last_mid()
 
@@ -95,13 +95,15 @@ class Qos1(TestSuite):
         e = pub.recv()
         # validating [MQTT-2.3.1-6]
         if not isinstance(e, EventPubrec) or e.mid != msgid:
+            debug('failing event (PUBREC waited): {0}'.format(e))
             return False
 
         pub.pubrel(msgid, read_response=False)
 
         # subscriber ready to receive msg
         e = sub.recv()
-        if not isinstance(e, EventPublish) or e.msg.qos != 2 or e.msg.payload != "foobar2":
+        if not isinstance(e, EventPublish) or e.msg.qos != 2 or e.msg.payload != msg:
+            debug('failing event (PUBLISH waited): {0}'.format(e))
             return False
 
         # subscriber: send PUBREC after having received PUBLISH message
@@ -109,6 +111,7 @@ class Qos1(TestSuite):
         e2 = sub.recv()
         # validating [MQTT-2.3.1-6]
         if not isinstance(e2, EventPubrel) or e2.mid != e.msg.mid:
+            debug('failing event (PUBREL waited): {0}'.format(e))
             return False
 
         sub.pubcomp(e.msg.mid)
@@ -117,24 +120,25 @@ class Qos1(TestSuite):
         pubcomp_evt = pub.recv()
         # validating [MQTT-2.3.1-6]
         if not isinstance(pubcomp_evt, EventPubcomp) or pubcomp_evt.mid != msgid:
+            debug('failing event (PUBCOMP waited): {0}'.format(e))
             return False
 
 
         sub.unsubscribe('a/b')
-        sub.disconnect()
-        pub.disconnect()
+        sub.disconnect(); pub.disconnect()
 
         return True
 
     @catch
     @desc("invalid qos 1 acknowledgement while transaction is qos 2")
     def test_010(self):
-        sub = self.newclient('sub')
+        sub = MqttClient('sub', connect=4)
         sub.subscribe('a/b', 2)
 
-        pub = self.newclient('pub')
-        pub.publish('a/b', "foobar2", qos=2, read_response=False)
-        
+        pub = MqttClient('pub', connect=4)
+        msg = gen_msg()
+        pub.publish('a/b', payload=msg, qos=2, read_response=False)
+
         pub.pubrec(pub.get_last_mid())
 
         # PUBREC
@@ -158,3 +162,4 @@ class Qos1(TestSuite):
         return True
 
     #TODO: delivery timeout (no acknowledgement) => message retransmitted
+

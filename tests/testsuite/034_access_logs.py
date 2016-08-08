@@ -1,16 +1,16 @@
-#!/usr/bin/env python
 # -*- coding: UTF8 -*-
-
-from lib import env
-from TestSuite import *
-from mqttcli import MqttClient
-from nyamuk.event import *
-from nyamuk.mqtt_pkt import MqttPkt
 
 import os
 import time
 import tempfile
 from pprint import pprint
+
+from lib import env
+from lib.env import debug
+from TestSuite import *
+from mqttcli import MqttClient
+from nyamuk.event import *
+from nyamuk.mqtt_pkt import MqttPkt
 
 import apache_log_parser
 from twisted.internet import defer
@@ -28,7 +28,7 @@ def _match(f, conds):
 
         for k, v in conds.iteritems():
             if line[k] != v:
-                print '  {0} not matching {1} (is {2})'.format(k, v, line[k])
+                debug("{0} not matching {1} (is {2})".format(k, v, line[k]), depth=1)
                 return False
 
     except Exception, e:

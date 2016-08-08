@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf8 -*-
 
 import time
@@ -6,6 +5,7 @@ import redis
 import socket
 
 from lib import env
+from lib.env import debug
 from TestSuite import *
 from mqttcli import MqttClient
 from nyamuk.event import *
@@ -32,7 +32,7 @@ class CleanSession(TestSuite):
         if not isinstance(ack, EventConnack) or\
                 ack.ret_code != 2 or\
                 ack.session_present != 0:
-            return False
+            debug(ack); return False
 
         return True
 
@@ -53,7 +53,7 @@ class CleanSession(TestSuite):
         if not isinstance(ack, EventConnack) or\
                 ack.ret_code != 0 or\
                 ack.session_present != 0:
-            return False
+            debug(ack); return False
 
         return True
 
@@ -73,7 +73,7 @@ class CleanSession(TestSuite):
         if not isinstance(ack, EventConnack) or\
                 ack.ret_code != 0 or\
                 ack.session_present != 0:
-            return False
+            debug(ack); return False
 
         c2 = MqttClient("cs", raw_connect=True)
         c2.forge(NC.CMD_CONNECT, 0, [
@@ -88,7 +88,7 @@ class CleanSession(TestSuite):
         if not isinstance(ack, EventConnack) or\
                 ack.ret_code != 0 or\
                 ack.session_present != 0:
-            return False
+            debug(ack); return False
 
         return True
 
@@ -108,13 +108,11 @@ class CleanSession(TestSuite):
         topics = dict(map(lambda x: topics[x:x+2], xrange(0, len(topics), 2)))
 
         if len(topics) != 3:
-            return False
-        if int(topics.get('/cs/qos-0', -1)) != 0:
-            return False
-        if int(topics.get('/cs/qos-1', -1)) != 1:
-            return False
-        if int(topics.get('/cs/qos-2', -1)) != 2:
-            return False
+            debug(topics); return False
+        for i in (0,1,2):
+            qos = int(topics.get("/cs/qos-{0}".format(i), -1))
+            if qos != i:
+                debug("wrong qos{0} topic qos: {1}".format(i, qos)); return False
 
         return True
 
@@ -134,11 +132,11 @@ class CleanSession(TestSuite):
 
         topics = env.db.lrange("topics:" + c.clientid(), 0, -1)
         if len(topics) != 0:
-            return False
+            debug(topics); return False
 
         # checking CONNACK session-present
         if c2.connack().session_present != 1:
-            return False
+            debug("session not present"); return False
 
         #TODO: list c2 subscriptions (needs specific API ?)
         return True
@@ -150,7 +148,7 @@ class CleanSession(TestSuite):
 
         c = MqttClient("cs", connect=4, clean_session=0)
         if c.connack().session_present != 0:
-            return False
+            debug("session present"); return False
         c.subscribe("/cs/qos-0", qos=0)
         c.disconnect()
 
@@ -158,14 +156,14 @@ class CleanSession(TestSuite):
         time.sleep(.5)
         c2 = MqttClient(client_id=c.client_id, connect=4, clean_session=0)
         if c2.connack().session_present != 1:
-            return False
+            debug("session not present"); return False
 
         pub.publish("/cs/qos-0", "", qos=1)
         evt = c2.recv()
         if not isinstance(evt, EventPublish) or\
                 evt.msg.topic != '/cs/qos-0' or\
                 evt.msg.qos != 0:
-            return False
+            debug(evt); return False
 
         return True
 
@@ -176,7 +174,7 @@ class CleanSession(TestSuite):
 
         c = MqttClient("cs", connect=4, clean_session=0)
         if c.connack().session_present != 0:
-            return False
+            debug("session present"); return False
         c.subscribe("/cs/qos-0", qos=0)
         c.disconnect()
 
@@ -184,12 +182,12 @@ class CleanSession(TestSuite):
         time.sleep(.5)
         c2 = MqttClient(client_id=c.client_id, connect=4, clean_session=1)
         if c2.connack().session_present != 0:
-            return False
+            debug("session present"); return False
 
         pub.publish("/cs/qos-0", "", qos=1)
         evt = c2.recv()
         if evt is not None:
-            return False
+            debug(evt); return False
 
         return True
 
@@ -198,14 +196,14 @@ class CleanSession(TestSuite):
     def test_014(self):
         c = MqttClient("cs", connect=4, clean_session=0)
         if c.connack().session_present != 0:
-            return False
+            debug("session present"); return False
         c.disconnect()
 
         # reconnect w/ same clientid, cleansession = 0
         time.sleep(.5)
         c2 = MqttClient(client_id=c.client_id, connect=4, clean_session=0)
         if c2.connack().session_present != 1:
-            return False
+            debug("session not present"); return False
 
         c2.disconnect()
         return True
@@ -237,6 +235,7 @@ class CleanSession(TestSuite):
             origin = pubmsgs.get(topic, [-1, ""])
             #print topic, origin, qos, content
             if int(qos) != origin[0] or content != origin[1]:
+                debug("{0}: {1}, {2}".format(origin, qos, content))
                 return False
 
         return True
@@ -261,14 +260,17 @@ class CleanSession(TestSuite):
 
         msgs = env.db.lrange("queue:" + c.clientid(), 0, -1)
         if len(msgs) != 2*3:
+            debug(msgs)
             return False
 
         for (topic, qos, msgid) in [msgs[i:i+3] for i in range(0, len(msgs), 3)]:
             content = env.db.get("msg:" + msgid)
             if topic != pubmsg['topic'] or content != pubmsg['payload']:
+                debug("{0}: {1}, {2}".format(topic, content, pubmsg))
                 return False
 
             if int(qos) not in (1,2):
+                debug("{0}: qos {1}".format(topic, qos))
                 return False
 
         return True
@@ -299,6 +301,7 @@ class CleanSession(TestSuite):
             #print evt
             if isinstance(evt, EventConnack):
                 if evt.session_present != 1:
+                    debug("{0}: session not present".format(evt))
                     return False
 
                 acked = True; continue
@@ -310,7 +313,7 @@ class CleanSession(TestSuite):
                 pubevt = evt; continue
 
             if evt != None:
-                return False
+                debug(evt); return False
             break
 
         c2.disconnect()
@@ -320,6 +323,7 @@ class CleanSession(TestSuite):
     def test_023(self):
         c = MqttClient("cs", connect=4, clean_session=0)
         if c.connack().session_present != 0:
+            debug("session present")
             return False
         c.subscribe("/cs/topic1/+", qos=2)
         c.disconnect()
@@ -352,6 +356,7 @@ class CleanSession(TestSuite):
             #print evt
             if isinstance(evt, EventConnack):
                 if evt.session_present != 1:
+                    debug("{0}: session not present".format(evt))
                     return False
 
                 acked = True; continue
@@ -362,13 +367,13 @@ class CleanSession(TestSuite):
                     pubcnt += 1; continue
 
             if evt != None:
-                return False
+                debug(evt); return False
             break
 
         if not acked:
-            return False
+            debug("not acked"); return False
         if pubcnt != 3:
-            return False
+            debug("not all messages received: {0}".format(pubcnt)); return False
 
         c2.disconnect()
         return True
@@ -378,7 +383,7 @@ class CleanSession(TestSuite):
     def test_024(self):
         c = MqttClient("cs", connect=4, clean_session=0)
         if c.connack().session_present != 0:
-            return False
+            debug("session present"); return False
         c.subscribe("/cs/topic1/+", qos=0)
         c.disconnect()
 
@@ -394,16 +399,18 @@ class CleanSession(TestSuite):
         # clean_session = 1 => offline subscriptions & published messages dropped
         c2 = MqttClient(client_id=c.client_id, connect=4, clean_session=1)
         if c2.connack().session_present != 0:
-            return False
+            debug("session present"); return False
 
-        if c2.recv() is not None:
-            return False
+        evt = c2.recv()
+        if evt is not None:
+            debug(evt); return False
 
         pub.publish("/cs/topic1/qz", env.gen_msg(42), qos=0)
         pub.disconnect()
-       
-        if c2.recv() is not None:
-            return False
+
+        evt = c2.recv()
+        if evt is not None:
+            debug(evt); return False
 
         c2.disconnect()
         return True
@@ -423,9 +430,10 @@ class CleanSession(TestSuite):
         }
         ack = pub.publish(**pubmsg)
 
-        c2 = MqttClient(client_id=c.client_id, connect=4, clean_session=0)
-        if not isinstance(c2.connack(), EventConnack):
-            return False
+        c2  = MqttClient(client_id=c.client_id, connect=4, clean_session=0)
+        evt = c2.connack()
+        if not isinstance(evt, EventConnack):
+            debug(evt); return False
 
         c2.recv()
 

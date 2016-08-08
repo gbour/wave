@@ -1,14 +1,14 @@
-#!/usr/bin/env python
 # -*- coding: UTF8 -*-
-
-from lib import env
-from TestSuite import *
-from mqttcli import MqttClient
-from nyamuk.event import *
 
 import os
 import types
 import tempfile
+
+from lib import env
+from lib.env import debug
+from TestSuite import *
+from mqttcli import MqttClient
+from nyamuk.event import *
 
 from twisted.internet import defer
 from twotp import Atom, to_python, Tuple
@@ -63,7 +63,7 @@ foo\tallow\tw\ttest/foo/pub/2/#
             def _init1(self):
                 yield self._set_acl(enabled='false')
                 defer.returnValue(self._t_check(client=user, acl=False, **users[user]))
-            setattr(self, "test_{0:02}".format(i), types.MethodType(catch(desc(
+            setattr(self, "test_{0:03}".format(i), types.MethodType(catch(desc(
                 "user '{0}', no acl".format(user))(
                 _init1)), self))
 
@@ -72,7 +72,7 @@ foo\tallow\tw\ttest/foo/pub/2/#
             def _init2(self):
                 yield self._set_acl(enabled='true', file=acl_file)
                 defer.returnValue(self._t_check(client=user, acl=True, **users[user]))
-            setattr(self, "test_{0:02}".format(i), types.MethodType(catch(desc(
+            setattr(self, "test_{0:03}".format(i), types.MethodType(catch(desc(
                 "user '{0}', acls enabled".format(user))(
                 _init2)), self))
 
@@ -124,9 +124,11 @@ foo\tallow\tw\ttest/foo/pub/2/#
         # MUST FAIL when acl on
         ret = c.subscribe("test/{0}/sub/0".format(client), qos=0)
         if not isinstance(ret, EventSuback):
+            debug("{0}, acl {1}: {2}".format(client, acl, ret))
             return False
         if     acl and ret.granted_qos != [0x80] or\
            not acl and ret.granted_qos != [0]:
+            debug("{0}, acl {1}: {2}".format(client, acl, ret))
             return False
 
         ## publish
@@ -135,10 +137,12 @@ foo\tallow\tw\ttest/foo/pub/2/#
         c.publish(topic, msg)
         e = ctrl.recv()
         if acl and e != None:
+            debug("{0}, acl {1}: {2}".format(client, acl, e))
             return False
         elif not acl and (not isinstance(e, EventPublish) or\
                 e.msg.topic != topic or\
                 e.msg.payload != msg):
+            debug("{0}, acl {1}: {2}".format(client, acl, e))
             return False
 
 
@@ -146,11 +150,13 @@ foo\tallow\tw\ttest/foo/pub/2/#
 
         ret = c.subscribe("test/{0}/sub/1".format(client), qos=0)
         if not isinstance(ret, EventSuback) or ret.granted_qos != [0]:
+            debug("{0}, acl {1}: {2}".format(client, acl, ret))
             return False
 
         if acl:
             ret = c.subscribe("test/{0}/sub/1/extra".format(client), qos=0)
             if not isinstance(ret, EventSuback) or ret.granted_qos != [0x80]:
+                debug("{0}, acl {1}: {2}".format(client, acl, ret))
                 return false
 
         topic = "test/{0}/pub/1".format(client); msg = env.gen_msg(10)
@@ -159,6 +165,7 @@ foo\tallow\tw\ttest/foo/pub/2/#
         if not isinstance(e, EventPublish) or\
                 e.msg.topic != topic or\
                 e.msg.payload != msg:
+            debug("{0}, acl {1}: {2}".format(client, acl, e))
             return False
 
         if acl:
@@ -166,6 +173,7 @@ foo\tallow\tw\ttest/foo/pub/2/#
             c.publish("test/{0}/pub/1/extra".format(client), msg)
             e = ctrl.recv()
             if e != None:
+                debug("{0}, acl {1}: {2}".format(client, acl, e))
                 return False
 
 
@@ -175,6 +183,7 @@ foo\tallow\tw\ttest/foo/pub/2/#
         if not isinstance(e, EventPublish) or\
                 e.msg.topic != topic or\
                 e.msg.payload != msg:
+            debug("{0}, acl {1}: {2}".format(client, acl, e))
             return False
 
         ctrl.disconnect(); c.disconnect()
