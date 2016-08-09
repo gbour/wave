@@ -194,7 +194,7 @@ class Auth(TestSuite):
         subprocess.Popen("../bin/mkpasswd -D {0} foo".format(tmp),
                          shell=True, stdout=subprocess.PIPE).wait()
         # file is monitored each 2 secs in debug context
-        time.sleep(3)
+        time.sleep(5)
 
         ret = c.connect(version=4)
         # auth accepted
