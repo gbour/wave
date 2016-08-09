@@ -17,7 +17,7 @@ class V311(TestSuite):
 
     @catch
     @desc("CONNECT")
-    def test_01(self):
+    def test_001(self):
         c = MqttClient("v311")
         evt = c.connect(version=4)
 
@@ -32,7 +32,7 @@ class V311(TestSuite):
     #      then we check server has closed the socket
     @catch
     @desc("DISCONNECT")
-    def test_02(self):
+    def test_002(self):
         c = MqttClient("v311", connect=4)
         #evt = c._c.disconnect()
         c.disconnect()
@@ -41,7 +41,7 @@ class V311(TestSuite):
 
     @catch
     @desc("SUBSCRIBE")
-    def test_10(self):
+    def test_010(self):
         c = MqttClient("v311", connect=4)
 
         evt = c.subscribe("/foo/bar", qos=0)
@@ -54,7 +54,7 @@ class V311(TestSuite):
 
     @catch
     @desc("PUBLISH (qos=0). no response")
-    def test_11(self):
+    def test_011(self):
         c = MqttClient("v311", connect=4)
         e = c.publish("/foo/bar", payload="plop")
         # QOS = 0 : no response indented
@@ -68,7 +68,7 @@ class V311(TestSuite):
 
     @catch
     @desc("PING REQ/RESP")
-    def test_20(self):
+    def test_020(self):
         c = MqttClient("v311", connect=4)
         e = c.send_pingreq()
         c.disconnect()
@@ -152,19 +152,11 @@ class V311(TestSuite):
             return False
 
         c._c.sock = sock
-
-        pkt = MqttPkt()
-        pkt.command = NC.CMD_CONNECT
-        pkt.remaining_length = 12 + 4 # client_id = "ff"
-        pkt.alloc()
-
-        pkt.write_string("MqTt")
-        pkt.write_byte(NC.PROTOCOL_VERSION_4) # = 4
-        pkt.write_string("ff")
-
-        c._c.packet_queue(pkt)
-        c._c.packet_write()
-        c._c.loop()
+        c.forge(NC.CMD_CONNECT, 0, [
+            ('string', 'MqTt'),
+            ('byte'  , NC.PROTOCOL_VERSION_4),
+            ('string', 'ff') # client id
+        ], send=True)
 
         try:
             c.send_pingreq()
@@ -189,23 +181,15 @@ class V311(TestSuite):
             return False
 
         c._c.sock = sock
+        c.forge(NC.CMD_CONNECT, 0, [
+            ('string', 'MQTT'),
+            ('byte'  , NC.PROTOCOL_VERSION_3),
+            ('byte'  , 0),   # flags
+            ('uint16', 60),  # keepalive
+            ('string', 'ff') # client id
+        ], send=True) # should return CONN_REFUSED
 
-        pkt = MqttPkt()
-        pkt.command = NC.CMD_CONNECT
-        pkt.remaining_length = 12 + 4 # client_id = "ff"
-        pkt.alloc()
-
-        pkt.write_string("MQTT")
-        pkt.write_byte(NC.PROTOCOL_VERSION_3)
-        pkt.write_byte(0)      # flags
-        pkt.write_uint16(60)   # keepalive
-        pkt.write_string("ff") # client id
-
-        c._c.packet_queue(pkt)
-        c._c.packet_write()
-        c._c.loop() # should return CONN_REFUSED
         evt = c._c.pop_event()
-
         if not isinstance(evt, EventConnack) or evt.ret_code != 1:
             debug(evt)
             return False
@@ -231,22 +215,14 @@ class V311(TestSuite):
             return False
 
         c._c.sock = sock
+        ret = c.forge(NC.CMD_CONNECT, 0, [
+            ('string', 'MQTT'),
+            ('byte'  , NC.PROTOCOL_VERSION_3),
+            ('byte'  , 1),   # flags - reserve set to 1
+            ('uint16', 60),  # keepalive
+            ('string', 'ff') # client id
+        ], send=True)
 
-        pkt = MqttPkt()
-        pkt.command = NC.CMD_CONNECT
-        pkt.remaining_length = 12 + 4 # client_id = "ff"
-        pkt.alloc()
-
-        pkt.write_string("MQTT")
-        pkt.write_byte(NC.PROTOCOL_VERSION_3)
-        pkt.write_byte(1)      # flags - reserve set to 1
-        pkt.write_uint16(60)   # keepalive
-        pkt.write_string("ff") # client id
-
-        c._c.packet_queue(pkt)
-        c._c.packet_write()
-
-        ret = c._c.loop()
         if ret != NC.ERR_CONN_LOST:
             debug("invalid error code: {0}".format(ret))
             return False
@@ -267,22 +243,14 @@ class V311(TestSuite):
             return False
 
         c._c.sock = sock
+        ret = c.forge(NC.CMD_CONNECT, 0, [
+            ('string', 'MQTT'),
+            ('byte'  , NC.PROTOCOL_VERSION_4),
+            ('byte'  , 1 << 6), # set password flag
+            ('uint16', 60),     # keepalive
+            ('string', 'ff')    # client id
+        ], send=True)
 
-        pkt = MqttPkt()
-        pkt.command = NC.CMD_CONNECT
-        pkt.remaining_length = 12 + 4 # client_id = "ff"
-        pkt.alloc()
-
-        pkt.write_string("MQTT")
-        pkt.write_byte(NC.PROTOCOL_VERSION_4)
-        pkt.write_byte(1 << 6) # set password flag
-        pkt.write_uint16(60)   # keepalive
-        pkt.write_string("ff") # client id
-
-        c._c.packet_queue(pkt)
-        c._c.packet_write()
-
-        ret = c._c.loop()
         if ret != NC.ERR_CONN_LOST:
             debug("invalid error code: {0}".format(ret))
             return False
@@ -303,28 +271,19 @@ class V311(TestSuite):
             return False
 
         c._c.sock = sock
+        c.forge(NC.CMD_CONNECT, 0, [
+            ('string', 'MQTT'),
+            ('byte'  , NC.PROTOCOL_VERSION_4),
+            ('byte'  , 0),    # flags
+            ('uint16', 2),    # keepalive
+            ('string', 'ff')  # client id
+        ], send=True)
 
-        pkt = MqttPkt()
-        pkt.command = NC.CMD_CONNECT
-        pkt.remaining_length = 12 + 4 # client_id = "ff"
-        pkt.alloc()
-
-        pkt.write_string("MQTT")
-        pkt.write_byte(NC.PROTOCOL_VERSION_4)
-        pkt.write_byte(0)      # flags
-        pkt.write_uint16(10)   # keepalive
-        pkt.write_string("ff") # client id
-
-        c._c.packet_queue(pkt)
-        c._c.packet_write()
-        c._c.loop()
         evt = c._c.pop_event()
-
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            debug(evt)
-            return False
+            debug(evt); return False
 
-        time.sleep(15.5)
+        time.sleep(3.5)
         ret = c._c.loop()
         if ret != NC.ERR_CONN_LOST:
             debug("invalid error code: {0}".format(ret))
@@ -346,34 +305,24 @@ class V311(TestSuite):
             return False
 
         c._c.sock = sock
+        c.forge(NC.CMD_CONNECT, 0, [
+            ('string', 'MQTT'),
+            ('byte'  , NC.PROTOCOL_VERSION_4),
+            ('byte'  , 0),    # flags
+            ('uint16', 2),   # keepalive
+            ('string', 'ff')  # client id
+        ], send=True)
 
-        pkt = MqttPkt()
-        pkt.command = NC.CMD_CONNECT
-        pkt.remaining_length = 12 + 4 # client_id = "ff"
-        pkt.alloc()
-
-        pkt.write_string("MQTT")
-        pkt.write_byte(NC.PROTOCOL_VERSION_4)
-        pkt.write_byte(0)      # flags
-        pkt.write_uint16(10)   # keepalive
-        pkt.write_string("ff") # client id
-
-        c._c.packet_queue(pkt)
-        c._c.packet_write()
-        c._c.loop()
         evt = c._c.pop_event()
-
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            debug(evt)
-            return False
+            debug(evt); return False
 
-        time.sleep(2)
+        time.sleep(1)
         evt = c.publish("foo", "bar", qos=1)
         if not isinstance(evt, EventPuback):
-            debug(evt)
-            return False
+            debug(evt); return False
 
-        time.sleep(15.5)
+        time.sleep(3.5)
         ret = c._c.loop()
         if ret != NC.ERR_CONN_LOST:
             debug("invalid error code: {0}".format(ret))
@@ -395,26 +344,17 @@ class V311(TestSuite):
             return False
 
         c._c.sock = sock
+        c.forge(NC.CMD_CONNECT, 0, [
+            ('string', 'MQTT'),
+            ('byte'  , NC.PROTOCOL_VERSION_4),
+            ('byte'  , 0),    # flags
+            ('uint16', 10),   # keepalive
+            ('string', '')    # client id
+        ], send=True)
 
-        pkt = MqttPkt()
-        pkt.command = NC.CMD_CONNECT
-        pkt.remaining_length = 12 # + 4 # client_id = "ff"
-        pkt.alloc()
-
-        pkt.write_string("MQTT")
-        pkt.write_byte(NC.PROTOCOL_VERSION_4)
-        pkt.write_byte(0)      # flags
-        pkt.write_uint16(10)   # keepalive
-        pkt.write_string("")   # client id
-
-        c._c.packet_queue(pkt)
-        c._c.packet_write()
-        c._c.loop()
         evt = c._c.pop_event()
-
         if not isinstance(evt, EventConnack) or evt.ret_code != 2:
-            debug(evt)
-            return False
+            debug(evt); return False
 
         return True
 
