@@ -4,12 +4,12 @@ import time
 
 from lib import env
 from lib.env import debug
+from lib.erl import supervisor
 from TestSuite import *
 from mqttcli import MqttClient
 
 from nyamuk.event import *
 from twisted.internet import defer
-import twotp
 
 """
     When a message delivery cannot be completed
@@ -23,23 +23,13 @@ class PartialDelivery(TestSuite):
     def __init__(self):
         TestSuite.__init__(self, "partial delivery")
 
-    @defer.inlineCallbacks
-    def msgworkers_count(self):
-        """ returns count of active msgworkers """
-        #twotp.supervisor.count_children(atom(wave_msgworkers_sup))
-        sup = yield env.remote('supervisor','count_children', twotp.Atom('wave_msgworkers_sup'))
-        actives = (filter(lambda (name, count): name == 'active', twotp.to_python(sup)))[0][1]
-        #print 'actives', actives
-
-        defer.returnValue(actives)
-
 
     @catch
     @desc("fake test: wait msg workers timeout")
     @defer.inlineCallbacks
     def test_000(self):
         time.sleep(6)
-        if (yield self.msgworkers_count()) != 0:
+        if (yield supervisor.count('wave_msgworkers_sup')) != 0:
             defer.returnValue(False)
 
         defer.returnValue(True)
@@ -56,14 +46,14 @@ class PartialDelivery(TestSuite):
         # PUBREL not sent
         pub.destroy(); del pub
 
-        cnt = yield self.msgworkers_count()
+        cnt = yield supervisor.count('wave_msgworkers_sup')
         if cnt != 1:
             debug("wrong msgworkers count: {0}".format(cnt))
             defer.returnValue(False)
 
         # msg worker is destroyed after 5 secs
         time.sleep(6)
-        if (yield self.msgworkers_count()) != 0:
+        if (yield supervisor.count('wave_msgworkers_sup')) != 0:
             debug("wrong msgworkers count")
             defer.returnValue(False)
 
@@ -87,13 +77,13 @@ class PartialDelivery(TestSuite):
         # PUBACK not send
         sub.destroy(); del sub
 
-        if (yield self.msgworkers_count()) != 1:
+        if (yield supervisor.count('wave_msgworkers_sup')) != 1:
             debug("wrong msgworkers count")
             defer.returnValue(False)
 
         # msg worker is destroyed after 5 secs
         time.sleep(6)
-        if (yield self.msgworkers_count()) != 0:
+        if (yield supervisor.count('wave_msgworkers_sup')) != 0:
             debug("wrong msgworkers count")
             defer.returnValue(False)
 
@@ -117,25 +107,25 @@ class PartialDelivery(TestSuite):
 
         sub.destroy(); del sub
 
-        if (yield self.msgworkers_count()) != 1:
+        if (yield supervisor.count('wave_msgworkers_sup')) != 1:
             debug("wrong msgworkers count")
             defer.returnValue(False)
 
         # sub removed, sub2 still alive
         time.sleep(6)
-        if (yield self.msgworkers_count()) != 1:
+        if (yield supervisor.count('wave_msgworkers_sup')) != 1:
             debug("wrong msgworkers count")
             defer.returnValue(False)
 
         # sub2 still alive
         time.sleep(6)
-        if (yield self.msgworkers_count()) != 1:
+        if (yield supervisor.count('wave_msgworkers_sup')) != 1:
             debug("wrong msgworkers count")
             defer.returnValue(False)
 
         # msg worker is destroyed after 5 secs
         sub2.puback(evt2.msg.mid)
-        if (yield self.msgworkers_count()) != 0:
+        if (yield supervisor.count('wave_msgworkers_sup')) != 0:
             debug("wrong msgworkers count")
             defer.returnValue(False)
 
@@ -161,13 +151,13 @@ class PartialDelivery(TestSuite):
         # PUBREC not send
         sub.destroy(); del sub
 
-        if (yield self.msgworkers_count()) != 1:
+        if (yield supervisor.count('wave_msgworkers_sup')) != 1:
             debug("wrong msgworkers count")
             defer.returnValue(False)
 
         # msg worker is destroyed after 5 secs
         time.sleep(6)
-        if (yield self.msgworkers_count()) != 0:
+        if (yield supervisor.count('wave_msgworkers_sup')) != 0:
             debug("wrong msgworkers count")
             defer.returnValue(False)
 
@@ -194,13 +184,13 @@ class PartialDelivery(TestSuite):
         # PUBCOMP not send
         sub.destroy(); del sub
 
-        if (yield self.msgworkers_count()) != 1:
+        if (yield supervisor.count('wave_msgworkers_sup')) != 1:
             debug("wrong msgworkers count")
             defer.returnValue(False)
 
         # msg worker is destroyed after 5 secs
         time.sleep(6)
-        if (yield self.msgworkers_count()) != 0:
+        if (yield supervisor.count('wave_msgworkers_sup')) != 0:
             debug("wrong msgworkers count")
             defer.returnValue(False)
 
@@ -215,7 +205,7 @@ class PartialDelivery(TestSuite):
         sub.subscribe("foo/+", qos=2)
         sub.disconnect()
 
-        if (yield self.msgworkers_count()) != 0:
+        if (yield supervisor.count('wave_msgworkers_sup')) != 0:
             debug("wrong msgworkers count")
             defer.returnValue(False)
 
@@ -228,7 +218,7 @@ class PartialDelivery(TestSuite):
             defer.returnValue(False)
 
         # msg is published to offline storage, msg worker should exit immediately
-        if (yield self.msgworkers_count()) != 0:
+        if (yield supervisor.count('wave_msgworkers_sup')) != 0:
             debug("wrong msgworkers count")
             defer.returnValue(False)
 

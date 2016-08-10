@@ -7,6 +7,7 @@ from pprint import pprint
 
 from lib import env
 from lib.env import debug
+from lib.erl import application as app, acl
 from TestSuite import *
 from mqttcli import MqttClient
 from nyamuk.event import *
@@ -14,7 +15,6 @@ from nyamuk.mqtt_pkt import MqttPkt
 
 import apache_log_parser
 from twisted.internet import defer
-from twotp import Atom, to_python, Tuple
 
 APACHE_COMBINED="%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\""
 parser = apache_log_parser.make_parser(APACHE_COMBINED)
@@ -42,6 +42,8 @@ class AccessLog(TestSuite):
     def __init__(self):
         TestSuite.__init__(self, "AccessLog")
 
+    @defer.inlineCallbacks
+    def setup_suite(self):
         ## configuring acls
         (fd, self.acl_file) = tempfile.mkstemp(prefix='wave-acl-'); os.close(fd)
         print "acl file:", self.acl_file
@@ -53,23 +55,12 @@ anonymous\tallow\tr\tfoo/baz
 anonymous\tallow\tw\tfoo/bat
 """)
 
-    @defer.inlineCallbacks
-    def _set_acl(self, **values):
-        types = {'enabled': Atom, 'file': str}
-        dft = {
-            'enabled': 'false',
-            'file'    : '/tmp/wave.acl'
-        }
-
-        dft.update(values)
-        ret = yield env.remote('application', 'set_env', Atom('wave'), Atom('acl'),
-                          [Tuple([Atom(k), types[k](v)]) for k,v in dft.iteritems()])
-        #print to_python(ret)
-        yield env.remote('wave_acl', 'switch', dft['file'])
+        yield acl.switch(self.acl_file)
 
     def setup_test(self):
         # be sure log is flushed
         time.sleep(.5)
+
 
     @catch
     @desc("CONNECT, DISCONNECT")
@@ -99,7 +90,7 @@ anonymous\tallow\tw\tfoo/bat
         f = open('../log/wave.access.log', 'r')
         f.seek(0, os.SEEK_END)
 
-        yield self._set_acl(enabled='false')
+        yield app.set_acl(enabled=False)
 
         # here we start
         c = MqttClient("conformity", connect=4)
@@ -115,7 +106,7 @@ anonymous\tallow\tw\tfoo/bat
             defer.returnValue(False)
 
         # test w/ acls on
-        yield self._set_acl(enabled='true', file=self.acl_file)
+        yield app.set_acl(enabled=True)
         c.subscribe("foo/bar", qos=0)
         if not _match(f, {'request_method': 'SUBSCRIBE', 'request_url': 'foo/bar',
                           'status': '403', 'request_header_user_agent': c.client_id}):
@@ -148,7 +139,7 @@ anonymous\tallow\tw\tfoo/bat
         f = open('../log/wave.access.log', 'r')
         f.seek(0, os.SEEK_END)
 
-        yield self._set_acl(enabled='false')
+        yield app.set_acl(enabled=False)
 
         # here we start
         c = MqttClient("conformity", connect=4)
@@ -160,7 +151,7 @@ anonymous\tallow\tw\tfoo/bat
             defer.returnValue(False)
 
         # test w/ acls on
-        yield self._set_acl(enabled='true', file=self.acl_file)
+        yield app.set_acl(enabled=True)
         c.publish("foo/bar", "", qos=0)
         if not _match(f, {'request_method': 'PUBLISH', 'request_url': 'foo/bar', 'response_bytes_clf': '0',
                           'status': '403', 'request_header_user_agent': c.client_id}):

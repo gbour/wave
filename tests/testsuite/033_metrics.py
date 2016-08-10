@@ -7,29 +7,14 @@ from   pprint import pprint
 
 from lib import env
 from lib.env import debug
+from lib.erl import exometer
 from TestSuite import *
 from mqttcli import MqttClient
 from nyamuk.event import *
 from nyamuk.mqtt_pkt import MqttPkt
 
 from twisted.internet import defer
-import twotp
-from twotp import Atom
 
-@defer.inlineCallbacks
-def exo_value(key):
-    def _encode(x):
-        try:
-            x = int(x)
-        except:
-            x = Atom(x)
-
-        return x
-
-    key = [_encode(x) for x in key.split('.')]
-
-    sessions = yield env.remote('exometer','get_value', key)
-    defer.returnValue(dict(twotp.to_python(sessions)[1]))
 
 def sys_value(client, topic, casttype):
     while True:
@@ -53,16 +38,11 @@ class Metrics(TestSuite):
             > exometer_report:list_reporters().
             [{exometer_report_statsd,<0.143.0>}]
         """
-        reporters = yield env.remote('exometer_report', 'list_reporters')
-        try:
-            if twotp.to_python(reporters[0][0]) != 'exometer_report_statsd':
-                defer.returnValue(False)
-        except Exception, e:
-            debug(e)
-            defer.returnValue(False)
+        reporters = yield exometer.reporters()
+        if 'exometer_report_statsd' not in reporters:
+            debug(reporters); defer.returnValue(False)
 
         defer.returnValue(True)
-
 
     @catch
     @desc("subscribed metrics")
@@ -95,13 +75,9 @@ class Metrics(TestSuite):
             'wave'                  : ('uptime',),
         }
 
-        subscriptions = yield env.remote('exometer_report', 'list_subscriptions',
-                                         twotp.Atom('exometer_report_statsd'))
-        #pprint(twotp.to_python(subscriptions))
-        for (name, datapoints, delay, args) in twotp.to_python(subscriptions):
-            name = '.'.join([str(x) for x in name])
-
-            #print name, list(metrics.get(name, [])) == sorted(datapoints)
+        subscriptions = yield exometer.subscriptions('exometer_report_statsd')
+        #print subscriptions
+        for name, datapoints in subscriptions.iteritems():
             if name in metrics:
                 if list(metrics[name]) != sorted(datapoints):
                     debug("not matching: {0}, {1}".format(name, datapoints))
@@ -125,17 +101,17 @@ class Metrics(TestSuite):
             > exometer:get_value([wave,sessions]).
             {ok,[{active,0},{offline,0}]}
         """
-        v_start = yield exo_value('wave.sessions')
+        v_start = yield exometer.value('wave.sessions')
 
         c = MqttClient("metrics", connect=4, clean_session=0)
-        v = yield exo_value('wave.sessions')
+        v = yield exometer.value('wave.sessions')
         if v['active'] != v_start['active']+1 or v['offline'] != v_start['offline']:
             debug("{0}, {1}".format(v, v_start))
             defer.returnValue(False)
 
         c.disconnect()
         time.sleep(.5)
-        v = yield exo_value('wave.sessions')
+        v = yield exometer.value('wave.sessions')
         if v['active'] != v_start['active'] or v['offline'] != v_start['offline']+1:
             debug("{0}, {1}".format(v, v_start))
             defer.returnValue(False)
@@ -150,13 +126,13 @@ class Metrics(TestSuite):
         """
         @defer.inlineCallbacks
         def _(qos):
-            v_start = yield exo_value('wave.messages.in.'+str(qos))
+            v_start = yield exometer.value('wave.messages.in.'+str(qos))
 
             c = MqttClient("metrics", connect=4)
             c.publish("foo/bar", "", qos=qos)
             c.disconnect()
 
-            v_end = yield exo_value('wave.messages.in.'+str(qos))
+            v_end = yield exometer.value('wave.messages.in.'+str(qos))
             if v_end['count'] - v_start['count'] != 1:
                 debug("{0}, {1}".format(v_end, v_start))
                 defer.returnValue(False)
@@ -175,19 +151,19 @@ class Metrics(TestSuite):
     def test_012(self):
         """
         """
-        v = yield exo_value('wave.subscriptions')
+        v = yield exometer.value('wave.subscriptions')
         ref_val = v['value']
 
         c = MqttClient("metrics", connect=4)
         c.subscribe('foo/bar', qos=0)
 
-        v = yield exo_value('wave.subscriptions')
+        v = yield exometer.value('wave.subscriptions')
         if v['value'] != ref_val+1:
             debug("{0}, {1}".format(v, ref_val))
             defer.returnValue(False)
 
         c.unsubscribe('foo/bar')
-        v = yield exo_value('wave.subscriptions')
+        v = yield exometer.value('wave.subscriptions')
         if v['value'] != ref_val:
             debug("{0}, {1}".format(v, ref_val))
             defer.returnValue(False)

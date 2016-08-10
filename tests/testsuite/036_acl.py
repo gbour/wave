@@ -6,12 +6,12 @@ import tempfile
 
 from lib import env
 from lib.env import debug
+from lib.erl import application as app, auth, acl
 from TestSuite import *
 from mqttcli import MqttClient
 from nyamuk.event import *
 
 from twisted.internet import defer
-from twotp import Atom, to_python, Tuple
 
 
 class Acl(TestSuite):
@@ -28,7 +28,8 @@ class Acl(TestSuite):
 """ctrl:$2a$12$4xhMVs/zgy6T/GZobBAdc.bpbL2yaXnckX5YE9z5abEnGzsSaIeGq
 foo:$2a$12$EwUNtApVj6j2z9VQlMf98O8Xc.650HdRFK6Rr4sVG6bc/tdjjgXOW
 """)
-        yield self._set_auth(required='false', file=auth_file)
+        yield app.set_auth(required=True, filename=auth_file)
+        yield auth.switch(auth_file)
 
         ## configuring acls
         (fd, acl_file) = tempfile.mkstemp(prefix='wave-acl-'); os.close(fd)
@@ -61,7 +62,8 @@ foo\tallow\tw\ttest/foo/pub/2/#
         for user in sorted(users.keys()):
             @defer.inlineCallbacks
             def _init1(self):
-                yield self._set_acl(enabled='false')
+                yield app.set_acl(enabled=False)
+
                 defer.returnValue(self._t_check(client=user, acl=False, **users[user]))
             setattr(self, "test_{0:03}".format(i), types.MethodType(catch(desc(
                 "user '{0}', no acl".format(user))(
@@ -70,7 +72,8 @@ foo\tallow\tw\ttest/foo/pub/2/#
             i += 1
             @defer.inlineCallbacks
             def _init2(self):
-                yield self._set_acl(enabled='true', file=acl_file)
+                yield app.set_acl(enabled=True, filename=acl_file); yield acl.switch(acl_file)
+
                 defer.returnValue(self._t_check(client=user, acl=True, **users[user]))
             setattr(self, "test_{0:03}".format(i), types.MethodType(catch(desc(
                 "user '{0}', acls enabled".format(user))(
@@ -79,38 +82,9 @@ foo\tallow\tw\ttest/foo/pub/2/#
             i += 1
 
     @defer.inlineCallbacks
-    def cleanup(self):
-        yield self._set_auth(required='false', file='/tmp/wave.auth')
-        yield self._set_acl(enabled='false')
-
-
-    @defer.inlineCallbacks
-    def _set_auth(self, **values):
-        types = {'required': Atom, 'file': str}
-        dft = {
-            'required': 'false',
-            'file'    : '/tmp/wave.passwd'
-        }
-        dft.update(values)
-
-        ret = yield env.remote('application', 'set_env', Atom('wave'), Atom('auth'),
-                          [Tuple([Atom(k), types[k](v)]) for k,v in dft.iteritems()])
-        #print to_python(ret)
-        yield env.remote('wave_auth', 'switch', dft['file'])
-
-    @defer.inlineCallbacks
-    def _set_acl(self, **values):
-        types = {'enabled': Atom, 'file': str}
-        dft = {
-            'enabled': 'false',
-            'file'    : '/tmp/wave.acl'
-        }
-
-        dft.update(values)
-        ret = yield env.remote('application', 'set_env', Atom('wave'), Atom('acl'),
-                          [Tuple([Atom(k), types[k](v)]) for k,v in dft.iteritems()])
-        #print to_python(ret)
-        yield env.remote('wave_acl', 'switch', dft['file'])
+    def cleanup_suite(self):
+        yield app.set_auth(required=False)
+        yield app.set_acl(enabled=False)
 
 
 #    @defer.inlineCallbacks

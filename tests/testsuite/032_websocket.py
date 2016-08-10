@@ -5,15 +5,17 @@ import time
 import pprint
 import websocket
 
+from nyamuk import *
+from twisted.internet import defer
+
 from lib import env
 from lib.env import debug
+from lib.erl import sessions, process
 from TestSuite import *
 from mqttcli import MqttClient
-from nyamuk import *
 
-from twisted.internet import defer
-from twotp import Atom, to_python, Tuple, Map
-from twotp.term import Pid
+from twotp            import to_python
+
 
 # TLS > v1 not available on python2.7 except for Debian
 # TLSv1 and lower are disabled in OTP >= 18
@@ -171,26 +173,20 @@ class WebSocket(TestSuite):
 
                 - we check that 4 servers are stopped after clb executed (ie MQTT DISCONNECTION)
         """
-        workers = yield env.remote('supervisor','which_children', Atom('wave_sessions_sup'))
-        #workers = ["<0.{0}.{1}>".format(pid.nodeId, pid.serial) for (a, pid, b, c) in workers]
-        for (a, pid, b, c) in workers:
+        workers = yield sessions.workers()
+        for pid in workers:
             debug("(pre:cleanup) killing {0} session worker".format(to_python(pid)))
-            yield env.remote('erlang', 'exit', pid, Atom('kill'))
+            yield process.kill(pid)
 
 
         ws = MqttClient("ws", port=1884, websocket=True, connect=4, keepalive=1)
 
-        workers = yield env.remote('supervisor','which_children', Atom('wave_sessions_sup'))
-        #workers = ["<0.{0}.{1}>".format(pid.nodeId, pid.serial) for (a, pid, b, c) in workers]
-        workers = [pid for (a, pid, b, c) in workers]
+        workers = yield sessions.workers()
         #pprint.pprint(workers)
         if len(workers) != 1:
             debug("more than 1 mqtt_sessions workers running")
             defer.returnValue(False)
-        processes = {'session': workers[0]}
-
-        #yield env.remote('wave_websocket','test', Map({Atom('a'): Atom('b'), 'foo': 'bar', 1: 2}))
-        #yield env.remote('wave_websocket','test', Map({}))
+        procs = {'session': workers[0]}
 
         #(wave@127.0.0.1)26> sys:get_state(Pid).
         #{connected,{session,<<"test_nyamuk">>,[],
@@ -203,33 +199,30 @@ class WebSocket(TestSuite):
         #                    undefined,15000,[],59738,undefined}}
 
         # get mqtt_session state
-        state = yield env.remote('sys','get_state', processes.get('session'))
-	#pprint.pprint(to_python(state))
-        processes['websocket'] = state[1][3][2]
+        state = yield sessions.state(procs['session'])
+        procs['websocket'] = state.transport[-1]
 
         # get wave_websocket state
-        state = yield env.remote('wave_websocket', 'debug_getstate', processes['websocket'])
-        #pprint.pprint(to_python(state))
-        processes['ranch'] = state[1]
-        processes['proto'] = state[2]
+        state = yield sessions.ws_state(procs['websocket'])
+        procs['ranch'] = state.parent
+        procs['proto'] = state.child
+        #print 'procs', procs
 
-        #pprint.pprint(processes)
         @defer.inlineCallbacks
-        def check_running(procs):
-            ret = [k for k, v in procs.iteritems() if
-                   to_python((yield env.remote('erlang','is_process_alive', v))) == 'true']
+        def check_running(_procs):
+            ret = [name for name, pid in _procs.iteritems() if (yield process.alive(pid))]
             defer.returnValue(ret)
-        #print (yield check_running(processes))
-        rprocs = yield check_running(processes)
-        if len(rprocs) != len(processes):
+
+        rprocs = yield check_running(procs)
+        #print 'rprocs',rprocs
+        if len(rprocs) != len(procs):
             debug("not all processes are alive before disconnect: {0}".format(rprocs))
             defer.returnValue(False)
 
-
+        ## callback to kill all session related processes
         clb(ws)
 
-        rprocs = yield check_running(processes)
-        #print rprocsi
+        rprocs = yield check_running(procs)
         if len(rprocs) != 0:
             debug("{0} proc(s) still running after disconnect".format(rprocs))
             defer.returnValue(False)
