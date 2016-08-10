@@ -15,6 +15,10 @@ class Retain(TestSuite):
     def __init__(self):
         TestSuite.__init__(self, "Retained messages")
 
+    def cleanup_suite(self):
+        env.db.flushdb()
+
+
     @catch
     @desc("[MQTT-3.3.1-5,MQTT-3.3.1-7] retain published message (qos 0)")
     def test_001(self):

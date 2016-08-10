@@ -15,6 +15,10 @@ class CleanSession(TestSuite):
     def __init__(self):
         TestSuite.__init__(self, "Clean Session")
 
+    def cleanup_suite(self):
+        env.db.flushdb()
+
+
     @catch
     @desc("[MQTT-3.1.3.7,MQTT-3.1.3-8,MQTT-3.2.2-4] 0-length clientid forbidden when clean-session flag is 0")
     def test_001(self):
