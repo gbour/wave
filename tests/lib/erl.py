@@ -75,11 +75,22 @@ class application(ErlO):
             Tuple([Atom('file'),    filename]),
         ]]
 
+    @staticmethod
+    @ErlO.erl('lager', 'log')
+    def log(msg):
+        return [Atom("warning"), [], msg]
+
 class supervisor(ErlO):
     @staticmethod
     @ErlO.erl('supervisor', 'count_children', fmt=lambda x: [val for (key, val) in x if key == Atom('active')][0])
     def count(name):
         return [Atom(name)]
+
+class wave(ErlO):
+    @staticmethod
+    @ErlO.erl('wave_app', 'debug_cleanup')
+    def cleanup():
+        return []
 
 class sessions(ErlO):
     records = {

@@ -33,6 +33,12 @@ class SSL2(TestSuite):
     def setup_suite(self):
         self.stop_external_wave()
 
+    def setup_test(self, testname):
+        pass
+
+    def cleanup_test(self, testname):
+        pass
+
     def stop_external_wave(self):
         p = subprocess.Popen("pidof beam.smp", shell=True, stdout=subprocess.PIPE)
         (outdata, errdata) = p.communicate()

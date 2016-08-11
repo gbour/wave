@@ -57,7 +57,9 @@ anonymous\tallow\tw\tfoo/bat
 
         yield acl.switch(self.acl_file)
 
-    def setup_test(self):
+    def setup_test(self, testname):
+        super(AccessLog, self).setup_test(testname)
+
         # be sure log is flushed
         time.sleep(.5)
 
