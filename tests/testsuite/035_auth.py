@@ -33,7 +33,7 @@ class Auth(TestSuite):
     def test_001(self):
         yield app.set_auth(required=False)
 
-        c = MqttClient("auth", connect=False)
+        c = MqttClient("auth:{seq}", connect=False)
         ret = c.connect(version=4)
         if not isinstance(ret, EventConnack) or\
                 ret.ret_code != 0:
@@ -48,7 +48,7 @@ class Auth(TestSuite):
     def test_002(self):
         yield app.set_auth(required=True)
 
-        c = MqttClient("auth", connect=False)
+        c = MqttClient("auth:{seq}", connect=False)
         ret = c.connect(version=4)
         if isinstance(ret, EventConnack) and ret.ret_code == 4:
             defer.returnValue(True)
@@ -63,7 +63,7 @@ class Auth(TestSuite):
         tmp = tempfile.mktemp(prefix='wave-testsuite-')
         yield app.set_auth(required=True, filename=tmp); yield auth.switch(tmp)
 
-        c = MqttClient("auth", connect=False)
+        c = MqttClient("auth:{seq}", connect=False)
         ret = c.connect(version=4)
         if isinstance(ret, EventConnack) and ret.ret_code == 4:
             defer.returnValue(True)
@@ -81,7 +81,7 @@ class Auth(TestSuite):
         yield app.set_auth(required= True, filename= tmp)
         yield auth.switch(tmp)
 
-        c = MqttClient("auth", connect=False, username="fez", password="bar")
+        c = MqttClient("auth:{seq}", connect=False, username="fez", password="bar")
         ret = c.connect(version=4)
         # auth rejected
         if isinstance(ret, EventConnack) and ret.ret_code == 4:
@@ -100,7 +100,7 @@ class Auth(TestSuite):
         yield app.set_auth(required= True, filename= tmp)
         yield auth.switch(tmp)
 
-        c = MqttClient("auth", connect=False, username="foo", password="baz")
+        c = MqttClient("auth:{seq}", connect=False, username="foo", password="baz")
         ret = c.connect(version=4)
         # auth rejected
         if isinstance(ret, EventConnack) and ret.ret_code == 4:
@@ -119,7 +119,7 @@ class Auth(TestSuite):
         yield app.set_auth(required= True, filename= tmp)
         yield auth.switch(tmp)
 
-        c = MqttClient("auth", connect=False, username="foo", password="bar")
+        c = MqttClient("auth:{seq}", connect=False, username="foo", password="bar")
         ret = c.connect(version=4)
         # auth accepted
         if isinstance(ret, EventConnack) and ret.ret_code == 0:
@@ -138,7 +138,7 @@ class Auth(TestSuite):
         yield app.set_auth(required= True, filename= tmp)
         yield auth.switch(tmp)
 
-        c = MqttClient("auth", connect=False, username="foo", password="baz")
+        c = MqttClient("auth:{seq}", connect=False, username="foo", password="baz")
         ret = c.connect(version=4)
         # auth rejected
         if not isinstance(ret, EventConnack) or ret.ret_code == 0:
@@ -169,7 +169,7 @@ class Auth(TestSuite):
         yield app.set_auth(required= True, filename= tmp)
         yield auth.switch(tmp)
 
-        c = MqttClient("auth", connect=False, username="foo", password="bar")
+        c = MqttClient("auth:{seq}", connect=False, username="foo", password="bar")
         ret = c.connect(version=4)
         # auth rejected
         if not isinstance(ret, EventConnack) or ret.ret_code != 0:

@@ -12,7 +12,7 @@ class Basic(TestSuite):
     @catch
     @desc("CONNECT")
     def test_001(self):
-        c = MqttClient("reg")
+        c = MqttClient("reg:{seq}")
         evt = c.connect()
 
         # [MQTT-3.1.4-4]: CONNACK retcode MUST be 0
@@ -29,7 +29,7 @@ class Basic(TestSuite):
     @catch
     @desc("DISCONNECT")
     def test_002(self):
-        c = MqttClient("reg", connect=4)
+        c = MqttClient("reg:{seq}", connect=4)
         #evt = c._c.disconnect()
         c.disconnect()
 
@@ -38,7 +38,7 @@ class Basic(TestSuite):
     @catch
     @desc("SUBSCRIBE/UNSUBSCRIBE")
     def test_010(self):
-        c = MqttClient("reg", connect=4)
+        c = MqttClient("reg:{seq}", connect=4)
 
         evt = c.subscribe("/foo/bar", qos=0)
         # validating [MQTT-2.3.1-7]
@@ -56,7 +56,7 @@ class Basic(TestSuite):
     @catch
     @desc("PUBLISH (qos=0). no response")
     def test_011(self):
-        c = MqttClient("reg", connect=4)
+        c = MqttClient("reg:{seq}", connect=4)
         e = c.publish("/foo/bar", "plop")
         # QOS = 0 : no response indented
         c.disconnect()
@@ -66,7 +66,7 @@ class Basic(TestSuite):
     @catch
     @desc("PING REQ/RESP")
     def test_020(self):
-        c = MqttClient("reg", connect=4)
+        c = MqttClient("reg:{seq}", connect=4)
         e = c.send_pingreq()
         c.disconnect()
 

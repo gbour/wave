@@ -32,7 +32,7 @@ class SSL(TestSuite):
     @catch
     @desc("CONNECT")
     def test_001(self):
-        c = MqttClient("reg", ssl=True, ssl_opts={'ssl_version': SSL_VERSION})
+        c = MqttClient("reg:{seq}", ssl=True, ssl_opts={'ssl_version': SSL_VERSION})
         evt = c.connect()
         debug("Using SSL: version={0}, cipher={1}".format(version(c._c.sock), c._c.sock.cipher()))
 
@@ -45,7 +45,7 @@ class SSL(TestSuite):
     @catch
     @desc("CONNECTION ERROR - FAILING certificate checking")
     def test_002(self):
-        c = MqttClient("reg", ssl=True, ssl_opts={
+        c = MqttClient("reg:{seq}", ssl=True, ssl_opts={
             'ssl_version': SSL_VERSION,
             'cert_reqs': ssl.CERT_REQUIRED
         })
@@ -60,7 +60,7 @@ class SSL(TestSuite):
     @catch
     @desc("CONNECTION OK - SUCCESSFULL certificate checking")
     def test_003(self):
-        c = MqttClient("reg", ssl=True, ssl_opts={
+        c = MqttClient("reg:{seq}", ssl=True, ssl_opts={
             'ssl_version': SSL_VERSION,
             'cert_reqs': ssl.CERT_REQUIRED,
             'ca_certs': os.path.join(os.path.dirname(__file__), "../../", "etc/wave_cert.pem")
@@ -76,7 +76,7 @@ class SSL(TestSuite):
     @catch
     @desc("CONNECTION ERROR - invalid cipher")
     def test_004(self):
-        c = MqttClient("reg", ssl=True, ssl_opts={
+        c = MqttClient("reg:{seq}", ssl=True, ssl_opts={
             'ssl_version': SSL_VERSION,
             'cert_reqs': ssl.CERT_REQUIRED,
             'ca_certs': os.path.join(os.path.dirname(__file__), "../../", "etc/wave_cert.pem"),
@@ -93,7 +93,7 @@ class SSL(TestSuite):
     @catch
     @desc("CONNECTION OK - forcing cipher")
     def test_005(self):
-        c = MqttClient("reg", ssl=True, ssl_opts={
+        c = MqttClient("reg:{seq}", ssl=True, ssl_opts={
             'ssl_version': SSL_VERSION,
             'cert_reqs': ssl.CERT_REQUIRED,
             'ca_certs': os.path.join(os.path.dirname(__file__), "../../", "etc/wave_cert.pem"),

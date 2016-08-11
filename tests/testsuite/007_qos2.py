@@ -15,7 +15,7 @@ class Qos1(TestSuite):
     @catch
     @desc("SUBSCRIBE/SUBACK")
     def test_001(self):
-        sub = MqttClient("sub", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         suback_evt = sub.subscribe('foo/bar', 2)
         if not isinstance(suback_evt, EventSuback) or \
                 suback_evt.mid != sub.get_last_mid() or \
@@ -28,10 +28,10 @@ class Qos1(TestSuite):
     @catch
     @desc("downgraded delivery to qos 0")
     def test_002(self):
-        sub = MqttClient('sub', connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', 2)
 
-        pub = MqttClient('pub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         msg = gen_msg()
         pub.publish('a/b', payload=msg, qos=0)
         pub.disconnect()
@@ -51,10 +51,10 @@ class Qos1(TestSuite):
     @catch
     @desc("downgraded delivery to qos 1")
     def test_003(self):
-        sub = MqttClient('sub', connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', qos=2)
 
-        pub = MqttClient('pub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         msg = gen_msg()
         pub.publish('a/b', payload=msg, qos=1)
 
@@ -82,10 +82,10 @@ class Qos1(TestSuite):
     @catch
     @desc("qos 2 delivery")
     def test_004(self):
-        sub = MqttClient('sub', connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', 2)
 
-        pub = MqttClient('pub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         msg = gen_msg()
         pub.publish('a/b', payload=msg, qos=2, read_response=False)
 
@@ -132,10 +132,10 @@ class Qos1(TestSuite):
     @catch
     @desc("invalid qos 1 acknowledgement while transaction is qos 2")
     def test_010(self):
-        sub = MqttClient('sub', connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', 2)
 
-        pub = MqttClient('pub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         msg = gen_msg()
         pub.publish('a/b', payload=msg, qos=2, read_response=False)
 

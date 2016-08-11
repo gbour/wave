@@ -17,12 +17,12 @@ class Will(TestSuite):
     @catch
     @desc("no will")
     def test_001(self):
-        monitor = MqttClient("monitor", connect=4)
+        monitor = MqttClient("monitor:{seq}", connect=4)
         # NOTE: '/' prefix skips $ messages
         # TODO: remove it when '$' filter will be impl.
         monitor.subscribe("/#", qos=0)
 
-        client  = MqttClient("rabbit", connect=4)
+        client  = MqttClient("rabbit:{seq}", connect=4)
         # close socket without disconnection
         client.socket_close()
 
@@ -37,12 +37,12 @@ class Will(TestSuite):
     @catch
     @desc("will: close socket w/o DISCONNECT")
     def test_002(self):
-        monitor = MqttClient("monitor", connect=4)
+        monitor = MqttClient("monitor:{seq}", connect=4)
         # NOTE: '/' prefix skips $ messages
         # TODO: remove it when '$' filter will be impl.
         monitor.subscribe("/#", qos=0)
 
-        client  = MqttClient("rabbit")
+        client  = MqttClient("rabbit:{seq}")
         will    = {'topic': '/node/disconnect', 'message': client.clientid()}
         client.connect(version=4, will=will)
         # close socket without disconnection
@@ -60,12 +60,12 @@ class Will(TestSuite):
     @catch
     @desc("will: on KeepAlive timeout")
     def test_003(self):
-        monitor = MqttClient("monitor", connect=4)
+        monitor = MqttClient("monitor:{seq}", connect=4)
         # NOTE: '/' prefix skips $ messages
         # TODO: remove it when '$' filter will be impl.
         monitor.subscribe("/#", qos=0)
 
-        client  = MqttClient("rabbit", keepalive=2)
+        client  = MqttClient("rabbit:{seq}", keepalive=2)
         will    = {'topic': '/node/disconnect', 'message': client.clientid()}
         client.connect(version=4, will=will)
 
@@ -89,12 +89,12 @@ class Will(TestSuite):
     @catch
     @desc("will: on protocol error")
     def test_004(self):
-        monitor = MqttClient("monitor", connect=4)
+        monitor = MqttClient("monitor:{seq}", connect=4)
         # NOTE: '/' prefix skips $ messages
         # TODO: remove it when '$' filter will be impl.
         monitor.subscribe("/#", qos=0)
 
-        client  = MqttClient("rabbit") # no keepalive
+        client  = MqttClient("rabbit:{seq}") # no keepalive
         will    = {'topic': '/node/disconnect', 'message': client.clientid()}
         client.connect(version=4, will=will)
 
@@ -116,12 +116,12 @@ class Will(TestSuite):
     @catch
     @desc("will: qos 1")
     def test_005(self):
-        monitor = MqttClient("monitor", connect=4)
+        monitor = MqttClient("monitor:{seq}", connect=4)
         # NOTE: '/' prefix skips $ messages
         # TODO: remove it when '$' filter will be impl.
         monitor.subscribe("/#", qos=2)
 
-        client  = MqttClient("rabbit") # no keepalive
+        client  = MqttClient("rabbit:{seq}") # no keepalive
         will    = {'topic': '/node/disconnect', 'message': client.clientid(), 'qos': 1}
         client.connect(version=4, will=will)
         client.socket_close()
@@ -140,12 +140,12 @@ class Will(TestSuite):
     @catch
     @desc("will: qos 2")
     def test_006(self):
-        monitor = MqttClient("monitor", connect=4)
+        monitor = MqttClient("monitor:{seq}", connect=4)
         # NOTE: '/' prefix skips $ messages
         # TODO: remove it when '$' filter will be impl.
         monitor.subscribe("/#", qos=2)
 
-        client  = MqttClient("rabbit") # no keepalive
+        client  = MqttClient("rabbit:{seq}") # no keepalive
         will    = {'topic': '/node/disconnect', 'message': client.clientid(), 'qos': 2}
         client.connect(version=4, will=will)
         client.socket_close()
@@ -163,7 +163,7 @@ class Will(TestSuite):
     @catch
     @desc("[MQTT-3.1.2-13,MQTT-3.1.2-11] if will flag set to 0, will-qos MUST be 0")
     def test_007(self):
-        client  = MqttClient("rabbit", raw_connect=True)
+        client  = MqttClient("rabbit:{seq}", raw_connect=True)
         client.forge(NC.CMD_CONNECT, 0, [
             ('string', 'MQTT'),
             ('byte'  , 4),         # protocol level
@@ -179,7 +179,7 @@ class Will(TestSuite):
     @catch
     @desc("[MQTT-3.1.2-14] if will flag set to 1, will-qos MAY be 0,1 or 2 (NOT 3)")
     def test_008(self):
-        client  = MqttClient("rabbit", raw_connect=True)
+        client  = MqttClient("rabbit:{seq}", raw_connect=True)
         client.forge(NC.CMD_CONNECT, 0, [
             ('string', 'MQTT'),
             ('byte'  , 4),         # protocol level
@@ -190,7 +190,7 @@ class Will(TestSuite):
             debug("connection still alive")
             return False
 
-        client  = MqttClient("rabbit", raw_connect=True)
+        client  = MqttClient("rabbit:{seq}", raw_connect=True)
         client.forge(NC.CMD_CONNECT, 0, [
             ('string', 'MQTT'),
             ('byte'  , 4),         # protocol level
@@ -213,7 +213,7 @@ class Will(TestSuite):
     @catch
     @desc("[MQTT-3.1.2-15,MQTT-3.1.2-11] if will flag set to 1, will-retain MUST be 0")
     def test_010(self):
-        client  = MqttClient("rabbit", raw_connect=True)
+        client  = MqttClient("rabbit:{seq}", raw_connect=True)
         client.forge(NC.CMD_CONNECT, 0, [
             ('string', 'MQTT'),
             ('byte'  , 4),         # protocol level
@@ -229,12 +229,12 @@ class Will(TestSuite):
     @catch
     @desc("[MQTT-3.1.2-16] if will-retain flag set to 1, will message published with retain unset")
     def test_011(self):
-        monitor = MqttClient("monitor", connect=4)
+        monitor = MqttClient("monitor:{seq}", connect=4)
         # NOTE: '/' prefix skips $ messages
         # TODO: remove it when '$' filter will be impl.
         monitor.subscribe("/#", qos=2)
 
-        client  = MqttClient("rabbit") # no keepalive
+        client  = MqttClient("rabbit:{seq}") # no keepalive
         will    = {'topic': '/node/disconnect', 'message': client.clientid(), 'retain': False}
         client.connect(version=4, will=will)
         client.socket_close()
@@ -257,12 +257,12 @@ class Will(TestSuite):
     @catch
     @desc("[MQTT-3.1.2-17] if will-retain flag set, will message published with retain set")
     def test_012(self):
-        monitor = MqttClient("monitor", connect=4)
+        monitor = MqttClient("monitor:{seq}", connect=4)
         # NOTE: '/' prefix skips $ messages
         # TODO: remove it when '$' filter will be impl.
         monitor.subscribe("/#", qos=2)
 
-        client  = MqttClient("rabbit") # no keepalive
+        client  = MqttClient("rabbit:{seq}") # no keepalive
         will    = {'topic': '/node/disconnect', 'message': client.clientid(), 'retain': True}
         client.connect(version=4, will=will)
         client.socket_close()
@@ -287,7 +287,7 @@ class Will(TestSuite):
         """
             broker throwing exception (mqtt_msg:decode_string())
         """
-        client  = MqttClient("rabbit", raw_connect=True)
+        client  = MqttClient("rabbit:{seq}", raw_connect=True)
         client.forge(NC.CMD_CONNECT, 0, [
             ('string', 'MQTT'),
             ('byte'  , 4),         # protocol level
@@ -308,7 +308,7 @@ class Will(TestSuite):
             throwing "anonymous" exception on binary pattern matching
             (mqtt_msg:decode_connect2())
         """
-        client  = MqttClient("rabbit", raw_connect=True)
+        client  = MqttClient("rabbit:{seq}", raw_connect=True)
         client.forge(NC.CMD_CONNECT, 0, [
             ('string', 'MQTT'),
             ('byte'  , 4),         # protocol level
@@ -321,7 +321,7 @@ class Will(TestSuite):
             debug("connection still alive")
             return False
 
-        client  = MqttClient("rabbit", raw_connect=True)
+        client  = MqttClient("rabbit:{seq}", raw_connect=True)
         client.forge(NC.CMD_CONNECT, 0, [
             ('string', 'MQTT'),
             ('byte'  , 4),         # protocol level

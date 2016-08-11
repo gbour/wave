@@ -103,7 +103,7 @@ class Metrics(TestSuite):
         """
         v_start = yield exometer.value('wave.sessions')
 
-        c = MqttClient("metrics", connect=4, clean_session=0)
+        c = MqttClient("metrics:{seq}", connect=4, clean_session=0)
         v = yield exometer.value('wave.sessions')
         if v['active'] != v_start['active']+1 or v['offline'] != v_start['offline']:
             debug("{0}, {1}".format(v, v_start))
@@ -128,7 +128,7 @@ class Metrics(TestSuite):
         def _(qos):
             v_start = yield exometer.value('wave.messages.in.'+str(qos))
 
-            c = MqttClient("metrics", connect=4)
+            c = MqttClient("metrics:{seq}", connect=4)
             c.publish("foo/bar", "", qos=qos)
             c.disconnect()
 
@@ -154,7 +154,7 @@ class Metrics(TestSuite):
         v = yield exometer.value('wave.subscriptions')
         ref_val = v['value']
 
-        c = MqttClient("metrics", connect=4)
+        c = MqttClient("metrics:{seq}", connect=4)
         c.subscribe('foo/bar', qos=0)
 
         v = yield exometer.value('wave.subscriptions')
@@ -196,7 +196,7 @@ class Metrics(TestSuite):
             '$SYS/broker/subscriptions/count',
         ]
 
-        c = MqttClient("metrics", connect=4)
+        c = MqttClient("metrics:{seq}", connect=4)
         c.subscribe('$SYS/#', qos=0)
 
         while True:
@@ -229,8 +229,8 @@ class Metrics(TestSuite):
     @catch
     @desc("$SYS hierarchy: PUBLISH received counter")
     def test_021(self):
-        c = MqttClient("metrics", connect=4)
-        d = MqttClient("duck", connect=3)
+        c = MqttClient("metrics:{seq}", connect=4)
+        d = MqttClient("duck:{seq}", connect=3)
         c.subscribe('$SYS/#', qos=0)
 
         pubs_start = sys_value(c, "$SYS/broker/publish/messages/received", int)

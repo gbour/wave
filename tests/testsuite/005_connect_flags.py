@@ -38,13 +38,13 @@ class ConnectFlags(TestSuite):
     @catch
     @desc("CONNECT flag - clean session :: set")
     def test_001(self):
-        pub = MqttClient("publisher")
+        pub = MqttClient("publisher:{seq}")
         evt = pub.connect()
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
             debug(evt)
             return False
 
-        ctrl = MqttClient("control-sample")
+        ctrl = MqttClient("control-sample:{seq}")
         evt = ctrl.connect()
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
             debug(evt)
@@ -58,7 +58,7 @@ class ConnectFlags(TestSuite):
 
         ###
         dummyid = "dummy:{0}".format(random.randint(0,9999))
-        dummy = MqttClient(dummyid, rand=False)
+        dummy = MqttClient(dummyid)
         evt = dummy.connect(clean_session=1)
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
             debug(evt)
@@ -85,7 +85,7 @@ class ConnectFlags(TestSuite):
 
 
         ## reconnects, without explicitly subscribing topic
-        dummy = MqttClient(dummyid, rand=False)
+        dummy = MqttClient(dummyid)
         evt = dummy.connect(clean_session=1)
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
             return False
@@ -123,12 +123,12 @@ class ConnectFlags(TestSuite):
     @catch
     @desc("CONNECT flag - clean session :: unset")
     def test_002(self):
-        pub = MqttClient("publisher")
+        pub = MqttClient("publisher:{seq}")
         evt = pub.connect()
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
             return False
 
-        ctrl = MqttClient("control-sample")
+        ctrl = MqttClient("control-sample:{seq}")
         evt = ctrl.connect()
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
             return False
@@ -140,7 +140,7 @@ class ConnectFlags(TestSuite):
 
         ###
         dummyid = "dummy:{0}".format(random.randint(0,9999))
-        dummy = MqttClient(dummyid, rand=False)
+        dummy = MqttClient(dummyid)
         evt = dummy.connect(clean_session=0)
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
             return False
@@ -165,7 +165,7 @@ class ConnectFlags(TestSuite):
 
 
         ## reconnects, without explicitly subscribing topic
-        dummy = MqttClient(dummyid, rand=False)
+        dummy = MqttClient(dummyid)
         evt = dummy.connect(clean_session=0)
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
             return False

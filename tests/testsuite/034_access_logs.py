@@ -69,7 +69,7 @@ anonymous\tallow\tw\tfoo/bat
         f.seek(0, os.SEEK_END)
 
         # here we start
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
         c.disconnect()
 
         if not _match(f,
@@ -93,7 +93,7 @@ anonymous\tallow\tw\tfoo/bat
         yield app.set_acl(enabled=False)
 
         # here we start
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
         c.subscribe("foo/bar", qos=1)
         c.unsubscribe("foo/bar")
 
@@ -142,7 +142,7 @@ anonymous\tallow\tw\tfoo/bat
         yield app.set_acl(enabled=False)
 
         # here we start
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
         c.publish("foo/bar", "baz", qos=1)
 
         f.readline() # skip CONNECT
@@ -184,7 +184,7 @@ anonymous\tallow\tw\tfoo/bat
         # here we start
         # NOTE: invalid publish cause disconnection
         for qos in (0,1,2):
-            c = MqttClient("conformity", connect=4)
+            c = MqttClient("conformity:{seq}", connect=4)
             time.sleep(.5); f.readline() # skip CONNECT
             c.publish("$SYS/bar", "baz", qos=qos)
 

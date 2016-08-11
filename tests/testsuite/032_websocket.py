@@ -31,7 +31,7 @@ class WebSocket(TestSuite):
         from nyamuk import nyamuk_ws
         subproto= nyamuk_ws.SUBPROTOCOLS[4]; nyamuk_ws.SUBPROTOCOLS[4] = 'foobar'
 
-        cli = MqttClient("ws", port=1884, websocket=True)
+        cli = MqttClient("ws:{seq}", port=1884, websocket=True)
         status = cli.connect(version=4)
         nyamuk_ws.SUBPROTOCOLS[4] = subproto
 
@@ -45,7 +45,7 @@ class WebSocket(TestSuite):
     @desc("[MQTT-6.0.0-3,MQTT-6.0.0-4] Server accepts 'mqtt' websocket subprotocol")
     def test_002(self):
         try:
-            c = MqttClient("ws", port=1884, websocket=True, connect=4)
+            c = MqttClient("ws:{seq}", port=1884, websocket=True, connect=4)
         except Exception, e:
             debug(e)
             return False
@@ -57,7 +57,7 @@ class WebSocket(TestSuite):
     @desc("[MQTT-6.0.0-3,MQTT-6.0.0-4] Server accepts 'mqttv3.1' websocket subprotocol")
     def test_003(self):
         try:
-            c = MqttClient("ws", port=1884, websocket=True, connect=3)
+            c = MqttClient("ws:{seq}", port=1884, websocket=True, connect=3)
         except Exception, e:
             debug(e)
             return False
@@ -84,7 +84,7 @@ class WebSocket(TestSuite):
     @catch
     @desc("WSS (SSL) connection test")
     def test_010(self):
-        cli = MqttClient("ws", port=8884, websocket=True, ssl=True, ssl_opts={'ssl_version': SSL_VERSION})
+        cli = MqttClient("ws:{seq}", port=8884, websocket=True, ssl=True, ssl_opts={'ssl_version': SSL_VERSION})
         evt = cli.connect(version=4)
         if not isinstance(evt, EventConnack):
             debug(evt)
@@ -96,8 +96,8 @@ class WebSocket(TestSuite):
     @catch
     @desc("discussion btw websocket and standard ssl clients")
     def test_020(self):
-        ws  = MqttClient("ws", port=1884, websocket=True, connect=4)
-        tcp = MqttClient("tcp", connect=4)
+        ws  = MqttClient("ws:{seq}", port=1884, websocket=True, connect=4)
+        tcp = MqttClient("tcp:{seq}", connect=4)
 
         tcp.subscribe("foo/bar", qos=0)
         ws.publish("foo/bar", "baz", qos=0)
@@ -179,7 +179,7 @@ class WebSocket(TestSuite):
             yield process.kill(pid)
 
 
-        ws = MqttClient("ws", port=1884, websocket=True, connect=4, keepalive=1)
+        ws = MqttClient("ws:{seq}", port=1884, websocket=True, connect=4, keepalive=1)
 
         workers = yield sessions.workers()
         #pprint.pprint(workers)

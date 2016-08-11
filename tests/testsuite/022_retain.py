@@ -22,7 +22,7 @@ class Retain(TestSuite):
     @catch
     @desc("[MQTT-3.3.1-5,MQTT-3.3.1-7] retain published message (qos 0)")
     def test_001(self):
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
 
         c.publish("/foo/bar/0", "plop", qos=0, retain=True)
         c.disconnect()
@@ -38,7 +38,7 @@ class Retain(TestSuite):
     @catch
     @desc("[MQTT-3.3.1-5] retain published message (qos 1)")
     def test_002(self):
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
         c.publish("/foo/bar/1", "plop", qos=1, retain=True)
         c.disconnect()
 
@@ -53,7 +53,7 @@ class Retain(TestSuite):
     @catch
     @desc("[MQTT-3.3.1-5] retain published message (qos 2)")
     def test_003(self):
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
         c.publish("/foo/bar/2", "plop", qos=2, retain=True)
         c.disconnect()
 
@@ -70,7 +70,7 @@ class Retain(TestSuite):
     @catch
     @desc("[MQTT-3.3.1-10,MQTT-3.3.1-11] retain: delete retained message")
     def test_010(self):
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
         c.publish("/retain/delete", 'waze', qos=0, retain=True)
 
         store = env.db.hgetall("retain:/retain/delete")
@@ -91,7 +91,7 @@ class Retain(TestSuite):
     @catch
     @desc("[MQTT-3.3.1-12] if retain flag unset, msg MUST NOT be stored nor replace nor remove existing msg")
     def test_011(self):
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
 
         # initial state
         c.publish("/retain/no/2", 'waze', retain=True)
@@ -118,8 +118,8 @@ class Retain(TestSuite):
     @catch
     @desc("[MQTT-3.3.1-9,MQTT-3.3.1-10] PUBLISH w/ retain is deliverd as normal msg (qos 0)")
     def test_012(self):
-        pub = MqttClient("conformity", connect=4)
-        sub = MqttClient("sub", connect=4)
+        pub = MqttClient("conformity:{seq}", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe("/retain/+", qos=0)
 
         pub.publish("/retain/delivered", 'waze', retain=True)
@@ -147,8 +147,8 @@ class Retain(TestSuite):
     @catch
     @desc("[MQTT-3.3.1-9,MQTT-3.3.1-10] PUBLISH w/ retain is delivered as normal msg (qos 1,2)")
     def test_013(self):
-        pub = MqttClient("conformity", connect=4)
-        sub = MqttClient("sub", connect=4)
+        pub = MqttClient("conformity:{seq}", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe("/test/022/013/+", qos=2)
 
         pub.publish("/test/022/013/t1", 'hurry', retain=True, qos=1)
@@ -179,8 +179,8 @@ class Retain(TestSuite):
     @catch
     @desc("[MQTT-3.3.1-6,MQTT-3.3.1-8] publication of retained message - topic exact match")
     def test_020(self):
-        retain = MqttClient("retain", connect=4)
-        sub    = MqttClient("subscriber", connect=4)
+        retain = MqttClient("retain:{seq}", connect=4)
+        sub    = MqttClient("subscriber:{seq}", connect=4)
 
         topic = "/woot/wo/ot"; msg = "expression of simplistic ecstasy"
         retain.publish(topic, msg, retain=True)
@@ -213,8 +213,8 @@ class Retain(TestSuite):
     @catch
     @desc("[MQTT-3.3.1-6,MQTT-3.3.1-8] publication of retained message - topic match w/ '+' wildcard")
     def test_021(self):
-        retain = MqttClient("retain", connect=4)
-        sub    = MqttClient("subscriber", connect=4)
+        retain = MqttClient("retain:{seq}", connect=4)
+        sub    = MqttClient("subscriber:{seq}", connect=4)
 
         topic = "/woot/wo/ot"; msg = "expression of simplistic ecstasy"
         retain.publish(topic, msg, retain=True)
@@ -259,8 +259,8 @@ class Retain(TestSuite):
     @catch
     @desc("[MTT-3.3.1-6,MQTT-3.3.1-8] publication of retained message - topic match w/ '#' wildcard")
     def test_022(self):
-        retain = MqttClient("retain", connect=4)
-        sub    = MqttClient("subscriber", connect=4)
+        retain = MqttClient("retain:{seq}", connect=4)
+        sub    = MqttClient("subscriber:{seq}", connect=4)
 
         topic = "/woot/wo/ot"; msg = "expression of simplistic ecstasy"
         retain.publish(topic, msg, retain=True)
@@ -295,8 +295,8 @@ class Retain(TestSuite):
     @catch
     @desc("[MQTT-3.3.1-6] retain: multiple messages delivered")
     def test_023(self):
-        retain = MqttClient("retain", connect=4)
-        sub    = MqttClient("subscr", connect=4)
+        retain = MqttClient("retain:{seq}", connect=4)
+        sub    = MqttClient("subscr:{seq}", connect=4)
 
         # matching topics
         rs = {
@@ -348,8 +348,8 @@ class Retain(TestSuite):
     @catch
     @desc("[MQTT-3.3.1-6] retain: qos 1 delivery")
     def test_030(self):
-        retain = MqttClient("retain", connect=4)
-        sub    = MqttClient("subscr", connect=4)
+        retain = MqttClient("retain:{seq}", connect=4)
+        sub    = MqttClient("subscr:{seq}", connect=4)
 
         msg = {'topic': "baby/ma/ma", 'payload': "The mother of your child(ren)", 'retain': True,
                 'qos': 1}

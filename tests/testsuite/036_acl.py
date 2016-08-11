@@ -89,8 +89,8 @@ foo\tallow\tw\ttest/foo/pub/2/#
 
 #    @defer.inlineCallbacks
     def _t_check(self, client, acl, user, password):
-        ctrl = MqttClient("ctrl", connect=4, username='ctrl', password='ctrl')
-        c    = MqttClient("client", connect=4, username=user, password=password)
+        ctrl = MqttClient("ctrl:{seq}", connect=4, username='ctrl', password='ctrl')
+        c    = MqttClient("client:{seq}", connect=4, username=user, password=password)
 
         ctrl.subscribe("test/#", qos=0)
 

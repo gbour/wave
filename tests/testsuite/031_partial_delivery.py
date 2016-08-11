@@ -38,10 +38,10 @@ class PartialDelivery(TestSuite):
     @desc("publisher (qos 2) : no PUBREL")
     @defer.inlineCallbacks
     def test_001(self):
-        sub = MqttClient("sub", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe("foo/bar", qos=0)
 
-        pub = MqttClient("pub", connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         pub.publish("foo/bar", env.gen_msg(42), qos=2)
         # PUBREL not sent
         pub.destroy(); del pub
@@ -63,10 +63,10 @@ class PartialDelivery(TestSuite):
     @desc("subscriber (qos 1) : no PUBACK")
     @defer.inlineCallbacks
     def test_002(self):
-        sub = MqttClient("sub", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe("foo/bar", qos=1)
 
-        pub = MqttClient("pub", connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         pub.publish("foo/bar", env.gen_msg(42), qos=1)
 
         evt = sub.recv()
@@ -94,12 +94,12 @@ class PartialDelivery(TestSuite):
     @desc("subscriber (qos 1) : no PUBACK, 2 subscribers")
     @defer.inlineCallbacks
     def test_003(self):
-        sub = MqttClient("sub", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe("foo/bar", qos=1)
-        sub2 = MqttClient("sub", connect=4)
+        sub2 = MqttClient("sub:{seq}", connect=4)
         sub2.subscribe("foo/+", qos=1)
 
-        pub = MqttClient("pub", connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         pub.publish("foo/bar", env.gen_msg(42), qos=1)
 
         evt1 = sub.recv()
@@ -136,10 +136,10 @@ class PartialDelivery(TestSuite):
     @desc("subscriber (qos 2) : no PUBREC")
     @defer.inlineCallbacks
     def test_004(self):
-        sub = MqttClient("sub", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe("foo/bar", qos=2)
 
-        pub = MqttClient("pub", connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         ack = pub.publish("foo/bar", env.gen_msg(42), qos=2)
         pub.pubrel(ack.mid)
 
@@ -168,10 +168,10 @@ class PartialDelivery(TestSuite):
     @desc("subscriber (qos 2) : no PUBCOMP")
     @defer.inlineCallbacks
     def test_005(self):
-        sub = MqttClient("sub", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe("foo/bar", qos=2)
 
-        pub = MqttClient("pub", connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         ack = pub.publish("foo/bar", env.gen_msg(42), qos=2)
         pub.pubrel(ack.mid)
 
@@ -201,7 +201,7 @@ class PartialDelivery(TestSuite):
     @desc("clean-session off and offline storage")
     @defer.inlineCallbacks
     def test_010(self):
-        sub = MqttClient("sub", connect=4, clean_session=0)
+        sub = MqttClient("sub:{seq}", connect=4, clean_session=0)
         sub.subscribe("foo/+", qos=2)
         sub.disconnect()
 
@@ -209,7 +209,7 @@ class PartialDelivery(TestSuite):
             debug("wrong msgworkers count")
             defer.returnValue(False)
 
-        pub = MqttClient("pub", connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         rec = pub.publish("foo/bar", env.gen_msg(42), qos=2)
         ack = pub.pubrel(rec.mid)
         print ack

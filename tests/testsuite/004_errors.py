@@ -14,8 +14,8 @@ class Errors(TestSuite):
 
 
     def test_010(self):
-        pub = MqttClient('pub', connect=4)
-        sub = MqttClient('sub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', 0)
 
         # NOTE: remaining length value is message length + 5 bytes (topic encoded) + 2 bytes (msgid)
@@ -35,8 +35,8 @@ class Errors(TestSuite):
     @catch
     @desc("PUBLISH remaining length header : 1 byte long")
     def test_011(self):
-        pub = MqttClient('pub', connect=4)
-        sub = MqttClient('sub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', 0)
 
         # NOTE: remaining length value is message length + 5 bytes (topic encoded) + 2 bytes (msgid)
@@ -60,8 +60,8 @@ class Errors(TestSuite):
     @catch
     @desc("PUBLISH remaining length header : 2 bytes long")
     def test_012(self):
-        pub = MqttClient('pub', connect=4)
-        sub = MqttClient('sub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', 0)
 
         # NOTE: remaining length value is message length + 5 bytes (topic encoded) + 2 bytes (msgid)
@@ -85,8 +85,8 @@ class Errors(TestSuite):
     @catch
     @desc("PUBLISH remaining length header : 3 bytes long")
     def test_013(self):
-        pub = MqttClient('pub', connect=4)
-        sub = MqttClient('sub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', 0)
 
         # NOTE: remaining length value is message length + 5 bytes (topic encoded) + 2 bytes (msgid)

@@ -15,7 +15,7 @@ class Qos1(TestSuite):
     @catch
     @desc("SUBSCRIBE/SUBACK")
     def test_001(self):
-        sub = MqttClient("sub", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         suback_evt = sub.subscribe('foo/bar', qos=1)
         if not isinstance(suback_evt, EventSuback) or \
                 suback_evt.mid != sub.get_last_mid() or \
@@ -28,10 +28,10 @@ class Qos1(TestSuite):
     @catch
     @desc("downgraded delivery qos (subscr qos = 1)")
     def test_002(self):
-        sub = MqttClient('sub', connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', qos=1)
 
-        pub = MqttClient('pub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         # published with qos 0
         msg = gen_msg()
         pub.publish('a/b', payload=msg)
@@ -52,10 +52,10 @@ class Qos1(TestSuite):
     @catch
     @desc("downgraded delivery qos (pub qos = 1)")
     def test_022(self):
-        sub = MqttClient('sub', connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', qos=0)
 
-        pub = MqttClient('pub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         # published with qos 0
         msg = gen_msg()
         pub.publish('a/b', payload=msg, qos=1)
@@ -76,10 +76,10 @@ class Qos1(TestSuite):
     @catch
     @desc("QOS 1 published message - acknowledged")
     def test_003(self):
-        sub = MqttClient('sub', connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', qos=1)
 
-        pub = MqttClient('pub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         msg = gen_msg()
         pub.publish('a/b', payload=msg, qos=1)
         pub.recv()
@@ -109,7 +109,7 @@ class Qos1(TestSuite):
     @catch
     @desc("destroyed socket (no subscriber, waiting PUBACK)")
     def test_004(self):
-        pub = MqttClient('pub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         pub.publish('a/b', payload=gen_msg(), qos=1)
 
         pub.destroy(); del pub # socket destroyed
@@ -118,10 +118,10 @@ class Qos1(TestSuite):
     @catch
     @desc("destroyed socket (1 subscriber, waiting PUBACK)")
     def test_005(self):
-        sub = MqttClient('sub', connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', qos=1)
 
-        pub = MqttClient('pub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         msg = gen_msg()
         pub.publish('a/b', payload=msg, qos=1)
         # destoying socket
@@ -140,10 +140,10 @@ class Qos1(TestSuite):
     @catch
     @desc("unexpected qos 2 PUBREC/PUBREL/PUBCOMP msgs while transaction is qos 1")
     def test_006(self):
-        sub = MqttClient('sub', connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', qos=1)
 
-        pub = MqttClient('pub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         msg = gen_msg()
         pub.publish('a/b', payload=msg, qos=1)
         pub.recv()
@@ -186,10 +186,10 @@ class Qos1(TestSuite):
     @catch
     @desc("msgid increment")
     def test_030(self):
-        sub = MqttClient('sub', connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe("foo/bar", qos=1)
 
-        pub = MqttClient('pub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         msg = gen_msg()
         pub.publish("foo/bar", payload=msg, qos=1)
 
@@ -207,11 +207,11 @@ class Qos1(TestSuite):
     @catch
     @desc("pairing ack with right publish (using msgid)")
     def test_031(self):
-        sub = MqttClient("sub", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         ack = sub.subscribe_multi([('foo/+', 1), ('foo/#', 1)])
         debug("subscribe_multi response: {0}".format(ack))
 
-        pub = MqttClient("pub", connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         pub.publish("foo/bar", gen_msg(42), qos=1)
 
         evt = sub.recv()

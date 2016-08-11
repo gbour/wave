@@ -50,7 +50,7 @@ class PubSub(TestSuite):
     def _pubsub(self, pubtopic, subtopic, match):
         msg = gen_msg()
 
-        sub = MqttClient('sub', connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         suback_evt = sub.subscribe(subtopic, 0)
         if not isinstance(suback_evt, EventSuback) or \
                 suback_evt.mid != sub.get_last_mid() or \
@@ -58,7 +58,7 @@ class PubSub(TestSuite):
             if match: debug("failed to subscribe: {0}".format(suback_evt))
             return False
 
-        pub = MqttClient('pub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         pub.publish(pubtopic, msg)
         pub.disconnect()
 

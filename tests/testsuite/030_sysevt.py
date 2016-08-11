@@ -27,12 +27,12 @@ class Qos1(TestSuite):
         subs = []
 
         for i in range(len(qos)):
-            subs.append(MqttClient("sub{0}".format(qos[i]), connect=4))
+            subs.append(MqttClient("sub{0}:{{seq}}".format(qos[i]), connect=4))
 
         for i in range(len(qos)):
             subs[i].subscribe(topic, qos[i])
 
-        pub = MqttClient('pub', connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
 
         # qos 0 client
         for i in range(len(qos)):

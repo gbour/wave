@@ -18,7 +18,7 @@ class V311(TestSuite):
     @catch
     @desc("CONNECT")
     def test_001(self):
-        c = MqttClient("v311")
+        c = MqttClient("v311:{seq}")
         evt = c.connect(version=4)
 
         if not isinstance(evt, EventConnack) or \
@@ -33,7 +33,7 @@ class V311(TestSuite):
     @catch
     @desc("DISCONNECT")
     def test_002(self):
-        c = MqttClient("v311", connect=4)
+        c = MqttClient("v311:{seq}", connect=4)
         #evt = c._c.disconnect()
         c.disconnect()
 
@@ -42,7 +42,7 @@ class V311(TestSuite):
     @catch
     @desc("SUBSCRIBE")
     def test_010(self):
-        c = MqttClient("v311", connect=4)
+        c = MqttClient("v311:{seq}", connect=4)
 
         evt = c.subscribe("/foo/bar", qos=0)
         c.disconnect()
@@ -55,7 +55,7 @@ class V311(TestSuite):
     @catch
     @desc("PUBLISH (qos=0). no response")
     def test_011(self):
-        c = MqttClient("v311", connect=4)
+        c = MqttClient("v311:{seq}", connect=4)
         e = c.publish("/foo/bar", payload="plop")
         # QOS = 0 : no response indented
         if e is not None:
@@ -69,7 +69,7 @@ class V311(TestSuite):
     @catch
     @desc("PING REQ/RESP")
     def test_020(self):
-        c = MqttClient("v311", connect=4)
+        c = MqttClient("v311:{seq}", connect=4)
         e = c.send_pingreq()
         c.disconnect()
 
@@ -84,7 +84,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.1.0-1] 1st pkt MUST be connect")
     def test_100(self):
-        c = MqttClient('conformity')
+        c = MqttClient("conformity:{seq}")
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
@@ -114,7 +114,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.1.0-2] pkt following a successful connect MUST NOT be connect")
     def test_101(self):
-        c = MqttClient("conformity")
+        c = MqttClient("conformity:{seq}")
         evt = c.connect(version=4)
 
         if not isinstance(evt, EventConnack) or \
@@ -141,7 +141,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.1.2-1] protocol name validation")
     def test_102(self):
-        c = MqttClient("conformity")
+        c = MqttClient("conformity:{seq}")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             sock.connect(('127.0.0.1', 1883))
@@ -170,7 +170,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.1.2-2] protocol version validation")
     def test_103(self):
-        c = MqttClient("conformity")
+        c = MqttClient("conformity:{seq}")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             sock.connect(('127.0.0.1', 1883))
@@ -204,7 +204,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.1.2-3] CONNECT reserve flag MUST be set to zero")
     def test_104(self):
-        c = MqttClient("conformity")
+        c = MqttClient("conformity:{seq}")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             sock.connect(('127.0.0.1', 1883))
@@ -232,7 +232,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.1.2-22] if username flag is not set, password flag must not be set")
     def test_105(self):
-        c = MqttClient("conformity")
+        c = MqttClient("conformity:{seq}")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             sock.connect(('127.0.0.1', 1883))
@@ -260,7 +260,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.1.2-24] client is disconnected after expired KeepAlive (test 1)")
     def test_106(self):
-        c = MqttClient("conformity")
+        c = MqttClient("conformity:{seq}")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             sock.connect(('127.0.0.1', 1883))
@@ -294,7 +294,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.1.2-24] client is disconnected after expired KeepAlive (test 2)")
     def test_107(self):
-        c = MqttClient("conformity")
+        c = MqttClient("conformity:{seq}")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             sock.connect(('127.0.0.1', 1883))
@@ -333,7 +333,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.1.3-7] 0-length clientid (w/ cleansession = 0)")
     def test_108(self):
-        c = MqttClient("conformity")
+        c = MqttClient("conformity:{seq}")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             sock.connect(('127.0.0.1', 1883))
@@ -362,7 +362,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.1.3-5] > 23 characters clientid")
     def test_109(self):
-        c = MqttClient("conformity")
+        c = MqttClient("conformity:{seq}")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             sock.connect(('127.0.0.1', 1883))
@@ -399,7 +399,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.1.3-5] clientid invalid characters")
     def test_110(self):
-        c = MqttClient("conformity")
+        c = MqttClient("conformity:{seq}")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             sock.connect(('127.0.0.1', 1883))
@@ -439,7 +439,7 @@ class V311(TestSuite):
     @desc("[MQTT-2.2.2-1,MQTT-2.2.2-2] reserved flags")
     def test_112(self):
         ## PINGREG
-        c = MqttClient("conformity", raw_connect=True)
+        c = MqttClient("conformity:{seq}", raw_connect=True)
         evt = c.connect(version=4)
 
         # flags shoud be 0
@@ -449,7 +449,7 @@ class V311(TestSuite):
             return False
 
         ## SUBSCRIBE
-        c = MqttClient("conformity2", raw_connect=True)
+        c = MqttClient("conformity2:{seq}", raw_connect=True)
         evt = c.connect(version=4)
 
         # flags shoud be 2
@@ -467,7 +467,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-2.3.1-1] missing packet identifier (SUBSCRIBE)")
     def test_113(self):
-        c = MqttClient("conformity", raw_connect=True)
+        c = MqttClient("conformity:{seq}", raw_connect=True)
         evt = c.connect(version=4)
 
         c.forge(NC.CMD_SUBSCRIBE, 2, [
@@ -484,7 +484,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-2.3.1-1] non-zero packet identifier (SUBSCRIBE)")
     def test_114(self):
-        c = MqttClient("conformity", raw_connect=True)
+        c = MqttClient("conformity:{seq}", raw_connect=True)
         evt = c.connect(version=4)
 
         c.forge(NC.CMD_SUBSCRIBE, 2, [
@@ -501,7 +501,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-2.3.1-1] non-zero packet identifier (UNSUBSCRIBE)")
     def test_115(self):
-        c = MqttClient("conformity", raw_connect=True)
+        c = MqttClient("conformity:{seq}", raw_connect=True)
         evt = c.connect(version=4)
 
         c.forge(NC.CMD_UNSUBSCRIBE, 2, [
@@ -517,7 +517,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-2.3.1-1] non-zero packet identifier (PUBLISH)")
     def test_116(self):
-        c = MqttClient("conformity", raw_connect=True)
+        c = MqttClient("conformity:{seq}", raw_connect=True)
         evt = c.connect(version=4)
 
         # qos 1
@@ -534,8 +534,8 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-2.3.1-6] PUBACK pktid not matching PUBLISH pktid")
     def test_200(self):
-        pub = MqttClient("conformity-pub", connect=4)
-        sub = MqttClient("conformity-sub", connect=4)
+        pub = MqttClient("conformity-pub:{seq}", connect=4)
+        sub = MqttClient("conformity-sub:{seq}", connect=4)
 
         sub.subscribe("foo/bar", qos=1)
         pub.publish("foo/bar", "wootwoot", qos=1)
@@ -560,8 +560,8 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-2.3.1-6] PUBREC pktid not matching PUBLISH pktid")
     def test_201(self):
-        pub = MqttClient("conformity-pub", connect=4)
-        sub = MqttClient("conformity-sub", connect=4)
+        pub = MqttClient("conformity-pub:{seq}", connect=4)
+        sub = MqttClient("conformity-sub:{seq}", connect=4)
 
         sub.subscribe("foo/bar", qos=2)
         pub.publish("foo/bar", "wootwoot", qos=2, read_response=False)
@@ -596,8 +596,8 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-2.3.1-6] PUBREL pktid not matching PUBLISH pktid")
     def test_202(self):
-        pub = MqttClient("conformity-pub", connect=4)
-        sub = MqttClient("conformity-sub", connect=4)
+        pub = MqttClient("conformity-pub:{seq}", connect=4)
+        sub = MqttClient("conformity-sub:{seq}", connect=4)
 
         sub.subscribe("foo/bar", qos=2)
         pub.publish("foo/bar", "wootwoot", qos=2, read_response=False)
@@ -627,8 +627,8 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-2.3.1-6] PUBCOMP pktid not matching PUBLISH pktid")
     def test_203(self):
-        pub = MqttClient("conformity-pub", connect=4)
-        sub = MqttClient("conformity-sub", connect=4)
+        pub = MqttClient("conformity-pub:{seq}", connect=4)
+        sub = MqttClient("conformity-sub:{seq}", connect=4)
 
         sub.subscribe("foo/bar", qos=2)
         pub.publish("foo/bar", "wootwoot", qos=2, read_response=False)
@@ -664,7 +664,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.1.2-18] if CONNECT password flag is not set, no username must be present")
     def test_210(self):
-        c = MqttClient("conformity", raw_connect=True)
+        c = MqttClient("conformity:{seq}", raw_connect=True)
 
         c.forge(NC.CMD_CONNECT, 0, [
             ('string', 'MQTT'),
@@ -680,7 +680,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.3.1-4] invalid PUBLISH qos value (3)")
     def test_211(self):
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
 
         c.forge(NC.CMD_PUBLISH, 6, [
             ('string', '/foo/bar'), # topic
@@ -697,7 +697,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.3.2-1] no topic name in PUBLISH message")
     def test_212(self):
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
 
         # qos 1
         c.forge(NC.CMD_PUBLISH, 2, [], send=True)
@@ -712,13 +712,13 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.3.2-2] wildcard characters (+ and #) are forbidden in PUBLISH topic")
     def test_213(self):
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
         c.publish("foo/+/bar", "", qos=0)
         if c.conn_is_alive():
             debug("connection still alive")
             return False
 
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
         c.publish("foo/#/bar", "", qos=0)
         if c.conn_is_alive():
             debug("connection still alive")
@@ -729,7 +729,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.8.3-1] SUBSCRIBE MUST have at least one topic filter/qos")
     def test_214(self):
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
 
         c.forge(NC.CMD_SUBSCRIBE, 2, [
             ('uint16', 10),         # identifier
@@ -744,7 +744,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.8.3-4] SUBSCRIBE qos is 0,1 or 2")
     def test_215(self):
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
         c.forge(NC.CMD_SUBSCRIBE, 2, [
             ('uint16', 42),         # identifier
             ('string', '/foo/bar'), # topic filter
@@ -759,8 +759,8 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.8.4-4, MQTT-3.8.4-5] SUBSCRIBE with multiple (>1) topicfilters, granted qoses returned in PUBACK resp")
     def test_216(self):
-        pub = MqttClient("conformity-pub", connect=4)
-        sub = MqttClient("conformity-sub", connect=4)
+        pub = MqttClient("conformity-pub:{seq}", connect=4)
+        sub = MqttClient("conformity-sub:{seq}", connect=4)
 
         ack = sub.subscribe_multi([
             ("foo/bar", 2),
@@ -785,7 +785,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.10.3-2] UNSUBSCRIBE MUST have at least one topic filter/qos")
     def test_220(self):
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
 
         c.forge(NC.CMD_UNSUBSCRIBE, 2, [
             ('uint16', 10),         # identifier
@@ -800,7 +800,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.10.4-5] UNSUBACK returned even without matching subscription")
     def test_221(self):
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
         ack = c.unsubscribe("foo/bar")
         if not isinstance(ack, EventUnsuback):
             debug(ack)
@@ -811,7 +811,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.10.4-6] UNSUBSCRIBE with multiple (>1) topicfilters")
     def test_222(self):
-        sub = MqttClient("conformity-sub", connect=4)
+        sub = MqttClient("conformity-sub:{seq}", connect=4)
         ack = sub.unsubscribe_multi(["foo/bar", "bar/baz", "paper/+/scissor"])
 
         if not isinstance(ack, EventUnsuback) or ack.mid != sub.get_last_mid():
@@ -824,7 +824,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.14.4-2] Server close connection after Client DISCONNECT")
     def test_223(self):
-        c = MqttClient("conformity-sub", connect=4)
+        c = MqttClient("conformity-sub:{seq}", connect=4)
         c.disconnect()
 
         if c.conn_is_alive():
@@ -836,8 +836,8 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.10.4-2] broker MUST stop forwarding messages when topic filter is unsubscribed")
     def test_230(self):
-        pub = MqttClient("conformity-pub", connect=4)
-        sub = MqttClient("conformity-sub", connect=4)
+        pub = MqttClient("conformity-pub:{seq}", connect=4)
+        sub = MqttClient("conformity-sub:{seq}", connect=4)
 
         sub.subscribe("foo/bar", qos=0)
         pub.publish("foo/bar", "grrr", qos=0)
@@ -861,8 +861,8 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.10.4-4] broker MUST complete qos 1 messages AFTER topic filter has been unsubscribed")
     def test_231(self):
-        pub = MqttClient("conformity-pub", connect=4)
-        sub = MqttClient("conformity-sub", connect=4)
+        pub = MqttClient("conformity-pub:{seq}", connect=4)
+        sub = MqttClient("conformity-sub:{seq}", connect=4)
 
         sub.subscribe("foo/bar", qos=1)
         pub.publish("foo/bar", "grrr", qos=1)
@@ -889,8 +889,8 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.10.4-4] broker MUST complete qos 2 messages AFTER topic filter has been unsubscribed")
     def test_232(self):
-        pub = MqttClient("conformity-pub", connect=4)
-        sub = MqttClient("conformity-sub", connect=4)
+        pub = MqttClient("conformity-pub:{seq}", connect=4)
+        sub = MqttClient("conformity-sub:{seq}", connect=4)
 
         sub.subscribe("foo/bar", qos=2)
         pub.publish("foo/bar", "grrr", qos=2)                # receive PUBREC as response
@@ -923,7 +923,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-4.6.0-3] PUBREC is send in order of received PUBLISH")
     def test_240(self):
-        pub = MqttClient("conformity-pub", connect=4)
+        pub = MqttClient("conformity-pub:{seq}", connect=4)
 
         pub.publish("foo/bar", "", qos=2, read_response=False); mid1 = pub.get_last_mid()
         pub.publish("bar/baz", "", qos=2, read_response=False); mid2 = pub.get_last_mid()
@@ -955,7 +955,7 @@ class V311(TestSuite):
         ]
 
         for (tf, isvalid) in tfs:
-            sub = MqttClient("conformity", connect=4)
+            sub = MqttClient("conformity:{seq}", connect=4)
             sub.subscribe(tf, qos=0, read_response=False)
             ack = sub.recv()
 
@@ -990,7 +990,7 @@ class V311(TestSuite):
         ]
 
         for (tf, isvalid) in tfs:
-            sub = MqttClient("conformity", connect=4)
+            sub = MqttClient("conformity:{seq}", connect=4)
             sub.subscribe(tf, qos=0, read_response=False)
             ack = sub.recv()
 
@@ -1006,10 +1006,10 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-4.7.2-1] topic started with '$' MUST NOT match # wildcard")
     def test_252(self):
-        sub = MqttClient("conformity", connect=4)
+        sub = MqttClient("conformity:{seq}", connect=4)
         sub.subscribe("#", qos=0)
 
-        pub = MqttClient("pub", connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         pub.publish("foo/bar", "test1")
 
         evt = sub.recv()
@@ -1031,10 +1031,10 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-4.7.2-1] topic started with '$' MUST NOT match topic filter starting with +")
     def test_253(self):
-        sub = MqttClient("conformity", connect=4)
+        sub = MqttClient("conformity:{seq}", connect=4)
         sub.subscribe("+/bar", qos=0)
 
-        pub = MqttClient("pub", connect=4)
+        pub = MqttClient("pub:{seq}", connect=4)
         pub.publish("foo/bar", "test1")
 
         evt = sub.recv()
@@ -1056,7 +1056,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-4.7.2-1] topic started with '$' match filters explicitely started with '$'")
     def test_254(self):
-        sub = MqttClient("conformity", connect=4)
+        sub = MqttClient("conformity:{seq}", connect=4)
         sub.subscribe("$SYS/broker/uptime", qos=0)
 
         # $SYS stats are published each 10 seconds by default
@@ -1073,21 +1073,21 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-4.7.3-1] topics and topic filters MUST be 1-character long at least")
     def test_255(self):
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
         c.subscribe("", qos=0)
 
         if c.conn_is_alive():
             debug("connection still alive")
             return False
 
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
         c.unsubscribe("")
 
         if c.conn_is_alive():
             debug("connection still alive")
             return False
 
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
         c.publish("", "", qos=0)
 
         if c.conn_is_alive():
@@ -1099,7 +1099,7 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-3.3.1-2] PUBLISH: DUP flag MUST be 0 if QOS = 0")
     def test_260(self):
-        c = MqttClient("conformity", connect=4)
+        c = MqttClient("conformity:{seq}", connect=4)
 
         c.forge(NC.CMD_PUBLISH, 8, [
             ('string', '/foo/bar'), # topic
@@ -1114,8 +1114,8 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT_4.3.2-2] QOS 1, DUP flag: after PUBACK, PUBLISH with same packet id is a new publication")
     def test_261(self):
-        pub = MqttClient("conformity", connect=4)
-        sub = MqttClient("test", connect=4)
+        pub = MqttClient("conformity:{seq}", connect=4)
+        sub = MqttClient("test:{seq}", connect=4)
         sub.subscribe("/foo/bar", qos=0)
 
         pub.forge(NC.CMD_PUBLISH, 2, [
@@ -1156,8 +1156,8 @@ class V311(TestSuite):
     @catch
     @desc("[MQTT-4.3.2-2] QOS 1, DUP flag: while PUBACK not delivered, a PUBLISH with same packed it is ignored")
     def test_262(self):
-        pub = MqttClient("conformity", connect=4)
-        sub = MqttClient("test", connect=4)
+        pub = MqttClient("conformity:{seq}", connect=4)
+        sub = MqttClient("test:{seq}", connect=4)
         sub.subscribe("/foo/bar", qos=1)
 
         pub.forge(NC.CMD_PUBLISH, 2, [
@@ -1197,7 +1197,7 @@ class V311(TestSuite):
     @catch
     @desc("PUBLISH to '$...' topic is forbidden")
     def test_270(self):
-        pub = MqttClient("luser", connect=4)
+        pub = MqttClient("luser:{seq}", connect=4)
         pub.publish("$foo/bar", "test1")
 
         if pub.conn_is_alive():

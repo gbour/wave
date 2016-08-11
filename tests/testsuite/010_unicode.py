@@ -21,7 +21,7 @@ class Unicode(TestSuite):
     @catch
     @desc("(un)subscribe with utf8 topic filter")
     def test_100(self):
-        c = MqttClient('unicode', connect=4)
+        c = MqttClient("unicode:{seq}", connect=4)
         topic = u"utf8/Какво е Unicode ?"
 
         evt = c.subscribe(topic, qos=0)
@@ -46,7 +46,7 @@ class Unicode(TestSuite):
                 u"utf8: \ud8a4 đ",
                 u"utf8: \ud8ff đ"):
 
-            c = MqttClient('unicode', connect=4)
+            c = MqttClient("unicode:{seq}", connect=4)
 
             evt = c.subscribe(topic, qos=0)
             if not evt is None:
@@ -63,8 +63,8 @@ class Unicode(TestSuite):
     @catch
     @desc("pubsub with utf8 topic filter/topic/content")
     def test_110(self):
-        sub = MqttClient('unisub', connect=4)
-        pub = MqttClient('unipub', connect=4)
+        sub = MqttClient("unisub:{seq}", connect=4)
+        pub = MqttClient("unipub:{seq}", connect=4)
 
         evt = sub.subscribe(u"ᛋᚳᛖᚪᛚ/+/ᚦᛖᚪᚻ", qos=0)
         if not isinstance(evt, EventSuback) or \
