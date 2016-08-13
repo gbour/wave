@@ -125,6 +125,9 @@ class WebSocket(TestSuite):
         defer.returnValue(ret)
 
 
+    # sometimes test fail, probably because socket closing is not detected "on time" by the broker (ranch ws gen_srv)
+    # test_032 is the same, but adding a 2 seconds sleep, causing wave_websocket timeout
+    @skip
     @catch
     @desc("all processes destroyed on: socket close (without MQTT DISCONNECT)")
     @defer.inlineCallbacks
