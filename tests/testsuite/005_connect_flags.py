@@ -16,7 +16,6 @@ class ConnectFlags(TestSuite):
     def __init__(self):
         TestSuite.__init__(self, "CONNECT flags")
 
-
     def pubsub(self, (pub, ctrl, dummy), clbs={}):
         msg = gen_msg(10)
         ## no response expected
@@ -24,15 +23,19 @@ class ConnectFlags(TestSuite):
 
         ## checking we received message for both control-sample & dummy clients
         evt = ctrl.recv()
-        if evt.msg.payload != msg:
-            return False
+        if not isinstance(evt, EventPublish) or evt.msg.payload != msg:
+            debug(evt, depth=1); return False
 
         evt = dummy.recv()
         #print evt, checkfn(evt, msg)
 
         def nop(*args, **kwargs):
             return True
-        return clbs.get('checkrecv', nop)(evt, msg)
+        ret = clbs.get('checkrecv', nop)(evt, msg)
+        if not ret: debug(evt, depth=1)
+
+        return ret
+
 
 
     @catch
@@ -41,19 +44,16 @@ class ConnectFlags(TestSuite):
         pub = MqttClient("publisher:{seq}")
         evt = pub.connect()
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            debug(evt)
-            return False
+            debug(evt); return False
 
         ctrl = MqttClient("control-sample:{seq}")
         evt = ctrl.connect()
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            debug(evt)
-            return False
+            debug(evt); return False
 
         evt = ctrl.subscribe("/test/qos/0", qos=0)
         if not isinstance(evt, EventSuback):
-            debug(evt)
-            return False
+            debug(evt); return False
 
 
         ###
@@ -61,18 +61,17 @@ class ConnectFlags(TestSuite):
         dummy = MqttClient(dummyid)
         evt = dummy.connect(clean_session=1)
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            debug(evt)
-            return False
+            debug(evt); return False
+
         evt = dummy.subscribe("/test/qos/0", qos=0)
         if not isinstance(evt, EventSuback):
-            debug(evt)
-            return False
+            debug(evt); return False
         #print evt.mid
 
 
         # 1. sent qos0, 1, 2 messages; check reception
         if not self.pubsub((pub, ctrl, dummy), clbs={
-                    'checkrecv': lambda evt, msg: evt is not None and evt.msg.payload == msg
+                    'checkrecv': lambda evt, msg: isinstance(evt, EventPublish) and evt.msg.payload == msg
                 }):
             return False
 
@@ -88,22 +87,22 @@ class ConnectFlags(TestSuite):
         dummy = MqttClient(dummyid)
         evt = dummy.connect(clean_session=1)
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            return False
+            debug(evt); return False
 
 
         ## checking message is not received by dummy
         evt = ctrl.recv()
-        if evt.msg.payload != msg:
-            return False
+        if not isinstance(evt, EventPublish) or evt.msg.payload != msg:
+            debug(evt); return False
 
         evt = dummy.recv()
         if evt != None:
-            return False
+            debug(evt); return False
 
         ## dummy resubscribe, check we receive messages
         evt = dummy.subscribe("/test/qos/0", qos=0)
         if not isinstance(evt, EventSuback):
-            return False
+            debug(evt); return False
 
         ## send test message
         if not self.pubsub((pub, ctrl, dummy), clbs={
@@ -126,16 +125,16 @@ class ConnectFlags(TestSuite):
         pub = MqttClient("publisher:{seq}")
         evt = pub.connect()
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            return False
+            debug(evt); return False
 
         ctrl = MqttClient("control-sample:{seq}")
         evt = ctrl.connect()
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            return False
+            debug(evt); return False
 
         evt = ctrl.subscribe("/test/qos/0", qos=0)
         if not isinstance(evt, EventSuback):
-            return False
+            debug(evt); return False
 
 
         ###
@@ -143,16 +142,16 @@ class ConnectFlags(TestSuite):
         dummy = MqttClient(dummyid)
         evt = dummy.connect(clean_session=0)
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            return False
+            debug(evt); return False
+
         evt = dummy.subscribe("/test/qos/0", qos=0)
         if not isinstance(evt, EventSuback):
-            return False
-        #print evt.mid
+            debug(evt); return False
 
 
         # 1. sent qos0, 1, 2 messages; check reception
         if not self.pubsub((pub, ctrl, dummy), clbs={
-                    'checkrecv': lambda evt, msg: evt is not None and evt.msg.payload == msg
+                    'checkrecv': lambda evt, msg: isinstance(evt, EventPublish) and evt.msg.payload == msg
                 }):
             return False
 
@@ -168,17 +167,17 @@ class ConnectFlags(TestSuite):
         dummy = MqttClient(dummyid)
         evt = dummy.connect(clean_session=0)
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            return False
+            debug(evt); return False
 
 
         ## checking message is not received by dummy
         evt = ctrl.recv()
-        if evt.msg.payload != msg:
-            return False
+        if not isinstance(evt, EventPublish) or evt.msg.payload != msg:
+            debug(evt); return False
 
         evt = dummy.recv()
         if evt != None:
-            return False
+            debug(evt); return False
 
         ## dummy resubscribe, check we receive messages
         #evt = dummy.do("subscribe", "/test/qos/0", 0)
