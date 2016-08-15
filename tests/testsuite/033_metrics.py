@@ -7,7 +7,7 @@ from   pprint import pprint
 
 from lib import env
 from lib.env import debug
-from lib.erl import exometer
+from lib.erl import application as app, exometer
 from TestSuite import *
 from mqttcli import MqttClient
 from nyamuk.event import *
@@ -28,6 +28,18 @@ class Metrics(TestSuite):
     """
     def __init__(self):
         TestSuite.__init__(self, "Metrics")
+
+    @defer.inlineCallbacks
+    def setup_suite(self):
+        super(Metrics, self).setup_suite()
+        yield exometer.interval(delay=1000)
+        yield app.set_metrics(enabled=True)
+
+    @defer.inlineCallbacks
+    def cleanup_suite(self):
+        super(Metrics, self).cleanup_suite()
+        yield exometer.interval(delay=3600000)
+        yield app.set_metrics(enabled=False)
 
 
     @catch

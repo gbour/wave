@@ -76,6 +76,13 @@ class application(ErlO):
         ]]
 
     @staticmethod
+    @ErlO.erl('application', 'set_env')
+    def set_metrics(enabled=False):
+        return [Atom('wave'), Atom('metrics'), [
+            Tuple([Atom('enabled'), Atom(str(enabled).lower())])
+        ]]
+
+    @staticmethod
     @ErlO.erl('lager', 'log')
     def log(msg):
         return [Atom("warning"), [], msg]
@@ -150,4 +157,10 @@ class exometer(ErlO):
               fmt=lambda x: dict([('.'.join([str(x) for x in name]), dps) for (name, dps, delay, args) in to_python(x)]))
     def subscriptions(reporter):
         return [Atom(reporter)]
+
+    @staticmethod
+    @ErlO.erl('wave_app', 'exometer_set_interval')
+    def interval(delay):
+        return [delay]
+
 

@@ -1055,20 +1055,25 @@ class V311(TestSuite):
 
     @catch
     @desc("[MQTT-4.7.2-1] topic started with '$' match filters explicitely started with '$'")
+    @defer.inlineCallbacks
     def test_254(self):
+        yield app.set_metrics(enabled=True)
         sub = MqttClient("conformity:{seq}", connect=4)
         sub.subscribe("$SYS/broker/uptime", qos=0)
 
         # $SYS stats are published each 10 seconds by default
         time.sleep(12)
+
+        retval = True
         evt = sub.recv()
         if not isinstance(evt, EventPublish) or\
                 evt.msg.topic != '$SYS/broker/uptime':
             debug(evt)
-            return False
+            retval=False
 
         sub.disconnect()
-        return True
+        yield app.set_metrics(enabled=False)
+        defer.returnValue(retval)
 
     @catch
     @desc("[MQTT-4.7.3-1] topics and topic filters MUST be 1-character long at least")
