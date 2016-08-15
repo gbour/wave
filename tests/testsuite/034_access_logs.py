@@ -28,7 +28,7 @@ def _match(f, conds):
 
         for k, v in conds.iteritems():
             if line[k] != v:
-                debug("{0} not matching {1} (is {2})".format(k, v, line[k]), depth=1)
+                debug("{0} not matching {1} (is {2}, raw= {3})".format(k, v, line[k], rawline), depth=1)
                 return False
 
     except Exception, e:
