@@ -164,8 +164,14 @@ class Auth(TestSuite):
     @defer.inlineCallbacks
     def test_008(self):
         tmp = tempfile.mktemp(prefix='wave-testsuite-')
-        subprocess.Popen("echo \"bar\"|../bin/mkpasswd -c {0} foo".format(tmp),
-                         shell=True, stdout=subprocess.PIPE).wait()
+        debug("pwd file: {0}".format(tmp))
+        proc = subprocess.Popen("echo \"bar\"|../bin/mkpasswd -c {0} foo".format(tmp),
+                         shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (out,err) = proc.communicate()
+        debug("out: {0}".format(out)); debug("err: {0}".format(err))
+        with open(tmp, 'r') as f:
+            debug(f.read())
+
         yield app.set_auth(required= True, filename= tmp)
         yield auth.switch(tmp)
 
@@ -175,12 +181,20 @@ class Auth(TestSuite):
         if not isinstance(ret, EventConnack) or ret.ret_code != 0:
             debug(ret)
             defer.returnValue(False)
+        c.disconnect()
+
 
         # deleting password
-        subprocess.Popen("../bin/mkpasswd -D {0} foo".format(tmp),
-                         shell=True, stdout=subprocess.PIPE).wait()
+        proc = subprocess.Popen("../bin/mkpasswd -D {0} foo && touch {0}".format(tmp),
+                         shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (out,err) = proc.communicate()
+        debug("out: {0}".format(out)); debug("err: {0}".format(err))
+        with open(tmp, 'r') as f:
+            debug(f.read())
+
         # file is monitored each 2 secs in debug context
-        time.sleep(5)
+        #time.sleep(5)
+        yield auth.switch(tmp)
 
         ret = c.connect(version=4)
         # auth accepted
@@ -190,3 +204,4 @@ class Auth(TestSuite):
 
         defer.returnValue(True)
 
+    #TODO: add tests to check file reload on change
