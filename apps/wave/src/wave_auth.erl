@@ -88,17 +88,18 @@ handle_call({auth, DeviceID, User, Password}, _, State) ->
                 _    -> {error, bad_credentials}
             end;
 
-        _ -> 
+        _ ->
             % make it harder to guess if Username exists or not
             % (as erlpass:match() takes around 600ms to execute)
             erlpass:match(<<"foo">>,<<"$2a$12$6zOUIP0NEwBupO7ATO.Hv..ZQq5WGmyZ0rCYGUoznFrYpFZkr8ppy">>),
             {error, bad_credentials}
     end,
-        
+
     {reply, Match, State};
 
 % load a new password file
 handle_call({switch, File}, _, State) ->
+    lager:debug("switching to ~p file", [File]),
     reload(File),
     {reply, ok, State#state{filename=File, last_modified=filelib:last_modified(File)}};
 
