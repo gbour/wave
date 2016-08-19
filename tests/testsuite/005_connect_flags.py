@@ -5,6 +5,7 @@
 #   - test qos 1 & 2 messages
 #   - test subscribe return
 
+import time
 import random
 
 from TestSuite import TestSuite, desc, catch
@@ -19,7 +20,7 @@ class ConnectFlags(TestSuite):
     def pubsub(self, (pub, ctrl, dummy), clbs={}):
         msg = gen_msg(10)
         ## no response expected
-        pub.do("publish", "/test/qos/0", msg)
+        pub.publish("/test/qos/0", msg)
 
         ## checking we received message for both control-sample & dummy clients
         evt = ctrl.recv()
@@ -77,6 +78,8 @@ class ConnectFlags(TestSuite):
 
         # 2. disconnecting (properly) dummmy; then reconnects
         dummy.disconnect(); del(dummy)
+        # be sure dummy client disconnection in fully complete on broker side before going further
+        time.sleep(1)
 
         ## publish message
         msg = gen_msg(10)
@@ -157,6 +160,8 @@ class ConnectFlags(TestSuite):
 
         # 2. disconnecting (properly) dummmy; then reconnects
         dummy.disconnect(); del(dummy)
+        # be sure dummy client disconnection in fully complete on broker side before going further
+        time.sleep(1)
 
         ## publish message
         msg = gen_msg(10)
@@ -176,7 +181,7 @@ class ConnectFlags(TestSuite):
             debug(evt); return False
 
         evt = dummy.recv()
-        if evt != None:
+        if not isinstance(evt, EventPublish) or evt.msg.payload != msg:
             debug(evt); return False
 
         ## dummy resubscribe, check we receive messages
