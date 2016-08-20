@@ -9,6 +9,7 @@ import subprocess
 from twisted.internet import defer, reactor
 
 from lib import env
+from lib.erl import application as app, wave
 
 p = subprocess.Popen(["stty","size"], stdout=subprocess.PIPE)
 WIDTH = int(p.stdout.read()[:-1].split(' ')[-1])
@@ -42,14 +43,6 @@ def skip(fun):
     return _
 
 
-@defer.inlineCallbacks
-def clean_states():
-    """ cleaning server state (db, internals) between each test """
-    env.db.flushdb()
-    yield env.twotp.callRemote('wave@127.0.0.1', 'wave_app', 'debug_cleanup')
-    #defer.returnValue(None)
-
-
 class TestSuite(object):
     def __init__(self, suitename):
         self.suitename = suitename
@@ -60,10 +53,15 @@ class TestSuite(object):
     def cleanup_suite(self):
         pass
 
-    def setup_test(self):
-        yield clean_states()
+    @defer.inlineCallbacks
+    def setup_test(self, testname):
+        """ cleaning server state (db, internals) between each test """
+        yield app.log("starting {0}:{1}".format(self.suitename, testname))
 
-    def cleanup_test(self):
+        yield wave.cleanup()
+        env.db.flushdb()
+
+    def cleanup_test(self, testname):
         pass
 
     @defer.inlineCallbacks
@@ -81,7 +79,7 @@ class TestSuite(object):
             if testfilter and not testfilter in name:
                 continue
 
-            yield self.setup_test()
+            yield self.setup_test(name)
             logging.debug(">> "+name)
             ret = test()
             try:
@@ -97,7 +95,7 @@ class TestSuite(object):
             counters[DISPLAY[ret][1].lower()] += 1
             status &= DISPLAY[ret][-1]
 
-            yield self.cleanup_test()
+            yield self.cleanup_test(name)
 
         yield self.cleanup_suite()
         defer.returnValue((status, counters))

@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: UTF8 -*-
 
 #
@@ -12,16 +11,12 @@ import types
 from TestSuite import TestSuite, desc, catch
 from mqttcli import MqttClient
 from nyamuk.event import *
+from lib.env import debug
 
 class Qos1(TestSuite):
     def __init__(self):
         TestSuite.__init__(self, "system events")
 
-    def newclient(self, name="req"):
-        c = MqttClient(name)
-        c.do("connect")
-
-        return c
 
     #NOTE: currently all internal events are sent with qos=0
     @catch
@@ -32,26 +27,26 @@ class Qos1(TestSuite):
         subs = []
 
         for i in range(len(qos)):
-            subs.append(self.newclient("sub{0}".format(qos[i])))
+            subs.append(MqttClient("sub{0}:{{seq}}".format(qos[i]), connect=4))
 
         for i in range(len(qos)):
             subs[i].subscribe(topic, qos[i])
 
-        pub = self.newclient('pub')
+        pub = MqttClient("pub:{seq}", connect=4)
 
         # qos 0 client
         for i in range(len(qos)):
-            print "qos {0}: receiving message".format(qos[i])
+            #print "qos {0}: receiving message".format(qos[i])
             e = subs[i].recv()
 
             if not isinstance(e, EventPublish):
-                print "qos {0}: message received should be EventPublish (is {1})".format(qos[i], e)
+                debug( "qos {0}: message received should be EventPublish (is {1})".format(qos[i], e))
                 return False
 
             if e.msg.topic != topic or\
                     e.msg.qos != 0: #qos[i]:
-                print "qos {0}: invalid packet received (topic= {1}, qos={2})".format(qos[i], e.msg.topic,\
-                                                                                      e.msg.qos)
+                debug("qos {0}: invalid packet received (topic= {1}, qos={2})".format(qos[i], e.msg.topic,\
+                                                                                      e.msg.qos))
                 return False
 
             #FUTURE: internal events supporting qos > 0
@@ -67,3 +62,4 @@ class Qos1(TestSuite):
 
         #TODO: check subs connectivity
         return True
+
