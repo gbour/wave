@@ -87,7 +87,33 @@ handle_cast(Event, State) ->
 
 
 handle_info(timeout, State) ->
-    lager:debug("timeout"),
+    lager:debug("timeout: ~p", [wave_app:env([metrics, enabled])]),
+    metrics(wave_app:env([metrics, enabled]), State),
+
+    erlang:send_after(?DFT_TIMEOUT, self(), timeout),
+    {noreply, State};
+
+handle_info(Info, State) ->
+    lager:warning("non catched info: ~p", [Info]),
+    {noreply, State}.
+
+
+terminate(_,_) ->
+    lager:error("~p terminated", [?MODULE]),
+    ok.
+
+
+code_change(_, State, _) ->
+    {ok, State}.
+
+
+%%
+%% INTERNAL FUNS
+%%
+
+
+-spec metrics(boolean(), #state{}) -> ok.
+metrics(true, State) ->
     [ publish(metric(T, State)) || T <- [version, uptime, sent, received, clients] ],
 
     ExoMetrics = [
@@ -112,26 +138,9 @@ handle_info(timeout, State) ->
     ],
     exometrics(ExoMetrics),
 
-    erlang:send_after(?DFT_TIMEOUT, self(), timeout),
-    {noreply, State};
-
-handle_info(Info, State) ->
-    lager:warning("non catched info: ~p", [Info]),
-    {noreply, State}.
-
-
-terminate(_,_) ->
-    lager:error("~p terminated", [?MODULE]),
+    ok;
+metrics(_, _) ->
     ok.
-
-
-code_change(_, State, _) ->
-    {ok, State}.
-
-
-%%
-%% INTERNAL FUNS
-%%
 
 
 %TODO: should be computed once at start only (maybe recomputed on code_change)

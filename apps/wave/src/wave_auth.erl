@@ -99,6 +99,7 @@ handle_call({auth, DeviceID, User, Password}, _, State) ->
 
 % load a new password file
 handle_call({switch, File}, _, State) ->
+    lager:debug("switching to ~p file", [File]),
     reload(File),
     {reply, ok, State#state{filename=File, last_modified=filelib:last_modified(File)}};
 

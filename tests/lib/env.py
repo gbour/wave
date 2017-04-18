@@ -10,7 +10,7 @@ from twisted.internet import defer
 db = None
 twotp = None
 
-def gen_msg(msglen):
+def gen_msg(msglen=16):
     return ''.join([chr(48+random.randint(0,42)) for x in xrange(msglen)])
 
 @defer.inlineCallbacks
@@ -23,8 +23,11 @@ def remote(mod, fun, *args):
 def _nodebug(msg):
     pass
 
-def _debug(msg):
-    nfo = getframeinfo(currentframe().f_back)
+def _debug(msg, depth=0):
+    frame = currentframe().f_back
+    for i in range(depth): frame = frame.f_back
+
+    nfo = getframeinfo(frame)
     print " D({0}:{1}): {2}".format(nfo.function, nfo.lineno, msg)
 
 DEBUG = os.environ.get('DEBUG', '0')

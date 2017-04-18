@@ -145,6 +145,7 @@ loop(State=#state{parent=Parent, child=Child, child_state=CState, in_buf=InBuf})
 
         % shutdown notice from session (received DISCONNECT)
         shutdown ->
+            lager:debug("shutdown notice"),
             % notify ranch to stop (close socket)
             Parent ! stop,
             Child  ! {error, closed},
@@ -153,6 +154,7 @@ loop(State=#state{parent=Parent, child=Child, child_state=CState, in_buf=InBuf})
         % notice parent has stopped
         {'DOWN', _, process, Parent, _} ->
         %{'EXIT', Parent, Reason} ->
+            lager:debug("parent is down"),
             case CState of
                 await -> Child ! {error, closed}, undefined;
                 _     -> State#state{child_state=shutdown}
@@ -176,3 +178,4 @@ on_pid_match(Action, Pid  , State, _) ->
     lager:notice("Process ~p not legitimate to ~p ws data through ~p channel ~p", [Pid, Action, self()]),
     Pid ! {error, eacces},
     State.
+

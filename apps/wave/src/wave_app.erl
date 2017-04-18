@@ -19,7 +19,7 @@
 -behaviour(application).
 
 %% Application callbacks
--export([start/0, start/2, stop/1, loglevel/1, env/1]).
+-export([start/0, start/2, stop/1, loglevel/1, env/1, exometer_set_interval/1]).
 
 -define(DEBUGW(X), ok).
 -ifdef(DEBUG).
@@ -158,8 +158,11 @@ loglevel(Level) ->
 % automatically subscribe to metrics (sent to statsd)
 %
 exometer_init() ->
-    {ok, Interval} = application:get_env(exometer,interval),
-    exometer_init(exometer:get_values(['_']), Interval),
+    {ok, Time} = application:get_env(exometer,interval),
+    NamedInterval = config_interval,
+    exometer_report:set_interval(exometer_report_statsd, NamedInterval, Time),
+
+    exometer_init(exometer:get_values(['_']), NamedInterval),
     ok.
 
 exometer_init([], _) ->
@@ -169,6 +172,14 @@ exometer_init([{Name, Metrics}|T], Interval) ->
     exometer_report:subscribe(exometer_report_statsd, Name, DPs, Interval),
 
     exometer_init(T, Interval).
+
+%
+% allow changing report interval live
+%
+-spec exometer_set_interval(integer()) -> ok.
+exometer_set_interval(Time) ->
+    exometer_report:set_interval(exometer_report_statsd, config_interval, Time),
+    ok.
 
 
 -ifdef(DEBUG).

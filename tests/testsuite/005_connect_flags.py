@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: UTF8 -*-
 
 #TODO:
@@ -6,115 +5,113 @@
 #   - test qos 1 & 2 messages
 #   - test subscribe return
 
+import time
+import random
+
 from TestSuite import TestSuite, desc, catch
 from mqttcli import MqttClient
 from nyamuk.event import *
-
-import random
+from lib.env import gen_msg, debug
 
 class ConnectFlags(TestSuite):
     def __init__(self):
         TestSuite.__init__(self, "CONNECT flags")
 
-    def newclient(self, name="req", autoconnect=False):
-        c = MqttClient(name)
-
-        def check(evt):
-            return isinstance(evt, EventConnack) and evt.ret_code == 0
-        if autoconnect:
-            return check(c.do("connect"))
-
-        return c
-
     def pubsub(self, (pub, ctrl, dummy), clbs={}):
-        def nop(*args, **kwargs):
-            return True
-
-        msg = ''.join([chr(48+random.randint(0,42)) for x in xrange(10)])
+        msg = gen_msg(10)
         ## no response expected
-        pub.do("publish", "/test/qos/0", msg)
+        pub.publish("/test/qos/0", msg)
 
         ## checking we received message for both control-sample & dummy clients
         evt = ctrl.recv()
-        if evt.msg.payload != msg:
-            return False
+        if not isinstance(evt, EventPublish) or evt.msg.payload != msg:
+            debug(evt, depth=1); return False
 
         evt = dummy.recv()
         #print evt, checkfn(evt, msg)
-        return clbs.get('checkrecv', nop)(evt, msg)
+
+        def nop(*args, **kwargs):
+            return True
+        ret = clbs.get('checkrecv', nop)(evt, msg)
+        if not ret: debug(evt, depth=1)
+
+        return ret
 
 
 
     @catch
     @desc("CONNECT flag - clean session :: set")
-    def test_01(self):
-
-        pub = MqttClient("publisher")
-        evt = pub.do("connect")
+    def test_001(self):
+        pub = MqttClient("publisher:{seq}")
+        evt = pub.connect()
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            return False
+            debug(evt); return False
 
-        ctrl = MqttClient("control-sample")
-        evt = ctrl.do("connect")
+        ctrl = MqttClient("control-sample:{seq}")
+        evt = ctrl.connect()
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            return False
+            debug(evt); return False
 
-        evt = ctrl.do("subscribe", "/test/qos/0", 0)
+        evt = ctrl.subscribe("/test/qos/0", qos=0)
         if not isinstance(evt, EventSuback):
-            return False
+            debug(evt); return False
 
 
         ###
         dummyid = "dummy:{0}".format(random.randint(0,9999))
-        dummy = MqttClient(dummyid, rand=False)
-        evt = dummy.do("connect", clean_session=1)
+        dummy = MqttClient(dummyid)
+        evt = dummy.connect(clean_session=1)
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            return False
-        evt = dummy.do("subscribe", "/test/qos/0", 0)
+            debug(evt); return False
+
+        evt = dummy.subscribe("/test/qos/0", qos=0)
         if not isinstance(evt, EventSuback):
-            return False
+            debug(evt); return False
         #print evt.mid
 
 
         # 1. sent qos0, 1, 2 messages; check reception
         if not self.pubsub((pub, ctrl, dummy), clbs={
-                    'checkrecv': lambda evt, msg: evt is not None and evt.msg.payload == msg
+                    'checkrecv': lambda evt, msg: isinstance(evt, EventPublish) and evt.msg.payload == msg
                 }):
             return False
 
         # 2. disconnecting (properly) dummmy; then reconnects
         dummy.disconnect(); del(dummy)
+        # be sure dummy client disconnection in fully complete on broker side before going further
+        time.sleep(1)
 
         ## publish message
-        msg = ''.join([chr(48+random.randint(0,42)) for x in xrange(10)])
-        pub.do("publish", "/test/qos/0", msg)
+        msg = gen_msg(10)
+        pub.publish("/test/qos/0", payload=msg)
 
 
         ## reconnects, without explicitly subscribing topic
-        dummy = MqttClient(dummyid, rand=False)
-        evt = dummy.do("connect", clean_session=1)
+        dummy = MqttClient(dummyid)
+        evt = dummy.connect(clean_session=1)
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            return False
+            debug(evt); return False
 
 
         ## checking message is not received by dummy
         evt = ctrl.recv()
-        if evt.msg.payload != msg:
-            return False
+        if not isinstance(evt, EventPublish) or evt.msg.payload != msg:
+            debug(evt); return False
 
         evt = dummy.recv()
         if evt != None:
-            return False
+            debug(evt); return False
 
         ## dummy resubscribe, check we receive messages
-        evt = dummy.do("subscribe", "/test/qos/0", 0)
+        evt = dummy.subscribe("/test/qos/0", qos=0)
         if not isinstance(evt, EventSuback):
-            return False
+            debug(evt); return False
 
         ## send test message
         if not self.pubsub((pub, ctrl, dummy), clbs={
                     'checkrecv': lambda evt, msg: evt is not None and evt.msg.payload == msg
                 }):
+            debug('pubsub failed')
             return False
 
 
@@ -127,64 +124,65 @@ class ConnectFlags(TestSuite):
 
     @catch
     @desc("CONNECT flag - clean session :: unset")
-    def test_02(self):
-
-        pub = MqttClient("publisher")
-        evt = pub.do("connect")
+    def test_002(self):
+        pub = MqttClient("publisher:{seq}")
+        evt = pub.connect()
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            return False
+            debug(evt); return False
 
-        ctrl = MqttClient("control-sample")
-        evt = ctrl.do("connect")
+        ctrl = MqttClient("control-sample:{seq}")
+        evt = ctrl.connect()
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            return False
+            debug(evt); return False
 
-        evt = ctrl.do("subscribe", "/test/qos/0", 0)
+        evt = ctrl.subscribe("/test/qos/0", qos=0)
         if not isinstance(evt, EventSuback):
-            return False
+            debug(evt); return False
 
 
         ###
         dummyid = "dummy:{0}".format(random.randint(0,9999))
-        dummy = MqttClient(dummyid, rand=False)
-        evt = dummy.do("connect", clean_session=0)
+        dummy = MqttClient(dummyid)
+        evt = dummy.connect(clean_session=0)
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            return False
-        evt = dummy.do("subscribe", "/test/qos/0", 0)
+            debug(evt); return False
+
+        evt = dummy.subscribe("/test/qos/0", qos=0)
         if not isinstance(evt, EventSuback):
-            return False
-        #print evt.mid
+            debug(evt); return False
 
 
         # 1. sent qos0, 1, 2 messages; check reception
         if not self.pubsub((pub, ctrl, dummy), clbs={
-                    'checkrecv': lambda evt, msg: evt is not None and evt.msg.payload == msg
+                    'checkrecv': lambda evt, msg: isinstance(evt, EventPublish) and evt.msg.payload == msg
                 }):
             return False
 
         # 2. disconnecting (properly) dummmy; then reconnects
         dummy.disconnect(); del(dummy)
+        # be sure dummy client disconnection in fully complete on broker side before going further
+        time.sleep(1)
 
         ## publish message
-        msg = ''.join([chr(48+random.randint(0,42)) for x in xrange(10)])
-        pub.do("publish", "/test/qos/0", msg)
+        msg = gen_msg(10)
+        pub.publish("/test/qos/0", payload=msg)
 
 
         ## reconnects, without explicitly subscribing topic
-        dummy = MqttClient(dummyid, rand=False)
-        evt = dummy.do("connect", clean_session=0)
+        dummy = MqttClient(dummyid)
+        evt = dummy.connect(clean_session=0)
         if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            return False
+            debug(evt); return False
 
 
         ## checking message is not received by dummy
         evt = ctrl.recv()
-        if evt.msg.payload != msg:
-            return False
+        if not isinstance(evt, EventPublish) or evt.msg.payload != msg:
+            debug(evt); return False
 
         evt = dummy.recv()
-        if evt != None:
-            return False
+        if not isinstance(evt, EventPublish) or evt.msg.payload != msg:
+            debug(evt); return False
 
         ## dummy resubscribe, check we receive messages
         #evt = dummy.do("subscribe", "/test/qos/0", 0)
@@ -200,9 +198,8 @@ class ConnectFlags(TestSuite):
         # cleanup
         pub.disconnect()
         ctrl.disconnect()
-        dummy.do("unsubscribe", "/test/qos/0")
+        dummy.unsubscribe("/test/qos/0")
         dummy.disconnect()
-
 
         return True
 

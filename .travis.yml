@@ -18,6 +18,13 @@ addons:
             - python-redis
             - python-twisted-web
 
+cache:
+    pip: true
+    directories:
+        - $HOME/.cache/rebar3/
+#        - $HOME/.kerl
+#        - $HOME/otp
+
 install:
     # get deps, compile code, generates config according to choosed environment
     - DEBUG=1 make env=travis all

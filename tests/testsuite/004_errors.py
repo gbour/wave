@@ -1,153 +1,108 @@
-#!/usr/bin/env python
 # -*- coding: UTF8 -*-
 
 import time
-import random
 import socket
 
 from TestSuite import TestSuite, desc, catch
 from mqttcli import MqttClient
 from nyamuk.event import *
+from lib.env import gen_msg, debug
 
 class Errors(TestSuite):
     def __init__(self):
         TestSuite.__init__(self, "error cases")
 
-    def newclient(self, name="req", autoconnect=False):
-        c = MqttClient(name)
-        if autoconnect:
-            c.do("connect")
 
-        return c
-
-    @catch
-    @desc("[MQTT-3.1.3-2,MQTT-3.1.3-9] CONNACK=0x02 :: clientid already connected")
-    def test_001(self):
-        c = MqttClient("twice01", rand=False)
-        evt = c.do("connect")
-        # OK
-        if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            return False
-
-        c2  = MqttClient("twice01", rand=False)
-        evt = c2.do("connect")
-        # identifier rejected
-        if not isinstance(evt, EventConnack) or evt.ret_code != 2:
-            return False
-
-        print c2.recv()
-        # [MQTT-3.1.3-9]: connection must be close if connack.ret_code = 2
-        if c2.conn_is_alive():
-            return False
-    
-        # disconnecting client #1, client #2 connection now works
-        c.disconnect()
-
-        c2  = MqttClient("twice01", rand=False)
-        evt = c2.do("connect")
-        if not isinstance(evt, EventConnack) or evt.ret_code != 0:
-            return False
-
-        c2.disconnect()
-        return True
-
-    @catch
-    @desc("PUBLISH remaining length header : 0 bytes message length")
     def test_010(self):
-        pub = self.newclient('pub', autoconnect=True)
-        sub = self.newclient('sub', autoconnect=True)
+        pub = MqttClient("pub:{seq}", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', 0)
 
         # NOTE: remaining length value is message length + 5 bytes (topic encoded) + 2 bytes (msgid)
-        msg = ''
-
-        puback_evt = pub.publish('a/b', msg, qos=1)
+        puback_evt = pub.publish('a/b', payload='', qos=1)
         if not isinstance(puback_evt, EventPuback) or \
-            puback_evt.mid != pub.get_last_mid():
-                return False
+                puback_evt.mid != pub.get_last_mid():
+            return False
 
         publish_evt = sub.recv()
         if not isinstance(publish_evt, EventPublish) or \
-            publish_evt.msg.payloadlen != 0 or \
-            publish_evt.msg.payload is not None:
-                return False
+                publish_evt.msg.payloadlen != 0 or \
+                publish_evt.msg.payload is not None:
+            return False
 
         return True
 
     @catch
     @desc("PUBLISH remaining length header : 1 byte long")
     def test_011(self):
-        pub = self.newclient('pub', autoconnect=True)
-        sub = self.newclient('sub', autoconnect=True)
+        pub = MqttClient("pub:{seq}", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', 0)
 
         # NOTE: remaining length value is message length + 5 bytes (topic encoded) + 2 bytes (msgid)
         #       120 + 5 + 2 = 127
-        msglen = 120
-        msg = ''.join([chr(48+random.randint(0,42)) for x in xrange(msglen)])
+        msg = gen_msg(120)
         #print "msg=", msg, len(msg)
 
         puback_evt = pub.publish('a/b', msg, qos=1)
         if not isinstance(puback_evt, EventPuback) or \
-            puback_evt.mid != pub.get_last_mid():
-                return False
+                puback_evt.mid != pub.get_last_mid():
+            return False
 
         publish_evt = sub.recv()
         if not isinstance(publish_evt, EventPublish) or \
-            publish_evt.msg.payloadlen != msglen or \
-            publish_evt.msg.payload != msg:
-                return False
+                publish_evt.msg.payloadlen != len(msg) or \
+                publish_evt.msg.payload != msg:
+            return False
 
         return True
 
     @catch
     @desc("PUBLISH remaining length header : 2 bytes long")
     def test_012(self):
-        pub = self.newclient('pub', autoconnect=True)
-        sub = self.newclient('sub', autoconnect=True)
+        pub = MqttClient("pub:{seq}", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', 0)
 
         # NOTE: remaining length value is message length + 5 bytes (topic encoded) + 2 bytes (msgid)
         #       150 + 5 + 2 = 157 >= 128
-        msglen = 150
-        msg = ''.join([chr(48+random.randint(0,42)) for x in xrange(msglen)])
+        msg = gen_msg(150)
         #print "msg=", msg, len(msg)
 
         puback_evt = pub.publish('a/b', msg, qos=1)
         if not isinstance(puback_evt, EventPuback) or \
-            puback_evt.mid != pub.get_last_mid():
-                return False
+                puback_evt.mid != pub.get_last_mid():
+            return False
 
         publish_evt = sub.recv()
         if not isinstance(publish_evt, EventPublish) or \
-            publish_evt.msg.payloadlen != msglen or \
-            publish_evt.msg.payload != msg:
-                return False
+                publish_evt.msg.payloadlen != len(msg) or \
+                publish_evt.msg.payload != msg:
+            return False
 
         return True
 
     @catch
     @desc("PUBLISH remaining length header : 3 bytes long")
     def test_013(self):
-        pub = self.newclient('pub', autoconnect=True)
-        sub = self.newclient('sub', autoconnect=True)
+        pub = MqttClient("pub:{seq}", connect=4)
+        sub = MqttClient("sub:{seq}", connect=4)
         sub.subscribe('a/b', 0)
 
         # NOTE: remaining length value is message length + 5 bytes (topic encoded) + 2 bytes (msgid)
-        msglen = 17000
-        msg = ''.join([chr(48+random.randint(0,42)) for x in xrange(msglen)])
+        msg = gen_msg(17000)
         #print "msg=", msg, len(msg)
 
         puback_evt = pub.publish('a/b', msg, qos=1)
         if not isinstance(puback_evt, EventPuback) or \
-            puback_evt.mid != pub.get_last_mid():
-                return False
+                puback_evt.mid != pub.get_last_mid():
+            return False
 
         publish_evt = sub.recv()
         if not isinstance(publish_evt, EventPublish) or \
-            publish_evt.msg.payloadlen != msglen or \
-            publish_evt.msg.payload != msg:
-                return False
+                publish_evt.msg.payloadlen != len(msg) or \
+                publish_evt.msg.payload != msg:
+            return False
 
         return True
 
@@ -157,7 +112,7 @@ class Errors(TestSuite):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect(('127.0.0.1', 1883))
         s.setblocking(0)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1) 
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 
         time.sleep(6) # connect timeout is 5 secs
         # close socket triggers a broken pipe (errno 32)
