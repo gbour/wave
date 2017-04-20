@@ -1,0 +1,75 @@
+
+/foo/# MATCH
+	/foo
+	/foo/bar
+	/foo/baz
+	/foo/bar/baz
+
+/foo/+ MATCH
+	/foo/bar
+	/foo/baz
+
+/foo/+/baz MATCH
+	/foo/bar/baz
+	/foo/baz/baz
+
+/foo	MATCH
+	+/+
+	/+
+	NOT +
+
+heading / if not required (but /foo and foo differs)
+topic names are case sensitive ( /foo != /Foo := /FOO )
+
+
+
+NEW TOPIC SERVER CREATION:
+	on publish
+		. search topic by name
+		. if not found
+			create topic
+
+		. send published message to topic
+
+	on subscribe
+		. record publisher process in topics tree
+		. if topic name is final (not a pattern)
+			create topic
+
+	on topic creation
+		. create gen_server
+		. extract all publishers matching topic name : add them to topic
+
+	on subscriber disconnection
+		. remove suscriber from topics tree
+
+
+topics trie traversal:
+	key: /foo/bar/baz
+
+	/foo/bar/baz
+
+	#
+	/#
+	/foo/#
+	/foo/bar/#
+	+/foo/bar/baz
+	+/+/bar/baz
+	+/+/+/baz
+	+/+/bar/+
+	+/+/+/+
+	+/foo/+/baz
+	+/foo/bar/+
+	/+/bar/baz
+	/+/+/baz
+	/+/bar/+
+	/foo/+/baz
+	/foo/+/+
+	/foo/bar/+
+	+/#
+	+/foo/#
+	+/foo/bar/#
+	+/foo/bar/baz/#
+	+/+/#
+	+/+/bar/#
+	+/+/bar/baz/#

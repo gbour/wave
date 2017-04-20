@@ -6,6 +6,13 @@
 - payload = json, msgpack later
 - strong auth (TLS, scrypted password)
 
+- dedicated topic for devices connections
+	/adm/device/{id}/connected
+	/adm/device/{id}/disconnected
+
+	=> wavectl manager can announce available commands
+	   emit({'/adm/device/{id}/connected', <<"deviceid">>}, undefined)
+
 clear:
 scryp:
 xoxo :
